@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host",
     "build": "tsc -p . && vite build",
-    "build:demo": "vite build --mode demo",
+    "build:demo": "vite build --mode demo && node scripts/artifact-html.mjs",
     "preview": "vite preview --host",
     "test": "vitest run"
   },
