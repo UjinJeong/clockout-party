@@ -4,6 +4,7 @@ import {
   nearestWalkable, parseLook, sanitizeChat, sanitizeName, sanitizeTitle, validateVoice,
 } from '@party/shared';
 import { PartyState, Player } from './schema';
+import { stats } from './stats';
 
 export interface PartyMetadata { title: string; theme: string; private: boolean }
 
@@ -70,11 +71,13 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
       x: spot.x, z: spot.z, dir: 0, moving: false, battery: 'charging',
     }));
     this.tracks.set(client.sessionId, { at: Date.now(), voiceAt: 0 });
+    stats.join({ id: client.sessionId, name, roomId: this.roomId, roomTitle: this.state.title, isPrivate: this.state.isPrivate, tz: options.tz });
   }
 
   onLeave(client: Client) {
     this.state.players.delete(client.sessionId);
     this.tracks.delete(client.sessionId);
+    stats.leave(client.sessionId);
   }
 
   private onMove(client: Client, m: unknown) {

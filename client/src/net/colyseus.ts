@@ -24,9 +24,11 @@ export type JoinRequest =
 
 export async function connectParty(req: JoinRequest, name: string, look: Look): Promise<PartyConnection> {
   const client = new Client(serverUrl());
+  // The time zone paints the visitor's sky and tells the manager page roughly where they are.
+  const tz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return undefined; } })();
   const room = req.mode === 'create'
-    ? await client.create(ROOM_NAME, { title: req.title, private: req.private, name, look })
-    : await client.joinById(req.roomId, { name, look });
+    ? await client.create(ROOM_NAME, { title: req.title, private: req.private, name, look, tz })
+    : await client.joinById(req.roomId, { name, look, tz });
   const conn = new ColyseusConnection(room);
   // Wait for the first full state so the room title and the guest list are ready.
   await new Promise<void>(res => { room.onStateChange.once(() => res()); setTimeout(res, 3000); });

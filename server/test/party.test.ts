@@ -1,3 +1,4 @@
+process.env.ADMIN_PASSWORD = 'test-pass';
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { boot, type ColyseusTestServer } from '@colyseus/testing';
 import app from '../src/app';
@@ -159,5 +160,30 @@ describe('room info', () => {
     await wait(50);
     expect((c.state as any).title).toBe('금요일 밤');
     expect((c.state as any).isPrivate).toBe(true);
+  });
+});
+
+describe('manager page', () => {
+  it('refuses the stats without the password', async () => {
+    const res = await fetch('http://localhost:2568/admin/api/stats');
+    expect(res.status).toBe(401);
+  });
+  it('shows who is online and from where', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', { title: '금요일 밤' });
+    await colyseus.connectTo(room, { name: '유진', look, tz: 'Asia/Seoul' });
+    await wait(50);
+    const auth = 'Basic ' + Buffer.from('admin:test-pass').toString('base64');
+    const res = await fetch('http://localhost:2568/admin/api/stats', { headers: { authorization: auth } });
+    expect(res.status).toBe(200);
+    const s = await res.json();
+    expect(s.online).toBe(1);
+    expect(s.people[0]).toMatchObject({ name: '유진', room: '금요일 밤', region: '대한민국 · 서울' });
+    expect(s.rooms[0]).toMatchObject({ title: '금요일 밤', clients: 1 });
+  });
+  it('serves the manager page itself behind the same password', async () => {
+    expect((await fetch('http://localhost:2568/admin')).status).toBe(401);
+    const auth = 'Basic ' + Buffer.from('admin:test-pass').toString('base64');
+    const res = await fetch('http://localhost:2568/admin', { headers: { authorization: auth } });
+    expect(await res.text()).toContain('파티 관리');
   });
 });
