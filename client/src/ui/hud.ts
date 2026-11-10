@@ -1,7 +1,8 @@
 import { BATTERY_LABEL, EMOTES, EMOTE_ICON, VOICE_MAX_MS, type Battery, type RoomId } from '@party/shared';
 import type { Party } from '../game/party';
 import type { PartyConnection } from '../net/types';
-import { ROOM_INFO, fullSrc, type Artwork } from '../world/art';
+import { ROOM_INFO, type Artwork } from '../world/art';
+import { createLivingViewer } from '../living/viewer';
 import type { Painting } from '../world/gallery';
 import { PHASE_ICON, phaseOf } from '../world/sky';
 import { VoiceRecorder } from '../audio/recorder';
@@ -67,8 +68,9 @@ export function createHud(conn: PartyConnection, controls: Controls) {
     input.value = '';
   });
   on(window, 'keydown', e => {
-    if (e.key === 'Enter' && !isTyping(e) && $('art').hidden) { input.focus(); e.preventDefault(); }
-    if (e.key === 'Escape') { if (!$('art').hidden) closeArt(); else if (document.activeElement === input) input.blur(); }
+    if (living.isOpen()) return; // the painting room handles its own keys
+    if (e.key === 'Enter' && !isTyping(e)) { input.focus(); e.preventDefault(); }
+    if (e.key === 'Escape' && document.activeElement === input) input.blur();
   });
   on(input, 'focus', () => { controls.enabled = false; });
   on(input, 'blur', () => { controls.enabled = true; });
@@ -152,20 +154,13 @@ export function createHud(conn: PartyConnection, controls: Controls) {
     catch { prompt('이 링크를 친구에게 보내 주세요', link); }
   });
 
-  // ---- artwork panel ----
-  const art = $('art');
+  // ---- living painting (the exhibition's moving-painting room) ----
   const chip = $('art-chip');
-  const openArt = (a: Artwork) => {
-    ($('art-img') as HTMLImageElement).src = fullSrc(a);
-    ($('art-img') as HTMLImageElement).alt = a.title;
-    $('art-room').textContent = ROOM_INFO[a.room].name;
-    $('art-title').textContent = a.title;
-    $('art-doc').textContent = a.doc;
-    art.hidden = false;
-    ($('art-close') as HTMLButtonElement).focus();
-  };
-  const closeArt = () => { art.hidden = true; };
-  on($('art-close'), 'click', closeArt);
+  const living = createLivingViewer({
+    onOpen: () => { controls.enabled = false; },
+    onClose: () => { controls.enabled = true; },
+  });
+  const openArt = (a: Artwork) => living.open(a.i);
   on(chip, 'click', () => { if (current) openArt(current.art); });
 
   const hooks = {
@@ -173,7 +168,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
     painting: (p: Painting | null) => {
       current = p;
       chip.hidden = !p;
-      if (p) chip.textContent = `「${p.art.title}」 보기`;
+      if (p) chip.textContent = `「${p.art.title}」 살아난 그림 보기`;
     },
     arrived: (p: Painting) => openArt(p.art),
     guests: (list: { id: string; name: string; battery: Battery; near: boolean; self: boolean; muted: boolean }[]) => {
@@ -198,7 +193,8 @@ export function createHud(conn: PartyConnection, controls: Controls) {
     closed,
     dispose() {
       cleanups.forEach(f => f());
-      hud.hidden = true; art.hidden = true; people.hidden = true; chip.hidden = true;
+      living.close();
+      hud.hidden = true; people.hidden = true; chip.hidden = true;
       $('help').hidden = true;
     },
   };

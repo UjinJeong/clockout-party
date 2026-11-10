@@ -74,12 +74,12 @@ button, input { font: inherit; color: inherit; }
 .dress-pick { display: grid; gap: 10px; }
 fieldset { border: 0; margin: 0; padding: 0; }
 legend { font-size: 13px; color: var(--ink-2); font-weight: 500; margin-bottom: 5px; padding: 0; }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chips button {
+.invite .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.invite .chips button {
   appearance: none; border: 1px solid #cdbd9e; background: #fbf6ec; color: var(--ink); padding: 5px 10px; border-radius: 3px;
   font-size: 13px; cursor: pointer;
 }
-.chips button[aria-pressed="true"] { background: var(--ink); color: var(--plate); border-color: var(--ink); }
+.invite .chips button[aria-pressed="true"] { background: var(--ink); color: var(--plate); border-color: var(--ink); }
 .swatches { display: flex; flex-wrap: wrap; gap: 7px; }
 .swatches button {
   appearance: none; width: 28px; height: 28px; border-radius: 50%; border: 2px solid #fbf6ec; box-shadow: 0 0 0 1px #cdbd9e; cursor: pointer; padding: 0;
@@ -196,21 +196,6 @@ html.touch .joystick { display: block; }
 .float { position: absolute; bottom: 30px; left: 0; font-size: 30px; transform: translateX(-50%); animation: floatUp 1.8s ease-out forwards; }
 @keyframes floatUp { from { transform: translate(-50%, 0) scale(.5); opacity: 0; } 15% { transform: translate(calc(-50% + var(--dx)), -10px) scale(1.15); opacity: 1; } to { transform: translate(calc(-50% + var(--dx)), -80px) scale(1); opacity: 0; } }
 
-/* ---------- artwork sheet ---------- */
-.art { position: fixed; z-index: 40; top: 0; right: 0; bottom: 0; width: min(440px, 100%); background: var(--plate); color: var(--ink); overflow-y: auto; box-shadow: -20px 0 60px rgba(0, 0, 0, .45); animation: slideIn .3s ease-out; }
-@keyframes slideIn { from { transform: translateX(30px); opacity: 0; } }
-.art figure { margin: 0; background: #1d1517; padding: 22px; display: grid; place-items: center; min-height: 220px; }
-.art img { max-width: 100%; max-height: 52vh; box-shadow: 0 0 0 6px #c9a25e, 0 0 0 7px #8c6c38, 0 20px 40px rgba(0, 0, 0, .6); }
-.art-text { padding: 22px 26px 34px; }
-.art-room { margin: 0; font-size: 13px; color: var(--ink-2); }
-.art h2 { margin: 2px 0 0; font: 700 30px/1.25 var(--serif); letter-spacing: -.02em; }
-.art-by { margin: 2px 0 14px; color: var(--ink-2); font-size: 14px; }
-.art p { max-width: 62ch; }
-.docent { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--plate-2); }
-.docent h3 { margin: 0 0 6px; font: 700 16px/1.3 var(--serif); color: var(--wine); }
-.docent p { font: 400 15.5px/1.85 var(--serif); margin: 0; }
-.art .close { position: absolute; top: calc(12px + var(--safe-t)); right: 12px; appearance: none; width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(241, 231, 211, .4); background: rgba(30, 21, 25, .6); color: var(--plate); cursor: pointer; font-size: 16px; }
-
 .loading { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: var(--night); font: 400 18px/1.4 var(--serif); color: #e8d6b2; transition: opacity .6s; }
 .loading.done { opacity: 0; pointer-events: none; }
 .toast { position: fixed; z-index: 70; left: 50%; bottom: calc(84px + var(--safe-b)); transform: translate(-50%, 20px); opacity: 0; background: var(--plate); color: var(--ink); padding: 9px 16px; font-size: 14px; border-bottom: 2px solid var(--gilt); pointer-events: none; transition: opacity .25s, transform .25s; max-width: calc(100% - 28px); text-align: center; }
@@ -234,9 +219,6 @@ html.touch .joystick { display: block; }
   .clock { display: none; }
   .demo-banner { top: auto; bottom: calc(126px + var(--safe-b)); white-space: normal; text-align: center; width: max-content; max-width: calc(100% - 28px); }
   html.touch .demo-banner { bottom: calc(252px + var(--safe-b)); }
-  .art { top: auto; height: 86vh; width: 100%; border-radius: 10px 10px 0 0; }
-  .art figure { padding: 16px; min-height: 0; }
-  .art img { max-height: 34vh; }
   .battery .bl { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {

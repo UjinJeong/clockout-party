@@ -9,7 +9,7 @@
   <meta name="theme-color" content="#1e1519" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" />
 </head>
 <body>
   <canvas id="view" aria-label="전시관 파티장"></canvas>
@@ -122,20 +122,6 @@
     </div>
   </section>
 
-  <!-- Artwork + docent -->
-  <aside id="art" class="art" hidden aria-labelledby="art-title">
-    <button class="close" id="art-close" type="button" aria-label="닫기">✕</button>
-    <figure><img id="art-img" alt="" /></figure>
-    <div class="art-text">
-      <p class="art-room" id="art-room"></p>
-      <h2 id="art-title"></h2>
-      <p class="art-by">정유진</p>
-      <div class="docent">
-        <h3>도슨트 해설</h3>
-        <p id="art-doc"></p>
-      </div>
-    </div>
-  </aside>
 
   <div id="loading" class="loading"><span>전시장 불을 켜는 중</span></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>

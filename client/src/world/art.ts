@@ -9,7 +9,6 @@ export const ART = ARTWORKS as Artwork[];
 
 const pad = (n: number) => String(n).padStart(2, '0');
 export const wallSrc = (a: Artwork) => `art/wall/${pad(a.i)}.jpg`;
-export const fullSrc = (a: Artwork) => `art/${pad(a.i)}.jpg`;
 
 export const ROOM_INFO: Record<RoomId, { name: string; color: string; note: string }> = {
   lobby: { name: '로비', color: '#3d2c24', note: '와인 한 잔 받아 들고 천천히 둘러보세요.' },
