@@ -253,3 +253,17 @@ html.touch .joystick { display: block; }
 }
 .places button .pi { font-size: 22px; line-height: 1; }
 .places button[aria-checked="true"] { background: var(--ink); color: var(--plate); border-color: var(--ink); }
+
+/* the invitation lets the party behind it show through: frosted, not solid,
+   so picking a place visibly changes the room behind the card */
+#start { background: radial-gradient(120% 90% at 50% 40%, rgba(30, 21, 25, .08), rgba(20, 13, 16, .5)); }
+#start .invite {
+  background: rgba(241, 231, 211, .8);
+  -webkit-backdrop-filter: blur(6px) saturate(1.1);
+  backdrop-filter: blur(6px) saturate(1.1);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, .4);
+}
+/* browsers without frosted glass get a more solid card, so the text stays easy to read */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  #start .invite { background: rgba(241, 231, 211, .93); }
+}
