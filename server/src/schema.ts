@@ -15,6 +15,8 @@ export const Player = schema({
 export type Player = SchemaType<typeof Player>;
 
 export const PartyState = schema({
+  title: t.string(),
+  isPrivate: t.boolean(),
   players: t.map(Player),
 }, 'PartyState');
 export type PartyState = SchemaType<typeof PartyState>;

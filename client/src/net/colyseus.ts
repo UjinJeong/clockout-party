@@ -1,0 +1,91 @@
+import { Client, Callbacks, type Room } from '@colyseus/sdk';
+import { ROOM_NAME, type Battery, type Emote, type Look } from '@party/shared';
+import { Emitter, type NetPlayer, type PartyConnection, type PartyEvents } from './types';
+
+/** Where the party server lives. Override with VITE_SERVER_URL (e.g. https://party.example.com). */
+export function serverUrl(): string {
+  const env = import.meta.env.VITE_SERVER_URL as string | undefined;
+  if (env) return env.replace(/\/$/, '');
+  const proto = location.protocol === 'https:' ? 'https' : 'http';
+  return `${proto}://${location.hostname || 'localhost'}:2567`;
+}
+
+export interface RoomListing { roomId: string; title: string; clients: number; maxClients: number }
+
+export async function listRooms(signal?: AbortSignal): Promise<RoomListing[]> {
+  const res = await fetch(`${serverUrl()}/rooms`, { signal });
+  if (!res.ok) throw new Error(`rooms ${res.status}`);
+  return res.json();
+}
+
+export type JoinRequest =
+  | { mode: 'create'; title: string; private: boolean }
+  | { mode: 'join'; roomId: string };
+
+export async function connectParty(req: JoinRequest, name: string, look: Look): Promise<PartyConnection> {
+  const client = new Client(serverUrl());
+  const room = req.mode === 'create'
+    ? await client.create(ROOM_NAME, { title: req.title, private: req.private, name, look })
+    : await client.joinById(req.roomId, { name, look });
+  const conn = new ColyseusConnection(room);
+  // Wait for the first full state so the room title and the guest list are ready.
+  await new Promise<void>(res => { room.onStateChange.once(() => res()); setTimeout(res, 3000); });
+  return conn;
+}
+
+interface ServerPlayer {
+  name: string; kind: string; color: number; prop: string;
+  x: number; z: number; dir: number; moving: boolean; battery: string;
+}
+
+class ColyseusConnection implements PartyConnection {
+  readonly demo = false;
+  private ev = new Emitter();
+  private known = new Map<string, NetPlayer>();
+
+  constructor(private room: Room) {
+    const cb = Callbacks.get(room as never) as any;
+    const toNet = (id: string, p: ServerPlayer): NetPlayer => ({
+      id, name: p.name, look: { kind: p.kind as Look['kind'], color: p.color, prop: p.prop as Look['prop'] },
+      x: p.x, z: p.z, dir: p.dir, moving: p.moving, battery: p.battery as Battery,
+    });
+    cb.onAdd('players', (p: ServerPlayer, id: string) => {
+      const np = toNet(id, p);
+      this.known.set(id, np);
+      this.ev.emit('add', np);
+      cb.onChange(p, () => { const n = toNet(id, p); this.known.set(id, n); this.ev.emit('change', n); });
+    });
+    cb.onRemove('players', (_p: ServerPlayer, id: string) => { this.known.delete(id); this.ev.emit('remove', id); });
+    room.onMessage('chat', (m: { from: string; text: string }) => this.ev.emit('chat', m.from, m.text));
+    room.onMessage('emote', (m: { from: string; kind: Emote }) => this.ev.emit('emote', m.from, m.kind));
+    room.onMessage('voice', (m: { from: string; mime: string; ms: number; data: Uint8Array }) => {
+      this.ev.emit('voice', m.from, new Blob([new Uint8Array(m.data)], { type: m.mime }), m.ms);
+    });
+    room.onMessage('snap', (m: { x: number; z: number }) => this.ev.emit('snap', m.x, m.z));
+    room.onLeave((code: number) => this.ev.emit('closed', code === 1000 ? 'left' : 'lost'));
+  }
+
+  get selfId() { return this.room.sessionId; }
+  get roomId() { return this.room.roomId; }
+  get title() { return (this.room.state as { title?: string }).title || '오프닝 파티'; }
+  get isPrivate() { return (this.room.state as { isPrivate?: boolean }).isPrivate ?? false; }
+
+  on(h: Partial<PartyEvents>) {
+    this.ev.on(h);
+    // replay players that arrived before this listener was attached
+    for (const p of this.known.values()) h.add?.(p);
+  }
+  move(x: number, z: number, dir: number, moving: boolean) { this.room.send('move', { x, z, dir, moving }); }
+  chat(text: string) { this.room.send('chat', { text }); }
+  emote(kind: Emote) { this.room.send('emote', { kind }); }
+  async voice(blob: Blob, ms: number) {
+    const data = new Uint8Array(await blob.arrayBuffer());
+    this.room.send('voice', { mime: blob.type || 'audio/webm', ms, data });
+    // The server doesn't echo voice notes back to the sender, so show ours right away.
+    this.ev.emit('voice', this.selfId, blob, ms);
+  }
+  battery(level: Battery) { this.room.send('battery', { level }); }
+  leave() { void this.room.leave(true); }
+}
+
+export type { ColyseusConnection };

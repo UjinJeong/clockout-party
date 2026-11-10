@@ -51,8 +51,11 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
 
   async onCreate(options: Record<string, unknown> = {}) {
     const isPrivate = options.private === true;
+    const title = sanitizeTitle(options.title);
+    this.state.title = title;
+    this.state.isPrivate = isPrivate;
     await this.setMatchmaking({
-      metadata: { title: sanitizeTitle(options.title), theme: THEME, private: isPrivate },
+      metadata: { title, theme: THEME, private: isPrivate },
       private: isPrivate,
     });
   }

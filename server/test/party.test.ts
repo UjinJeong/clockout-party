@@ -110,6 +110,22 @@ describe('party room', () => {
     expect(farSizes).toEqual([]);
   });
 
+  it('relays a realistic 120KB voice note without dropping the connection', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', {});
+    const a = await colyseus.connectTo(room, { name: 'A', look });
+    const b = await colyseus.connectTo(room, { name: 'B', look });
+    const sizes: number[] = [];
+    b.onMessage('voice', (m: any) => sizes.push(m.data.byteLength));
+    a.send('voice', { mime: 'audio/webm', ms: 25000, data: new Uint8Array(120_000) });
+    await wait(300);
+    expect(sizes).toEqual([120_000]);
+    a.send('chat', { text: '아직 연결돼 있어요' });
+    const got: string[] = [];
+    b.onMessage('chat', (m: any) => got.push(m.text));
+    await wait(150);
+    expect(got).toEqual(['아직 연결돼 있어요']);
+  });
+
   it('toggles the battery status', async () => {
     const room = await colyseus.createRoom<PartyRoom>('party', {});
     const a = await colyseus.connectTo(room, { name: 'A', look });
@@ -132,5 +148,16 @@ describe('party room', () => {
     const friend = await colyseus.sdk.joinById(room.roomId, { name: '친구', look });
     expect(friend.roomId).toBe(room.roomId);
     await friend.leave();
+  });
+});
+
+describe('room info', () => {
+  it('syncs the title and privacy to clients', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', { title: '금요일 밤', private: true });
+    const c = await colyseus.connectTo(room, { name: 'A', look });
+    await room.waitForNextPatch();
+    await wait(50);
+    expect((c.state as any).title).toBe('금요일 밤');
+    expect((c.state as any).isPrivate).toBe(true);
   });
 });
