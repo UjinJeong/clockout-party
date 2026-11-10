@@ -4,7 +4,8 @@ import { schema, t, type SchemaType } from '@colyseus/schema';
 export const Player = schema({
   name: t.string(),
   kind: t.string(),
-  color: t.uint8(),
+  /** 0–7 a swatch, or 0x1000000 + 0xRRGGBB picked from the palette (see shared colorHex). */
+  color: t.uint32(),
   hat: t.string(),
   hand: t.string(),
   outfit: t.string(),

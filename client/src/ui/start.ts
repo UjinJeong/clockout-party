@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import {
   HANDS, HAND_LABEL, HATS, HAT_LABEL, KINDS, KIND_LABEL, OUTFITS, OUTFIT_LABEL, PALETTE, THEMES, THEME_ICON, THEME_LABEL,
-  isTheme, parseLook, sanitizeName, type Look, type Theme,
+  colorHex, customColor, isCustomColor, isTheme, parseLook, sanitizeName, type Look, type Theme,
 } from '@party/shared';
 import { buildAnimal, type AnimalRig } from '../avatar/animal';
 import { Animator } from '../avatar/animator';
 import { $, load, onSubmit, save } from './dom';
+import { Palette } from './palette';
 
 /** The invitation card: write a name, dress up your animal (colour, hat, paw, outfit), with a turning 3D preview. */
 export interface StartOptions {
@@ -53,30 +54,44 @@ export function showStart(opts: StartOptions = {}): Promise<{ name: string; look
   };
 
   // ---- pickers ----
-  const kindBox = $('pick-kind'), colorBox = $('pick-color');
+  const kindBox = $('pick-kind'), colorBox = $('pick-color'), palBox = $('pick-palette');
   const hatBox = $('pick-hat'), handBox = $('pick-hand'), outfitBox = $('pick-outfit'), dice = $('pick-random');
   const chips = <T extends string>(list: readonly T[], label: Record<T, string>, slot: 'hat' | 'hand' | 'outfit') =>
     list.map(v => `<button type="button" data-slot="${slot}" data-v="${v}" aria-pressed="${look[slot] === v}">${label[v]}</button>`).join('');
   const render = () => {
     kindBox.innerHTML = KINDS.map(k => `<button type="button" data-k="${k}" aria-pressed="${look.kind === k}">${KIND_LABEL[k]}</button>`).join('');
-    colorBox.innerHTML = PALETTE.map((c, i) => `<button type="button" data-c="${i}" aria-pressed="${look.color === i}" aria-label="색 ${i + 1}" style="background:${c}"></button>`).join('');
+    const own = isCustomColor(look.color);
+    colorBox.innerHTML = PALETTE.map((c, i) => `<button type="button" data-c="${i}" aria-pressed="${look.color === i}" aria-label="색 ${i + 1}" style="background:${c}"></button>`).join('')
+      + `<button type="button" class="pal-open" data-pal="1" aria-pressed="${own}" aria-expanded="${!palBox.hidden}" aria-label="팔레트에서 고르기"`
+      + (own ? ` style="--own:${colorHex(look.color)}"` : '') + '></button>';
     hatBox.innerHTML = chips(HATS, HAT_LABEL, 'hat');
     handBox.innerHTML = chips(HANDS, HAND_LABEL, 'hand');
     outfitBox.innerHTML = chips(OUTFITS, OUTFIT_LABEL, 'outfit');
+  };
+  // the palette: any colour at all; the preview follows the finger (one rebuild per frame at most)
+  let redraw = 0;
+  const palette = new Palette(palBox, colorHex(look.color), hex => {
+    look = { ...look, color: customColor(hex) };
+    if (!redraw) redraw = requestAnimationFrame(() => { redraw = 0; render(); rebuild(false); });
+  });
+  const showPalette = (open: boolean) => {
+    if (open) palette.set(colorHex(look.color));
+    palBox.hidden = !open;
   };
   render();
   const onPick = (e: Event) => {
     const b = (e.target as HTMLElement).closest('button');
     if (!b) return;
     if (b.dataset.k) look = { ...look, kind: b.dataset.k as Look['kind'] };
-    else if (b.dataset.c) look = { ...look, color: Number(b.dataset.c) };
+    else if (b.dataset.pal) { showPalette(palBox.hidden); render(); return; }
+    else if (b.dataset.c) { look = { ...look, color: Number(b.dataset.c) }; showPalette(false); }
     else if (b.dataset.slot && b.dataset.v) look = parseLook({ ...look, [b.dataset.slot]: b.dataset.v });
     else return;
     render(); rebuild();
   };
   const boxes = [kindBox, colorBox, hatBox, handBox, outfitBox];
   boxes.forEach(el => el.addEventListener('click', onPick));
-  const onDice = () => { look = randomLook(); render(); rebuild(); };
+  const onDice = () => { look = randomLook(); showPalette(false); render(); rebuild(); };
   dice.addEventListener('click', onDice);
   rebuild(true);
 
@@ -110,6 +125,7 @@ export function showStart(opts: StartOptions = {}): Promise<{ name: string; look
       offSubmit();
       boxes.forEach(el => el.removeEventListener('click', onPick));
       dice.removeEventListener('click', onDice);
+      cancelAnimationFrame(redraw); palette.dispose(); palBox.hidden = true;
       screen.hidden = true;
       resolve({ name, look, theme });
     };

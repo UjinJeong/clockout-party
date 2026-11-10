@@ -23,10 +23,10 @@ const up = (o: THREE.Object3D) => { o.updateWorldMatrix(true, false); return new
 describe('charging up shows on your face', () => {
   it('eyes open a little more as you recharge, but never wide', async () => {
     const { r, anim } = await make();
-    run(anim, body({ energy: 10 }));
-    const drained = eyes(r);
-    run(anim, body({ energy: 100 }));
-    const full = eyes(r);
+    // a blink (0.2 s, at a random moment) must not land on the measurement: take the widest over half a second
+    const widest = (b: Body) => { run(anim, b); let m = 0; for (let i = 0; i < 15; i++) { anim.update(1 / 30, b); m = Math.max(m, eyes(r)); } return m; };
+    const drained = widest(body({ energy: 10 }));
+    const full = widest(body({ energy: 100 }));
     expect(full).toBeGreaterThan(drained * 2);
     expect(full).toBeLessThan(0.75);
   });

@@ -1,4 +1,5 @@
 import {
+  customColor,
   DOZE_AFTER, EMOTES, ENERGY, KINDS, MOOD_ENERGY, MOVE_HZ, HANDS, HATS, OUTFITS, WALK_SPEED, batteryOf, chargeRate, isNear, mapFor,
   moveWithCollision, nearestWalkable, stepEnergy,
   type Emote, type Look, type Mood, type Seat, type Theme, type WorldMap,
@@ -12,6 +13,9 @@ import { Emitter, type NetPlayer, type PartyConnection, type PartyEvents } from 
  * rules as the real server: only nearby players hear you, same walls and
  * furniture, same seats and the same charging.
  */
+/** Bots 1 and 4 wear a colour from the palette instead of a swatch. */
+const BOT_COLORS: Record<number, string> = { 1: '#2a9d8f', 4: '#b07cd8' };
+
 const BOTS: { name: string; energy: number; mood: Mood }[] = [
   { name: '월요병', energy: 12, mood: 'drained' },
   { name: '소금빵', energy: 55, mood: 'meh' },
@@ -79,7 +83,8 @@ export class DemoConnection implements PartyConnection {
     BOTS.forEach((b, i) => {
       // every bot dressed differently, so the party shows off the wardrobe
       const lk: Look = {
-        kind: KINDS[(i + 1) % KINDS.length], color: (i * 3 + 1) % 8,
+        // a couple picked their own colour from the palette
+        kind: KINDS[(i + 1) % KINDS.length], color: BOT_COLORS[i] ? customColor(BOT_COLORS[i]) : (i * 3 + 1) % 8,
         hat: HATS[(i + 1) % HATS.length], hand: HANDS[(i * 3 + 1) % HANDS.length], outfit: OUTFITS[(i + 2) % OUTFITS.length],
       };
       // two guests start near you, the others are already somewhere in the party

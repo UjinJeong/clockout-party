@@ -1,6 +1,6 @@
 import {
   BATTERIES, CHAT_MAX, DEFAULT_LOOK, DEFAULT_TITLE, EMOTES, HANDS, HATS, KINDS, NAME_MAX, OUTFITS, PALETTE, TITLE_MAX,
-  VOICE_MAX_BYTES, VOICE_MAX_MS, type Battery, type Emote, type Look,
+  VOICE_MAX_BYTES, VOICE_MAX_MS, colorHex, customColor, isCustomColor, type Battery, type Emote, type Look,
 } from './constants';
 
 function clean(s: unknown, max: number): string | null {
@@ -18,8 +18,9 @@ export const sanitizeTitle = (s: unknown) => clean(s, TITLE_MAX) ?? DEFAULT_TITL
 export function parseLook(v: unknown): Look {
   const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
   const kind = (KINDS as readonly unknown[]).includes(o.kind) ? (o.kind as Look['kind']) : DEFAULT_LOOK.kind;
-  const color = Number.isInteger(o.color) && (o.color as number) >= 0 && (o.color as number) < PALETTE.length
-    ? (o.color as number) : DEFAULT_LOOK.color;
+  const c = o.color as number;
+  const color = isCustomColor(c) ? customColor(colorHex(c))          // re-pack: lifts near-black
+    : Number.isInteger(c) && c >= 0 && c < PALETTE.length ? c : DEFAULT_LOOK.color;
   // Older saves had one "prop" slot: the wine glass went in the paw, beret/ribbon on the head.
   const legacyHat = o.prop === 'beret' || o.prop === 'ribbon' ? o.prop : undefined;
   const legacyHand = o.prop === 'wine' ? o.prop : undefined;

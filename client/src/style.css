@@ -80,11 +80,36 @@ legend { font-size: 13px; color: var(--ink-2); font-weight: 500; margin-bottom: 
   font-size: 13px; cursor: pointer;
 }
 .invite .chips button[aria-pressed="true"] { background: var(--ink); color: var(--plate); border-color: var(--ink); }
-.swatches { display: flex; flex-wrap: wrap; gap: 7px; }
+.swatches { display: flex; gap: 7px; }
 .swatches button {
-  appearance: none; width: 28px; height: 28px; border-radius: 50%; border: 2px solid #fbf6ec; box-shadow: 0 0 0 1px #cdbd9e; cursor: pointer; padding: 0;
+  appearance: none; flex: 0 1 28px; min-width: 22px; aspect-ratio: 1; display: grid; place-items: center; border-radius: 50%; border: 2px solid #fbf6ec; box-shadow: 0 0 0 1px #cdbd9e; cursor: pointer; padding: 0;
 }
 .swatches button[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--ink); }
+/* the last swatch opens the palette: a rainbow ring, filled with your own colour once picked */
+.swatches .pal-open {
+  background: radial-gradient(circle, var(--own, #fbf6ec) 0 46%, transparent 48%),
+    conic-gradient(#f45b5b, #f4c95b, #8fe36b, #5bd3f4, #6b7cf4, #d36bf4, #f45b5b);
+}
+.swatches .pal-open:not([aria-pressed="true"])::after { content: "+"; font: 600 15px/1 var(--sans); color: var(--ink-2); }
+.palette { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 9px; max-width: 280px; }
+.palette[hidden] { display: none; }
+.pal-sv {
+  position: relative; height: 104px; border-radius: 6px; cursor: crosshair; touch-action: none;
+  background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, .8)), linear-gradient(to right, #fff, var(--hue, red));
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .12);
+}
+.pal-hue {
+  position: relative; height: 16px; border-radius: 8px; cursor: pointer; touch-action: none;
+  background: linear-gradient(to right, #f00, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00);
+}
+.pal-dot, .pal-knob {
+  position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%;
+  border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, .45), 0 1px 3px rgba(0, 0, 0, .35); pointer-events: none;
+}
+.pal-knob { top: 50%; width: 20px; height: 20px; margin: -10px 0 0 -10px; background: var(--c); }
+.pal-hex { margin: 0; display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink-2); }
+.pal-chip { width: 16px; height: 16px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 1px #cdbd9e; }
+.pal-hex code { font: 500 12.5px "IBM Plex Mono", ui-monospace, monospace; letter-spacing: .02em; }
 .invite .btn.primary { justify-self: center; padding: 12px 34px; font-size: 16px; }
 
 /* lobby */

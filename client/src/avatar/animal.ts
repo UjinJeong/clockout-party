@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { PALETTE, type Look } from '@party/shared';
+import { colorHex, type Look } from '@party/shared';
 import { blobShadow } from '../world/textures';
 
 /**
@@ -48,14 +48,20 @@ const matCache = new Map<string, THREE.MeshStandardMaterial>();
 function mat(color: string, opts: Partial<THREE.MeshStandardMaterialParameters> = {}) {
   const key = color + JSON.stringify(opts);
   let m = matCache.get(key);
-  if (!m) { m = new THREE.MeshStandardMaterial({ color, roughness: 0.75, flatShading: true, ...opts }); matCache.set(key, m); }
+  if (!m) {
+    m = new THREE.MeshStandardMaterial({ color, roughness: 0.75, flatShading: true, ...opts });
+    matCache.set(key, m);
+    // dragging across the palette makes a new colour every frame: forget the oldest
+    // (meshes still using one keep it; it's just no longer shared)
+    if (matCache.size > 160) matCache.delete(matCache.keys().next().value!);
+  }
   return m;
 }
 const EYE_BLACK = new THREE.MeshBasicMaterial({ color: '#141012' });
 const tint = (hex: string, k: number) => '#' + new THREE.Color(hex).lerp(new THREE.Color(k > 0 ? '#ffffff' : '#000000'), Math.abs(k)).getHexString();
 
 export function buildAnimal(look: Look): AnimalRig {
-  const base = PALETTE[look.color] ?? PALETTE[0];
+  const base = colorHex(look.color);
   const isPenguin = look.kind === 'penguin';
   const isFrog = look.kind === 'frog';
   const fur = mat(isPenguin ? tint(base, -0.35) : base);

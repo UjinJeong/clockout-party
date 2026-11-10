@@ -35,8 +35,35 @@ export const KIND_LABEL: Record<Kind, string> = {
   fox: '칼퇴한 여우', dog: '산책 못 간 강아지', frog: '월요병 개구리',
 };
 
-/** Shared palette: every avatar is coloured from these eight swatches. */
+/** Eight suggested swatches. Any other colour can be picked from the palette (see customColor). */
 export const PALETTE = ['#c98b5a', '#f2e6d0', '#5b5f6b', '#e9a8b8', '#8fb8a0', '#9fb4e0', '#f0c75e', '#3a3236'] as const;
+
+/**
+ * A look's colour is one number, so it syncs as a single field (web and Unity alike):
+ *   0–7                    → one of the PALETTE swatches
+ *   0x1000000 + 0xRRGGBB   → a colour picked from the palette
+ */
+export const CUSTOM_COLOR = 0x1000000;
+/** Darkest a picked colour may be (brightest channel), so the eyes and face still show. */
+const MIN_BRIGHT = 0x30;
+
+export const isCustomColor = (c: number) => Number.isInteger(c) && c >= CUSTOM_COLOR && c < CUSTOM_COLOR * 2;
+
+/** Pack '#rrggbb' as a look colour, lifting near-black so faces stay visible. Not a colour → 0. */
+export function customColor(hex: string): number {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return 0;
+  let rgb = [0, 2, 4].map(i => parseInt(m[1].slice(i, i + 2), 16));
+  const top = Math.max(...rgb);
+  if (top < MIN_BRIGHT) rgb = top === 0 ? [MIN_BRIGHT, MIN_BRIGHT, MIN_BRIGHT] : rgb.map(v => Math.round(v * MIN_BRIGHT / top));
+  return CUSTOM_COLOR + ((rgb[0] << 16) | (rgb[1] << 8) | rgb[2]);
+}
+
+/** The colour to paint with, '#rrggbb'. Anything unknown → the first swatch. */
+export function colorHex(c: number): string {
+  if (isCustomColor(c)) return '#' + (c - CUSTOM_COLOR).toString(16).padStart(6, '0');
+  return Number.isInteger(c) && c >= 0 && c < PALETTE.length ? PALETTE[c] : PALETTE[0];
+}
 
 /** What sits on the head. */
 export const HATS = ['none', 'beret', 'ribbon', 'party', 'headphones', 'eyemask'] as const;

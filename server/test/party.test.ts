@@ -30,6 +30,17 @@ describe('party room', () => {
     expect(p.battery).toBe('low'); // everyone arrives tired
   });
 
+  it('a colour picked from the palette reaches everyone intact', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', {});
+    const teal = 0x1000000 + 0x2a9d8f;
+    const a = await colyseus.connectTo(room, { name: 'A', look: { ...look, color: teal } });
+    const b = await colyseus.connectTo(room, { name: 'B', look });
+    await room.waitForNextPatch();
+    await wait(120);
+    expect(room.state.players.get(a.sessionId)!.color).toBe(teal);
+    expect((b.state as any).players.get(a.sessionId).color).toBe(teal); // survives the wire
+  });
+
   it('gives a fallback name when none is sent', async () => {
     const room = await colyseus.createRoom<PartyRoom>('party', {});
     const c = await colyseus.connectTo(room, {});

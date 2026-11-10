@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { QUESTIONS, typingSteps } from '../src/living/docent';
@@ -18,7 +19,7 @@ describe('fixed docent answers', () => {
     }
   });
   it('never calls Claude from the painting room', () => {
-    const src = readFileSync('src/living/viewer.js', 'utf8');
+    const src = readFileSync(join(__dirname, '../src/living/viewer.js'), 'utf8');
     expect(src).not.toMatch(/use\(\s*['"]sample['"]\s*\)/);
     expect(src).not.toMatch(/\bsample\(/);
   });
