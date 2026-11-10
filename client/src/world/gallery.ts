@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { BAR, BENCHES, DOOR_HALF, PARTITIONS, ROOM_D, ROOM_IDS, ROOM_W, WORLD, type RoomId } from '@party/shared';
+import { livingCanvas, tickLivingWall } from './livingWall';
 import { ART, ROOM_INFO, slotsFor, wallSrc, type Artwork, type Slot } from './art';
 import { fabric, parquet, runner, textPlate } from './textures';
 import { SkyPainter, skyAt, type SkyState } from './sky';
@@ -186,7 +187,7 @@ export function buildGallery(scene: THREE.Scene, renderer: THREE.WebGLRenderer):
       };
       fr(w + fw * 2, fw, 0, h / 2 + fw / 2); fr(w + fw * 2, fw, 0, -h / 2 - fw / 2);
       fr(fw, h, -w / 2 - fw / 2, 0); fr(fw, h, w / 2 + fw / 2, 0);
-      const mat = new THREE.MeshBasicMaterial({ color: 0x3a3430 });
+      const mat = livingCanvas(id, art.i); // gently moves, each room in its own way
       canvasMats.push(mat);
       const canvas = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
       canvas.position.z = 0.02;
@@ -259,7 +260,7 @@ export function buildGallery(scene: THREE.Scene, renderer: THREE.WebGLRenderer):
     }
   };
 
-  return { paintings, floor, setTime, loadArt, tick: (dt: number) => decor.tick(dt), fadeOccluders };
+  return { paintings, floor, setTime, loadArt, tick: (dt: number) => { decor.tick(dt); tickLivingWall(dt); }, fadeOccluders };
 }
 
 export const roomIndex = (id: RoomId) => ROOM_IDS.indexOf(id);
