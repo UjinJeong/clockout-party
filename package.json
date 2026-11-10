@@ -2,10 +2,14 @@
   "name": "web-party",
   "private": true,
   "type": "module",
-  "workspaces": ["shared", "server", "client"],
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
   "scripts": {
     "dev": "concurrently -n server,client -c magenta,cyan \"npm run dev -w server\" \"npm run dev -w client\"",
-    "test": "npm test -w shared && npm test -w server",
+    "test": "npm test -w shared && npm test -w server && npm test -w client",
     "build": "npm run build -w client",
     "start": "npm start -w server"
   },

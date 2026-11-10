@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import type { Battery, Emote } from '@party/shared';
 import type { AnimalRig } from './animal';
 
@@ -24,7 +25,8 @@ export class Animator {
     r.legL.rotation.x = step * 0.6 * w;
     r.legR.rotation.x = -step * 0.6 * w;
     r.armL.rotation.x = -step * 0.5 * w;
-    r.armR.rotation.x = step * 0.5 * w;
+    // holding a drink: elbow forward, and only a small swing so it doesn't slosh
+    r.armR.rotation.x = r.held ? -0.55 + step * 0.18 * w : step * 0.5 * w;
     r.armL.rotation.z = -0.18;
     r.armR.rotation.z = 0.18;
     r.bodyPivot.position.y = Math.abs(Math.cos(t * 9)) * 0.05 * w;
@@ -44,6 +46,21 @@ export class Animator {
     const open = battery === 'low' ? 0.15 : 0.55;
     for (const lid of r.lids) lid.rotation.x = -0.2 + (1 - open) * 1.3 + blink * 1.2;
 
+    this.gesture(dt);
+    this.keepUpright();
+  }
+
+  /** Whatever the arm does, the glass stays level with the body (no spilled wine). */
+  private keepUpright() {
+    const r = this.rig;
+    if (!r.held) return;
+    r.armR.updateMatrix();
+    r.held.quaternion.copy(Animator.tmp.setFromRotationMatrix(r.armR.matrix)).invert();
+  }
+  private static tmp = new THREE.Quaternion();
+
+  private gesture(dt: number) {
+    const r = this.rig;
     if (!this.emote) return;
     this.emoteT += dt;
     const p = this.emoteT / Animator.EMOTE_TIME;

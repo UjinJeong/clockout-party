@@ -7,7 +7,8 @@
     "dev": "vite --host",
     "build": "tsc -p . && vite build",
     "build:demo": "vite build --mode demo",
-    "preview": "vite preview --host"
+    "preview": "vite preview --host",
+    "test": "vitest run"
   },
   "dependencies": {
     "@party/shared": "*",

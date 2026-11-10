@@ -13,6 +13,8 @@ export interface AnimalRig {
   armL: THREE.Group; armR: THREE.Group;
   legL: THREE.Group; legR: THREE.Group;
   lids: THREE.Mesh[];    // eyelids: lower = sleepier
+  /** Something held in the right paw (the wine glass); the animator keeps it upright. */
+  held: THREE.Group | null;
   look: Look;
   dispose(): void;
 }
@@ -137,28 +139,32 @@ export function buildAnimal(look: Look): AnimalRig {
     }
   }
 
-  addProp(look, head, armR);
+  const held = addProp(look, head, armR, isPenguin ? mat(tint(base, -0.35)) : fur);
 
   root.traverse(o => { if ((o as THREE.Mesh).isMesh) o.castShadow = false; });
   return {
-    root, bodyPivot, head, armL, armR, legL, legR, lids, look,
+    root, bodyPivot, head, armL, armR, legL, legR, lids, held, look,
     dispose() { root.removeFromParent(); (shadow.material as THREE.Material).dispose(); },
   };
 }
 
-function addProp(look: Look, head: THREE.Group, armR: THREE.Group) {
+function addProp(look: Look, head: THREE.Group, armR: THREE.Group, paw: THREE.Material): THREE.Group | null {
   switch (look.prop) {
     case 'wine': {
-      const g = new THREE.Group(); g.position.set(0, -0.36, 0.08); armR.add(g);
+      // Pivot at the paw; the glass stands just in front of it, held by the stem.
+      const g = new THREE.Group(); g.position.set(0, -0.33, 0); armR.add(g);
       const glass = mat('#e6eef0', { transparent: true, opacity: 0.5, roughness: 0.05, flatShading: false });
-      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.14, 5), glass); stem.position.y = 0.07;
-      const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.01, 8), glass);
-      const bowl = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 7, 0, Math.PI * 2, Math.PI / 2.4, Math.PI / 1.7), glass);
-      bowl.position.y = 0.2; bowl.rotation.x = Math.PI;
-      const wine = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), mat('#7c1d2c', { roughness: 0.3, flatShading: false }));
-      wine.position.y = 0.19; wine.rotation.x = Math.PI;
-      g.add(stem, foot, bowl, wine);
-      break;
+      const z = 0.12;
+      const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.012, 10), glass); foot.position.set(0, -0.075, z);
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.15, 6), glass); stem.position.set(0, 0, z);
+      const bowl = new THREE.Mesh(new THREE.SphereGeometry(0.075, 12, 8, 0, Math.PI * 2, Math.PI / 2.4, Math.PI / 1.7), glass);
+      bowl.position.set(0, 0.16, z); bowl.rotation.x = Math.PI;
+      const wine = new THREE.Mesh(new THREE.SphereGeometry(0.062, 12, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), mat('#7c1d2c', { roughness: 0.3, flatShading: false }));
+      wine.position.set(0, 0.15, z); wine.rotation.x = Math.PI;
+      // a curled paw wrapped around the stem
+      const grip = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), paw); grip.position.set(0, -0.005, z - 0.035); grip.scale.set(1.1, 0.9, 0.9);
+      g.add(foot, stem, bowl, wine, grip);
+      return g;
     }
     case 'beret': {
       const b = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.27, 0.09, 12), mat('#7a2232'));
@@ -176,4 +182,5 @@ function addProp(look: Look, head: THREE.Group, armR: THREE.Group) {
       break;
     }
   }
+  return null;
 }
