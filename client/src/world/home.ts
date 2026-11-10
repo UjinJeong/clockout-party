@@ -5,6 +5,7 @@ import { canvasTexture, textPlate } from './textures';
 import { glow } from './decor';
 import { builder, bunting, flames, planks, pottedPlant, rnd, skylineTexture, std, stringLights, tiles } from './kit';
 import type { WorldParts } from './world';
+import { doorways, wallPieces } from './walls';
 
 /**
  * 🏠 The home party: a city apartment cut open like a dollhouse.
@@ -79,38 +80,51 @@ export function buildHome(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
   box(12, 0.12, 0.04, M.trim, 6, 0.06, B.z0 + 0.02);         // skirting
   box(11.4, 0.9, 0.03, M.subway, 18, 1.35, B.z0 + 0.02);     // splashback tiles
   box(24, 0.14, 0.14, M.trim, 12, H - 0.07, B.z0 + 0.07);     // crown moulding
-  // side wall on the left, partition between living room and kitchen (full height at the back, low at the front)
-  const side = (x: number, doorHalf: number | null, mat: THREE.Material) => {
-    const backEnd = doorHalf ?? -1.5;
-    const d1 = backEnd - B.z0;
-    box(0.14, H, d1, mat, x, H / 2, B.z0 + d1 / 2);
-    const frontStart = doorHalf ?? 1.5;
-    const d2 = B.z1 - frontStart;
-    box(0.14, LOW, d2, mat, x, LOW / 2, frontStart + d2 / 2);
-    box(0.2, 0.05, d2, M.trim, x, LOW, frontStart + d2 / 2);
-    if (doorHalf === null) box(0.14, LOW, 3, mat, x, LOW / 2, 0); // closed middle on the outer wall
+  // the closed outer wall on the left: tall at the back, low toward the camera
+  const outerWall = (x: number, mat: THREE.Material) => {
+    const tallTo = -1.5;
+    box(0.14, H, tallTo - B.z0, mat, x, H / 2, (B.z0 + tallTo) / 2);
+    box(0.14, LOW, B.z1 - tallTo, mat, x, LOW / 2, (tallTo + B.z1) / 2);
+    box(0.2, 0.05, B.z1 - tallTo, M.trim, x, LOW, (tallTo + B.z1) / 2);
   };
   const paintSide = std('#cbbfa7', { roughness: 0.9 });
-  side(0, null, paintSide);
-  side(12, HOME.doorHalf[0], paintSide);
-  // the terrace side of the kitchen: a glass wall with a wide open sliding door
-  {
-    const x = 24, dh = HOME.doorHalf[1];
-    const d = dh - (-B.z0); // from the back wall to the door
-    const glassBack = add(new THREE.PlaneGeometry(-dh - B.z0, H - 0.1), M.glass, x, (H - 0.1) / 2, (B.z0 - dh) / 2, Math.PI / 2);
-    glassBack.renderOrder = 5;
-    void d;
-    for (const z of [B.z0 + 0.04, -dh, (B.z0 - dh) / 2]) box(0.1, H, 0.08, M.frame, x, H / 2, z);
-    box(0.12, 0.1, -dh - B.z0, M.frame, x, H - 0.05, (B.z0 - dh) / 2);
-    box(0.12, 0.08, -dh - B.z0, M.frame, x, 0.04, (B.z0 - dh) / 2);
-    // the slid-open door panel, parked in front of the fixed one
-    const slid = add(new THREE.PlaneGeometry(1.8, H - 0.2), M.glass, x + 0.12, (H - 0.2) / 2, -dh - 0.95, Math.PI / 2);
-    slid.renderOrder = 5;
-    box(0.06, H - 0.2, 0.06, M.frame, x + 0.12, (H - 0.2) / 2, -dh - 0.05);
-    // low wall toward the camera
-    const d2 = B.z1 - dh;
-    box(0.14, LOW, d2, paintSide, x, LOW / 2, dh + d2 / 2);
-    box(0.2, 0.05, d2, M.trim, x, LOW, dh + d2 / 2);
+  outerWall(0, paintSide);
+  // Inner walls come straight from the shared map, so every doorway you can
+  // walk through is one you can see. The kitchen→terrace wall is glass.
+  const pieces = wallPieces(HOME_MAP, H, LOW);
+  const GLASS_X = HOME.partitions[1];
+  for (const p of pieces) {
+    const len = p.z1 - p.z0, mid = (p.z0 + p.z1) / 2;
+    if (p.x === GLASS_X && p.h === H) {
+      const pane = add(new THREE.PlaneGeometry(len, H - 0.1), M.glass, p.x, (H - 0.1) / 2, mid, Math.PI / 2);
+      pane.renderOrder = 5;
+      for (const z of [p.z0 + 0.04, mid]) box(0.1, H, 0.08, M.frame, p.x, H / 2, z);
+      box(0.12, 0.1, len, M.frame, p.x, H - 0.05, mid);
+      box(0.12, 0.08, len, M.frame, p.x, 0.04, mid);
+      // the slid-open door panel, parked against the fixed one
+      const slid = add(new THREE.PlaneGeometry(Math.min(1.8, len - 0.2), H - 0.2), M.glass, p.x + 0.12, (H - 0.2) / 2, p.z1 - 0.95, Math.PI / 2);
+      slid.renderOrder = 5;
+      continue;
+    }
+    box(0.14, p.h, len, paintSide, p.x, p.h / 2, mid);
+    if (p.h === LOW) box(0.2, 0.05, len, M.trim, p.x, LOW, mid);
+  }
+  // Door frames: two posts and a header, so a doorway reads as a doorway.
+  // The header fades when the camera is right behind it (see fadeOccluders).
+  const DOOR_H = 2.35;
+  const headers: { x: number; mats: THREE.MeshStandardMaterial[] }[] = [];
+  for (const d of doorways(pieces)) {
+    const glassDoor = d.x === GLASS_X;
+    const post = glassDoor ? M.frame : M.trim;
+    for (const z of [d.z0, d.z1]) box(0.2, DOOR_H, 0.12, post, d.x, DOOR_H / 2, z + (z === d.z0 ? 0.06 : -0.06));
+    const wallM = (glassDoor ? M.frame : paintSide).clone() as THREE.MeshStandardMaterial;
+    const trimM = (glassDoor ? M.frame : M.trim).clone() as THREE.MeshStandardMaterial;
+    wallM.transparent = trimM.transparent = true;
+    box(0.14, H - DOOR_H, d.z1 - d.z0, wallM, d.x, DOOR_H + (H - DOOR_H) / 2, (d.z0 + d.z1) / 2);
+    box(0.22, 0.1, d.z1 - d.z0 + 0.24, trimM, d.x, DOOR_H, (d.z0 + d.z1) / 2);
+    headers.push({ x: d.x, mats: [wallM, trimM] });
+    // a threshold strip on the floor
+    const sill = box(0.3, 0.012, d.z1 - d.z0, M.walnut, d.x, 0.006, (d.z0 + d.z1) / 2); void sill;
   }
 
   // ---- 거실: living room ----
@@ -326,11 +340,15 @@ export function buildHome(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
     rail(new THREE.Vector3(24.1, 0, B.z0 + 0.05), new THREE.Vector3(B.x1 - 0.05, 0, B.z0 + 0.05));
     rail(new THREE.Vector3(B.x1 - 0.05, 0, B.z0 + 0.05), new THREE.Vector3(B.x1 - 0.05, 0, B.z1 - 0.1));
   }
-  // the sky and the city beyond the railing (only out here — indoors stays indoors)
-  // far away, so the city reads as a skyline and not as the building next door
-  add(new THREE.PlaneGeometry(90, 44), new THREE.MeshBasicMaterial({ map: sky.texture, fog: false }), 52, 10, -40);
-  const farCity = city.texture.clone(); farCity.wrapS = THREE.RepeatWrapping; farCity.repeat.set(2.4, 1); farCity.needsUpdate = true;
-  add(new THREE.PlaneGeometry(96, 6.5), new THREE.MeshBasicMaterial({ map: farCity, transparent: true, fog: false }), 52, 1.2, -38);
+  // The view from the terrace is a painted stage backdrop standing just past the
+  // railing — sky and skyline, exactly as wide as the terrace, its top and edges
+  // melting into the dark. Being close, it never peeks out above the indoor
+  // rooms the way a far-away sky would; indoors stays indoors.
+  const view = terraceBackdrop(sky.canvas, city.canvas);
+  const VIEW = { x0: 24.2, x1: 44, z: -6.4, h: 6.2 };
+  const backdrop = add(new THREE.PlaneGeometry(VIEW.x1 - VIEW.x0, VIEW.h), new THREE.MeshBasicMaterial({ map: view.texture, transparent: true, depthWrite: false, fog: false }),
+    (VIEW.x0 + VIEW.x1) / 2, VIEW.h / 2 - 0.4, VIEW.z);
+  backdrop.renderOrder = -1;
   // deck furniture
   for (const [k, b] of HOME.beanbags.entries()) {
     const bag = add(new THREE.SphereGeometry(b.r, 14, 10), std(k ? '#6fb3c8' : '#d9a441', { roughness: 1 }), b.x, 0.26, b.z);
@@ -387,7 +405,7 @@ export function buildHome(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
     sky.paint(s);
     night = s.night;
     city.paint(s.night);
-    farCity.needsUpdate = true; // clones share the canvas, but say so explicitly
+    view.paint();
     hemi.intensity = 0.55 + s.hemi * 0.5;
     sun.color.copy(s.sun); sun.intensity = 0.4 + s.sunI * 0.6;
     warm.intensity = 0.35 + 0.5 * s.night;
@@ -401,7 +419,13 @@ export function buildHome(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
     floor,
     setTime,
     loadArt: async () => {},
-    fadeOccluders: () => {},
+    fadeOccluders(cam: THREE.Vector3) {
+      for (const h of headers) {
+        // fully there 3m+ to the side, almost gone when the camera is right behind it
+        const o = Math.min(1, Math.max(0.08, (Math.abs(cam.x - h.x) - 0.6) / 2.4));
+        for (const m of h.mats) { m.opacity = o; m.depthWrite = o > 0.95; }
+      }
+    },
     tick(dt: number) {
       t += dt;
       lights.tick(t, night);
@@ -451,4 +475,32 @@ function rugTexture() {
     x.fillStyle = 'rgba(0,0,0,.06)';
     for (let i = 0; i < w; i += 3) x.fillRect(i, 0, 1, h);
   });
+}
+
+/**
+ * The terrace view: the visitor's sky with the city in front, faded to clear at
+ * the top and the sides so it blends into the dark around the dollhouse.
+ */
+function terraceBackdrop(skyCanvas: HTMLCanvasElement, cityCanvas: HTMLCanvasElement) {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 224;
+  const texture = new THREE.CanvasTexture(c); texture.colorSpace = THREE.SRGBColorSpace;
+  const paint = () => {
+    const g = c.getContext('2d')!, w = c.width, h = c.height;
+    g.globalCompositeOperation = 'source-over';
+    g.clearRect(0, 0, w, h);
+    g.drawImage(skyCanvas, 0, 0, w, h);
+    // the skyline along the bottom, a slice of the wide city strip
+    g.drawImage(cityCanvas, 0, 0, cityCanvas.width * 0.5, cityCanvas.height, 0, h * 0.42, w, h * 0.58);
+    // fade: clear at the top, soft at the sides
+    g.globalCompositeOperation = 'destination-in';
+    const v = g.createLinearGradient(0, 0, 0, h);
+    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(0.38, 'rgba(0,0,0,1)'); v.addColorStop(1, 'rgba(0,0,0,1)');
+    g.fillStyle = v; g.fillRect(0, 0, w, h);
+    const sides = g.createLinearGradient(0, 0, w, 0);
+    sides.addColorStop(0, 'rgba(0,0,0,.25)'); sides.addColorStop(0.06, 'rgba(0,0,0,1)'); sides.addColorStop(0.9, 'rgba(0,0,0,1)'); sides.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = sides; g.fillRect(0, 0, w, h);
+    g.globalCompositeOperation = 'source-over';
+    texture.needsUpdate = true;
+  };
+  return { texture, paint };
 }

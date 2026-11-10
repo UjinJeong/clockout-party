@@ -201,5 +201,5 @@ export function skylineTexture() {
     tex.needsUpdate = true;
   };
   paint(0);
-  return { texture: tex, paint };
+  return { texture: tex, canvas: c, paint };
 }
