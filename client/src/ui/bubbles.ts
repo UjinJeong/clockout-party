@@ -10,14 +10,16 @@ export class Tag {
   private plate = document.createElement('div');
   private nameEl = document.createElement('b');
   private batEl = document.createElement('span');
+  private moodEl = document.createElement('span');
 
   constructor(layer: HTMLElement, name: string, isSelf: boolean) {
     this.el.className = 'tag' + (isSelf ? ' self' : '');
     this.stack.className = 'stack';
     this.plate.className = 'plate';
     this.batEl.className = 'bat';
+    this.moodEl.className = 'mood';
     this.nameEl.textContent = name;
-    this.plate.append(this.batEl, this.nameEl);
+    this.plate.append(this.batEl, this.nameEl, this.moodEl);
     this.el.append(this.stack, this.plate);
     layer.append(this.el);
   }
@@ -31,6 +33,14 @@ export class Tag {
       this.batEl.title = b === 'low' ? '방전 · 구경만 할래요' : '충전 중 · 말 걸어도 돼요';
       this.el.classList.toggle('low', b === 'low');
     }
+  }
+
+  /** How their day went, as a little face after the name. */
+  setMood(icon: string, label: string) {
+    if (this.moodEl.textContent === icon) return;
+    this.moodEl.textContent = icon;
+    this.moodEl.title = label;
+    this.moodEl.hidden = !icon;
   }
 
   setNear(near: boolean) { this.el.classList.toggle('near', near); }

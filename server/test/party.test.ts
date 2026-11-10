@@ -8,7 +8,7 @@ import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { boot, type ColyseusTestServer } from '@colyseus/testing';
 import app from '../src/app';
 import type { PartyRoom } from '../src/PartyRoom';
-import { DOZE_AFTER, ENERGY, MAPS } from '@party/shared';
+import { DOZE_AFTER, ENERGY, MAPS, MOOD_ENERGY } from '@party/shared';
 
 let colyseus: ColyseusTestServer;
 beforeAll(async () => { colyseus = await boot(app); });
@@ -256,6 +256,35 @@ describe('퇴근 → 충전', () => {
     a.send('emote', { kind: 'nod' });
     await wait(80);
     expect(room.state.players.get(a.sessionId)!.dozing).toBe(false);
+  });
+});
+
+describe('오늘 하루 어땠어요?', () => {
+  it('your first answer shows on your name and sets how charged you arrive', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', {});
+    const a = await colyseus.connectTo(room, { name: 'A', look });
+    await room.waitForNextPatch();
+    a.send('mood', { mood: 'drained' });
+    await wait(80);
+    const p = room.state.players.get(a.sessionId)!;
+    expect(p.mood).toBe('drained');
+    expect(p.energy).toBe(MOOD_ENERGY.drained);
+  });
+
+  it('changing your mind later changes the face, not the energy; nonsense is ignored', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', {});
+    const a = await colyseus.connectTo(room, { name: 'A', look });
+    await room.waitForNextPatch();
+    a.send('mood', { mood: 'drained' });
+    await wait(60);
+    a.send('mood', { mood: 'hyped' });
+    await wait(60);
+    const p = room.state.players.get(a.sessionId)!;
+    expect(p.mood).toBe('hyped');
+    expect(p.energy).toBe(MOOD_ENERGY.drained);
+    a.send('mood', { mood: 'furious' });
+    await wait(60);
+    expect(p.mood).toBe('hyped');
   });
 });
 

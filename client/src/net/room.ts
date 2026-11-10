@@ -1,5 +1,5 @@
 import {
-  ENERGY, THEME_LABEL, batteryOf, isEmote, isNear, parseLook, sanitizeChat, sanitizeName, type Emote, type Look, type Theme,
+  ENERGY, THEME_LABEL, batteryOf, isEmote, isMood, isNear, parseLook, sanitizeChat, sanitizeName, type Emote, type Look, type Mood, type Theme,
 } from '@party/shared';
 import { DemoConnection } from './demo';
 import { Emitter, type NetPlayer, type PartyConnection, type PartyEvents } from './types';
@@ -86,13 +86,13 @@ export class LiveRoomConnection implements PartyConnection {
     void room.presence(this.presence({ e: ENERGY.start, s: -1, dz: false })).catch(() => {});
     // your energy, seat and dozing come from the same simulation as the bots';
     // share them when they change (whole numbers, so this stays rare)
-    let shared = { e: ENERGY.start, s: -1, dz: false };
+    let shared = { e: ENERGY.start, s: -1, dz: false, md: '' as string };
     this.bots.on({
       change: p => {
         if (p.id !== 'me') return;
-        if (p.energy === shared.e && p.seat === shared.s && p.dozing === shared.dz) return;
-        shared = { e: p.energy, s: p.seat, dz: p.dozing };
-        void this.room.presence({ e: p.energy, s: p.seat, dz: p.dozing }).catch(() => {});
+        if (p.energy === shared.e && p.seat === shared.s && p.dozing === shared.dz && p.mood === shared.md) return;
+        shared = { e: p.energy, s: p.seat, dz: p.dozing, md: p.mood };
+        void this.room.presence({ e: p.energy, s: p.seat, dz: p.dozing, md: p.mood || null }).catch(() => {});
       },
     });
   }
@@ -117,6 +117,7 @@ export class LiveRoomConnection implements PartyConnection {
   async voice() { /* not available in the preview */ }
   sit(seatId: number) { this.bots.sit(seatId); }
   stand() { this.bots.stand(); }
+  mood(m: Mood) { this.bots.mood(m); }
   leave() {
     this.offs.forEach(f => f());
     void this.room.presence({ x: null, z: null, n: null }).catch(() => {});
@@ -144,5 +145,6 @@ function toPlayer(p: RoomPeer): NetPlayer | null {
     })(),
     seat: typeof s.s === 'number' && Number.isInteger(s.s) ? s.s : -1,
     dozing: s.dz === true,
+    mood: isMood(s.md) ? s.md : '',
   };
 }

@@ -1,4 +1,4 @@
-import type { Battery, Emote, Look, Theme } from '@party/shared';
+import type { Battery, Emote, Look, Mood, Theme } from '@party/shared';
 
 /** Everything the game needs from "the party", whether it is a real server or the demo. */
 export interface NetPlayer {
@@ -9,6 +9,8 @@ export interface NetPlayer {
   /** Seat id, or -1 when on your feet. */
   seat: number;
   dozing: boolean;
+  /** How their day went, '' until they say. */
+  mood: Mood | '';
 }
 
 export interface PartyEvents {
@@ -42,6 +44,8 @@ export interface PartyConnection {
   /** Sit on a seat you're standing next to (the party decides if you may). */
   sit(seatId: number): void;
   stand(): void;
+  /** Answer "오늘 하루 어땠어요?" (the first answer sets how charged you arrive). */
+  mood(m: Mood): void;
   leave(): void;
 }
 

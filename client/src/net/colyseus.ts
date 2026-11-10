@@ -1,5 +1,5 @@
 import { Client, Callbacks, type Room } from '@colyseus/sdk';
-import { ROOM_NAME, isTheme, parseLook, type Battery, type Emote, type Look, type Theme } from '@party/shared';
+import { ROOM_NAME, isMood, isTheme, parseLook, type Battery, type Emote, type Look, type Mood, type Theme } from '@party/shared';
 import { Emitter, type NetPlayer, type PartyConnection, type PartyEvents } from './types';
 
 /**
@@ -43,7 +43,7 @@ export async function connectParty(req: JoinRequest, name: string, look: Look): 
 interface ServerPlayer {
   name: string; kind: string; color: number; hat: string; hand: string; outfit: string;
   x: number; z: number; dir: number; moving: boolean; battery: string;
-  energy: number; seat: number; dozing: boolean;
+  energy: number; seat: number; dozing: boolean; mood: string;
 }
 
 class ColyseusConnection implements PartyConnection {
@@ -57,7 +57,7 @@ class ColyseusConnection implements PartyConnection {
     const toNet = (id: string, p: ServerPlayer): NetPlayer => ({
       id, name: p.name, look: parseLook({ kind: p.kind, color: p.color, hat: p.hat, hand: p.hand, outfit: p.outfit }),
       x: p.x, z: p.z, dir: p.dir, moving: p.moving, battery: p.battery as Battery,
-      energy: p.energy ?? 0, seat: p.seat ?? -1, dozing: !!p.dozing,
+      energy: p.energy ?? 0, seat: p.seat ?? -1, dozing: !!p.dozing, mood: isMood(p.mood) ? p.mood : '',
     });
     cb.onAdd('players', (p: ServerPlayer, id: string) => {
       const np = toNet(id, p);
@@ -97,6 +97,7 @@ class ColyseusConnection implements PartyConnection {
   }
   sit(seatId: number) { this.room.send('sit', { seat: seatId }); }
   stand() { this.room.send('stand', {}); }
+  mood(m: Mood) { this.room.send('mood', { mood: m }); }
   leave() { void this.room.leave(true); }
 }
 

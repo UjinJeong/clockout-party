@@ -40,3 +40,11 @@ export function nearSeat(seats: Seat[], p: Vec2, within = 1.4): Seat | null {
   }
   return best;
 }
+
+/** "오늘 하루 어땠어요?" — asked once on arrival; it decides how charged you walk in. */
+export const MOODS = ['drained', 'meh', 'sleepy', 'hyped'] as const;
+export type Mood = (typeof MOODS)[number];
+export const MOOD_ICON: Record<Mood, string> = { drained: '😵', meh: '🙂', sleepy: '😴', hyped: '🥳' };
+export const MOOD_LABEL: Record<Mood, string> = { drained: '녹초', meh: '그럭저럭', sleepy: '졸려', hyped: '신나!' };
+export const MOOD_ENERGY: Record<Mood, number> = { drained: 10, meh: 25, sleepy: 15, hyped: 50 };
+export const isMood = (v: unknown): v is Mood => (MOODS as readonly unknown[]).includes(v);

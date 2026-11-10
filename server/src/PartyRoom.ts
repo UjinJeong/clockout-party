@@ -1,6 +1,6 @@
 import { Room, type Client } from '@colyseus/core';
 import {
-  DOZE_AFTER, ENERGY, MAX_PLAYERS, MAX_SPEED, batteryOf, chargeRate, finite, isEmote, isTheme, mapFor,
+  DOZE_AFTER, ENERGY, MAX_PLAYERS, MAX_SPEED, MOOD_ENERGY, batteryOf, chargeRate, finite, isEmote, isMood, isTheme, mapFor,
   moveWithCollision, nearbyIds, nearestWalkable, stepEnergy, type WorldMap, parseLook, sanitizeChat, sanitizeName, sanitizeTitle, validateVoice,
 } from '@party/shared';
 import { PartyState, Player } from './schema';
@@ -14,6 +14,8 @@ interface Track {
   energy: number;
   /** Seconds since the player last did anything. */
   idle: number;
+  /** Only the first answer to "how was your day" sets your arrival energy. */
+  moodSet: boolean;
 }
 
 /**
@@ -47,6 +49,18 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
     },
     sit: (client: Client, m: unknown) => this.onSit(client, (m as { seat?: unknown } | null)?.seat),
     stand: (client: Client) => { this.standUp(client.sessionId); this.active(client.sessionId); },
+    mood: (client: Client, m: unknown) => {
+      const mood = (m as { mood?: unknown } | null)?.mood;
+      const p = this.state.players.get(client.sessionId), t = this.tracks.get(client.sessionId);
+      if (!p || !t || !isMood(mood)) return;
+      p.mood = mood;
+      if (!t.moodSet) {
+        t.moodSet = true;
+        t.energy = MOOD_ENERGY[mood];
+        p.energy = Math.floor(t.energy); p.battery = batteryOf(t.energy);
+      }
+      this.active(client.sessionId);
+    },
     voice: (client: Client, m: unknown) => {
       const note = validateVoice(m);
       const track = this.tracks.get(client.sessionId);
@@ -82,9 +96,9 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
     this.state.players.set(client.sessionId, new Player({
       name, kind: look.kind, color: look.color, hat: look.hat, hand: look.hand, outfit: look.outfit,
       x: spot.x, z: spot.z, dir: 0, moving: false,
-      energy: ENERGY.start, battery: batteryOf(ENERGY.start), seat: -1, dozing: false,
+      energy: ENERGY.start, battery: batteryOf(ENERGY.start), seat: -1, dozing: false, mood: '',
     }));
-    this.tracks.set(client.sessionId, { at: Date.now(), voiceAt: 0, energy: ENERGY.start, idle: 0 });
+    this.tracks.set(client.sessionId, { at: Date.now(), voiceAt: 0, energy: ENERGY.start, idle: 0, moodSet: false });
     stats.join({ id: client.sessionId, name, roomId: this.roomId, roomTitle: this.state.title, isPrivate: this.state.isPrivate, tz: options.tz });
   }
 

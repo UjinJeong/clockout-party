@@ -1,4 +1,7 @@
-import { BATTERY_LABEL, EMOTES, EMOTE_ICON, ENERGY, VOICE_MAX_MS, type Battery, type MapRoom, type Seat } from '@party/shared';
+import {
+  BATTERY_LABEL, EMOTES, EMOTE_ICON, ENERGY, MOODS, MOOD_ENERGY, MOOD_ICON, MOOD_LABEL, VOICE_MAX_MS,
+  type Battery, type MapRoom, type Mood, type Seat,
+} from '@party/shared';
 import type { Party } from '../game/party';
 import type { PartyConnection } from '../net/types';
 import type { Artwork } from '../world/art';
@@ -105,6 +108,25 @@ export function createHud(conn: PartyConnection, controls: Controls) {
   showEnergy(ENERGY.start);
   on(batBtn, 'click', () => toast('가만히 있어도 조금씩 충전돼요. 소파나 의자에 앉으면 훨씬 빨라요 🛋️', 3200));
 
+  // ---- "오늘 하루 어땠어요?" — asked once, right after stepping out of the lift ----
+  const moodCard = $('mood-card'), moodPick = $('mood-pick');
+  moodPick.innerHTML = MOODS.map(m => `<button type="button" data-mood="${m}"><span class="mi">${MOOD_ICON[m]}</span>${MOOD_LABEL[m]}</button>`).join('');
+  const MOOD_REPLY: Record<Mood, string> = {
+    drained: '오늘 고생 많았어요. 소파에 앉아서 천천히 충전해요 🛋️',
+    meh: '그럭저럭인 날도 있죠. 편하게 둘러봐요',
+    sleepy: '졸리면 졸아도 돼요. 아무도 뭐라 안 해요 😴',
+    hyped: '오 신나는 날이네요! 건배 한 번 해요 🥂',
+  };
+  on(moodPick, 'click', e => {
+    const m = (e.target as HTMLElement).closest<HTMLButtonElement>('button')?.dataset.mood as Mood | undefined;
+    if (!m) return;
+    conn.mood(m);
+    moodCard.hidden = true;
+    toast(`${MOOD_REPLY[m]} (지금 에너지 ${MOOD_ENERGY[m]}%)`, 3600);
+  });
+  on($('mood-skip'), 'click', () => { moodCard.hidden = true; });
+  cleanups.push(() => { moodCard.hidden = true; });
+
   // ---- seats: sit down nearby, or get up ----
   const seatChip = $('seat-chip');
   let offered: { seat: Seat; seated: boolean } | null = null;
@@ -192,13 +214,14 @@ export function createHud(conn: PartyConnection, controls: Controls) {
     },
     energy: (e: number) => showEnergy(e),
     charged: () => toast('⚡ 충전 완료! 오늘도 수고했어요', 4200),
-    guests: (list: { id: string; name: string; battery: Battery; near: boolean; self: boolean; muted: boolean }[]) => {
+    landed: () => { moodCard.hidden = false; },
+    guests: (list: { id: string; name: string; battery: Battery; mood: Mood | ''; near: boolean; self: boolean; muted: boolean }[]) => {
       const near = list.filter(g => g.near).length;
       $('who').textContent = near ? `${list.length}명 있어요, 근처에 ${near}명` : `${list.length}명 있어요`;
       if (people.hidden) return;
       plist.innerHTML = list.sort((a, b) => Number(b.self) - Number(a.self) || Number(b.near) - Number(a.near))
         .map(g => `<li><span>${g.battery === 'low' ? '🪫' : '🔋'}</span>
-          <span>${esc(g.name)}${g.self ? '<span class="me">나</span>' : g.near ? '<span class="near">근처</span>' : ''}</span>
+          <span>${esc(g.name)}${g.mood ? ` ${MOOD_ICON[g.mood]}` : ''}${g.self ? '<span class="me">나</span>' : g.near ? '<span class="near">근처</span>' : ''}</span>
           ${g.self ? '<span></span>' : `<button type="button" data-mute="${esc(g.id)}" aria-pressed="${g.muted}">${g.muted ? '다시 보기' : '안 보기'}</button>`}</li>`).join('');
     },
   };

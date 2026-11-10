@@ -19,6 +19,8 @@ export const Player = schema({
   seat: t.int16(),
   /** Nodding off after a while doing nothing. */
   dozing: t.boolean(),
+  /** How their day went ("오늘 하루 어땠어요?"), '' until they say. */
+  mood: t.string(),
 }, 'Player');
 export type Player = SchemaType<typeof Player>;
 

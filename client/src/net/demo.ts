@@ -1,7 +1,7 @@
 import {
-  DOZE_AFTER, EMOTES, ENERGY, KINDS, MOVE_HZ, HANDS, HATS, OUTFITS, WALK_SPEED, batteryOf, chargeRate, isNear, mapFor,
+  DOZE_AFTER, EMOTES, ENERGY, KINDS, MOOD_ENERGY, MOVE_HZ, HANDS, HATS, OUTFITS, WALK_SPEED, batteryOf, chargeRate, isNear, mapFor,
   moveWithCollision, nearestWalkable, stepEnergy,
-  type Emote, type Look, type Seat, type Theme, type WorldMap,
+  type Emote, type Look, type Mood, type Seat, type Theme, type WorldMap,
 } from '@party/shared';
 import { Emitter, type NetPlayer, type PartyConnection, type PartyEvents } from './types';
 
@@ -12,12 +12,12 @@ import { Emitter, type NetPlayer, type PartyConnection, type PartyEvents } from 
  * rules as the real server: only nearby players hear you, same walls and
  * furniture, same seats and the same charging.
  */
-const BOTS: { name: string; energy: number }[] = [
-  { name: '월요병', energy: 12 },
-  { name: '소금빵', energy: 55 },
-  { name: '야근요정', energy: 30 },
-  { name: '꿀잠', energy: 8 },
-  { name: '하루', energy: 70 },
+const BOTS: { name: string; energy: number; mood: Mood }[] = [
+  { name: '월요병', energy: 12, mood: 'drained' },
+  { name: '소금빵', energy: 55, mood: 'meh' },
+  { name: '야근요정', energy: 30, mood: 'drained' },
+  { name: '꿀잠', energy: 8, mood: 'sleepy' },
+  { name: '하루', energy: 70, mood: 'hyped' },
 ];
 /** What each bot says, per place (same order as BOTS). */
 const LINES: Record<Theme, string[][]> = {
@@ -46,7 +46,7 @@ const LINES: Record<Theme, string[][]> = {
 const REPLIES = ['ㅋㅋㅋ 맞아요', '오 그래요?', '저도요!', '와 공감해요', '좋네요 🥂', '천천히 쉬다 가요'];
 
 /** The simulated body behind one guest: exact energy and how long they've been idle. */
-interface Sim { energy: number; idle: number }
+interface Sim { energy: number; idle: number; moodSet?: boolean }
 interface Bot extends NetPlayer, Sim {
   target: { x: number; z: number } | null;
   /** The seat a bot is heading to, to sit down on when it gets there. */
@@ -74,7 +74,7 @@ export class DemoConnection implements PartyConnection {
     const at = nearestWalkable(this.map.spawn, this.map);
     this.me = {
       id: 'me', name, look, x: at.x, z: at.z, dir: 0, moving: false,
-      energy: ENERGY.start, battery: batteryOf(ENERGY.start), seat: -1, dozing: false, idle: 0,
+      energy: ENERGY.start, battery: batteryOf(ENERGY.start), seat: -1, dozing: false, idle: 0, mood: '',
     };
     BOTS.forEach((b, i) => {
       // every bot dressed differently, so the party shows off the wardrobe
@@ -88,7 +88,7 @@ export class DemoConnection implements PartyConnection {
       const pos = nearestWalkable(p, this.map);
       this.bots.push({
         id: `bot${i}`, name: b.name + (opts.botSuffix ?? ''), look: lk, x: pos.x, z: pos.z, dir: Math.random() * 6, moving: false,
-        energy: b.energy, battery: batteryOf(b.energy), seat: -1, dozing: false, idle: Math.random() * 20,
+        energy: b.energy, battery: batteryOf(b.energy), seat: -1, dozing: false, idle: Math.random() * 20, mood: b.mood,
         target: null, wantSeat: null, wait: 2 + Math.random() * 6, lines: LINES[this.theme][i], nextLine: 3 + Math.random() * 6,
       });
     });
@@ -124,6 +124,13 @@ export class DemoConnection implements PartyConnection {
 
   stand() {
     this.standUp(this.me);
+    this.wake(this.me);
+    this.ev.emit('change', strip(this.me));
+  }
+
+  mood(m: Mood) {
+    this.me.mood = m;
+    if (!this.me.moodSet) { this.me.moodSet = true; this.me.energy = MOOD_ENERGY[m]; this.me.battery = batteryOf(this.me.energy); }
     this.wake(this.me);
     this.ev.emit('change', strip(this.me));
   }
@@ -238,5 +245,5 @@ export class DemoConnection implements PartyConnection {
 
 const strip = (b: NetPlayer): NetPlayer => ({
   id: b.id, name: b.name, look: b.look, x: b.x, z: b.z, dir: b.dir, moving: b.moving,
-  battery: b.battery, energy: Math.floor(b.energy), seat: b.seat, dozing: b.dozing,
+  battery: b.battery, energy: Math.floor(b.energy), seat: b.seat, dozing: b.dozing, mood: b.mood,
 });

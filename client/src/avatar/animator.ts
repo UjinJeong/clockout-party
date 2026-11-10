@@ -13,6 +13,9 @@ export interface BodyState {
   baseY: number;
 }
 
+/** Emotes anyone can send, plus a few moves the party plays by itself. */
+export type Gesture = Emote | 'sigh';
+
 /** Code-driven motion: walking, idle breathing, sitting, lying, dozing, and a short gesture per emote. */
 export class Animator {
   private t = Math.random() * 3; // first blink comes after a second or so
@@ -20,7 +23,7 @@ export class Animator {
   private sit = 0;             // 0..1 blend into sitting
   private lie = 0;             // 0..1 blend into lying back
   private doze = 0;            // 0..1 blend into nodding off
-  private emote: Emote | null = null;
+  private emote: Gesture | null = null;
   private emoteT = 0;
   static readonly EMOTE_TIME = 1.5;
 
@@ -28,7 +31,7 @@ export class Animator {
     rig.root.rotation.order = 'YXZ'; // turn first, then lean back (lying on a lounger)
   }
 
-  play(kind: Emote) { this.emote = kind; this.emoteT = 0; }
+  play(kind: Gesture) { this.emote = kind; this.emoteT = 0; }
 
   update(dt: number, b: BodyState) {
     const r = this.rig;
@@ -135,6 +138,16 @@ export class Animator {
         // slow, agreeable nods: "mm, mm"
         r.head.rotation.x += Math.abs(Math.sin(this.emoteT * 6.5)) * 0.32 * env;
         break;
+      case 'sigh': {
+        // stepping out of the lift after work: hand to the collar, tug the tie loose, shoulders drop
+        const up = Math.min(1, p * 2.4), down = Math.max(0, (p - 0.55) / 0.45);
+        const hand = up * (1 - down);
+        r.armR.rotation.x = -2.1 * hand;
+        r.armR.rotation.z = 0.18 + 0.65 * hand;
+        r.head.rotation.x += -0.22 * hand + 0.25 * down * (1 - down) * 4;
+        r.bodyPivot.position.y -= 0.03 * Math.sin(Math.PI * down);
+        break;
+      }
       case 'zone':
         // staring into the middle distance, head tipped, a slow sway
         r.head.rotation.z += 0.28 * env;

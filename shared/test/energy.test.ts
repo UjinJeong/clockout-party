@@ -65,3 +65,15 @@ describe('low-energy reactions', () => {
     expect(EMOTE_ICON.zone).toBeTruthy();
   });
 });
+
+describe('오늘 하루 어땠어요?', () => {
+  it('four moods, each with a face, a word, and how much energy you arrive with', async () => {
+    const { MOODS, MOOD_ICON, MOOD_LABEL, MOOD_ENERGY, isMood } = await import('../src');
+    expect(MOODS).toEqual(['drained', 'meh', 'sleepy', 'hyped']);
+    for (const m of MOODS) { expect(MOOD_ICON[m]).toBeTruthy(); expect(MOOD_LABEL[m]).toBeTruthy(); }
+    expect(MOOD_ENERGY.drained).toBeLessThan(MOOD_ENERGY.meh);
+    expect(MOOD_ENERGY.hyped).toBeGreaterThan(ENERGY.low);
+    expect(isMood('hyped')).toBe(true);
+    expect(isMood('angry')).toBe(false);
+  });
+});

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {
-  ENERGY, MOVE_HZ, NEAR_RADIUS, WALK_SPEED, findPath, inWater, isNear, moveWithCollision, nearSeat, roomAt,
-  type Battery, type Emote, type MapRoom, type Seat, type Vec2,
+  ENERGY, MOOD_ICON, MOOD_LABEL, MOVE_HZ, NEAR_RADIUS, WALK_SPEED, findPath, inWater, isNear, moveWithCollision, nearSeat, roomAt,
+  type Battery, type Emote, type MapRoom, type Mood, type Seat, type Vec2,
 } from '@party/shared';
 import { buildAnimal, type AnimalRig } from '../avatar/animal';
 import { Animator } from '../avatar/animator';
@@ -13,6 +13,7 @@ import type { Controls } from './controls';
 import { Sparkles } from './effects';
 import { cameraPose } from './camera';
 import { canvasTexture } from '../world/textures';
+import { ARRIVAL, Elevator, ding } from './elevator';
 
 interface Guest {
   net: NetPlayer;
@@ -29,6 +30,9 @@ interface Guest {
   zzz: THREE.Sprite[] | null;
   /** Energy last frame, to notice the moment someone is fully recharged. */
   lastEnergy: number;
+  /** The lift they're stepping out of, while arriving. */
+  arrive: Elevator | null;
+  sighed: boolean;
 }
 
 const zTex = () => canvasTexture(64, 64, (x, w, h) => {
@@ -46,7 +50,7 @@ const floatieGeo = new THREE.TorusGeometry(0.46, 0.14, 10, 22);
 export interface PartyHooks {
   room(room: MapRoom): void;
   painting(p: Painting | null): void;
-  guests(list: { id: string; name: string; battery: Battery; near: boolean; self: boolean; muted: boolean }[]): void;
+  guests(list: { id: string; name: string; battery: Battery; mood: Mood | ''; near: boolean; self: boolean; muted: boolean }[]): void;
   arrived(p: Painting): void;
   /** A free seat you could sit on right now (or the one you're on). */
   seat(s: { seat: Seat; seated: boolean } | null): void;
@@ -54,6 +58,8 @@ export interface PartyHooks {
   energy(e: number): void;
   /** You just reached full charge. */
   charged(): void;
+  /** You've stepped out of the lift and are at the party. */
+  landed(): void;
 }
 
 
@@ -76,6 +82,9 @@ export class Party {
   private seatHits: THREE.Mesh[] = [];
   private offeredSeat: { id: number; seated: boolean } | null = null;
   private lastEnergyShown = -1;
+  /** Guests already here when you arrive just stand there; anyone joining later comes up in the lift. */
+  private settled = false;
+  private settleTimer: number;
   private ring: THREE.Mesh;
   private targetMark: THREE.Mesh;
   /** 0 = close behind you (동물의 숲), 1 = overview. `zoomGoal` is where the wheel/button want it. */
@@ -122,6 +131,7 @@ export class Party {
       scene.add(hit); this.seatHits.push(hit);
     }
 
+    this.settleTimer = window.setTimeout(() => { this.settled = true; }, 1500);
     conn.on({
       add: p => this.addGuest(p),
       change: p => this.updateGuest(p),
@@ -174,7 +184,13 @@ export class Party {
     this.guests.set(p.id, {
       net: { ...p }, rig, anim: new Animator(rig), tag, pos: new THREE.Vector2(p.x, p.z), dir: p.dir,
       lookKey: JSON.stringify(p.look), wet: 0, floatie: null, zzz: null, lastEnergy: p.energy,
+      // you, and anyone who joins after you, arrive by the 퇴근 lift
+      arrive: isSelf || this.settled ? new Elevator(this.scene, new THREE.Vector3(p.x, 0, p.z), 0, isSelf ? () => ding() : undefined) : null,
+      sighed: false,
     });
+    const g0 = this.guests.get(p.id)!;
+    if (g0.arrive) { g0.dir = 0; g0.rig.root.visible = false; }
+    g0.tag.setMood(p.mood ? MOOD_ICON[p.mood] : '', p.mood ? MOOD_LABEL[p.mood] : '');
     if (isSelf) { this.camTarget.set(p.x, 0, p.z); this.snapCamera(); }
     this.listDirty = true;
   }
@@ -193,6 +209,7 @@ export class Party {
     } else g.net = { ...p };
     g.tag.setName(p.name);
     g.tag.setBattery(p.battery);
+    g.tag.setMood(p.mood ? MOOD_ICON[p.mood] : '', p.mood ? MOOD_LABEL[p.mood] : '');
     const key = JSON.stringify(p.look);
     if (key !== g.lookKey) {
       const rig = buildAnimal(p.look);
@@ -208,6 +225,7 @@ export class Party {
     if (!g) return;
     g.rig.dispose(); g.tag.dispose();
     for (const z of g.zzz ?? []) z.removeFromParent();
+    g.arrive?.dispose();
     this.guests.delete(id);
     this.listDirty = true;
   }
@@ -314,7 +332,8 @@ export class Party {
       g.rig.root.position.z = g.pos.y;
       g.rig.root.rotation.y = g.dir;
       const baseY = seat ? (seat.pose === 'lie' ? seat.y - 0.04 : seat.y - 0.24) : this.wade(g, dt);
-      const moving = !seat && (id === this.conn.selfId ? g.net.moving : g.net.moving || Math.hypot(g.net.x - g.pos.x, g.net.z - g.pos.y) > 0.05);
+      let moving = !seat && (id === this.conn.selfId ? g.net.moving : g.net.moving || Math.hypot(g.net.x - g.pos.x, g.net.z - g.pos.y) > 0.05);
+      if (g.arrive) moving = this.arriving(g, dt, id === this.conn.selfId) || moving;
       g.anim.update(dt, { moving, energy: g.net.energy, pose: seat ? seat.pose : 'stand', dozing: g.net.dozing, baseY });
       this.dozeFx(g, dt);
       this.chargeFx(g, id === this.conn.selfId);
@@ -344,6 +363,8 @@ export class Party {
 
   private moveSelf(me: Guest, dt: number) {
     let { x: dx, z: dz } = this.controls.direction();
+    // still in the lift: wait for the doors
+    if (me.arrive && me.arrive.t < ARRIVAL.out) { dx = 0; dz = 0; this.controls.target = null; }
     // any steering while seated gets you up first
     if (me.net.seat >= 0 && (dx !== 0 || dz !== 0 || this.controls.target)) this.standUp();
     const tgt = this.controls.target;
@@ -465,6 +486,20 @@ export class Party {
     this.conn.stand();
   }
 
+  /** Stepping out of the lift: drawn a little back inside it until the doors are open, then out, then a sigh. */
+  private arriving(g: Guest, dt: number, isSelf: boolean): boolean {
+    const e = g.arrive!;
+    e.update(dt);
+    g.rig.root.visible = e.guestVisible();
+    g.rig.root.position.z -= e.guestOffset();
+    if (!g.sighed && e.t >= ARRIVAL.out) { g.sighed = true; g.anim.play('sigh'); }
+    if (e.done) {
+      g.arrive = null; g.rig.root.visible = true;
+      if (isSelf) this.hooks.landed();
+    }
+    return e.stepping();
+  }
+
   /** Nodding off: a few Z's drift up from the head. */
   private dozeFx(g: Guest, dt: number) {
     if (!g.net.dozing) { if (g.zzz) for (const z of g.zzz) z.visible = false; return; }
@@ -543,13 +578,14 @@ export class Party {
     this.listDirty = false; this.listT = 1;
     const me = this.self();
     this.hooks.guests([...this.guests.values()].map(g => ({
-      id: g.net.id, name: g.net.name, battery: g.net.battery, self: g.net.id === this.conn.selfId,
+      id: g.net.id, name: g.net.name, battery: g.net.battery, mood: g.net.mood, self: g.net.id === this.conn.selfId,
       near: !!me && g.net.id !== me.net.id && isNear(me.net, g.net), muted: this.muted.has(g.net.id),
     })));
   }
 
   dispose() {
     this.disposed = true;
+    clearTimeout(this.settleTimer);
     this.dom.removeEventListener('pointerup', this.onTap);
     this.dom.removeEventListener('wheel', this.onWheel);
     this.dom.removeEventListener('pointerdown', this.onPointerDown);
