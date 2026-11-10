@@ -33,9 +33,9 @@ export const VIEWER_HTML = `
       <span class="lbl">도슨트</span>
       <p class="doc" id="v-doc"></p>
       <div id="ask" hidden>
+        <span class="lbl ask-lbl">도슨트에게 물어보기</span>
         <div class="chips" id="ask-chips"></div>
-        <form class="askf" id="ask-form" autocomplete="off" style="margin-top:10px"><input id="ask-q" name="q" placeholder="이 그림에 대해 물어보세요" aria-label="도슨트에게 질문"><button class="btn dark" type="submit" id="ask-go">묻기</button></form>
-        <div class="answer" id="ask-a" aria-live="polite" hidden style="margin-top:10px"></div>
+        <div class="answer" id="ask-a" aria-live="polite" hidden style="margin-top:10px" title="누르면 바로 끝까지 보여요"></div>
       </div>
     </div>
   </aside>

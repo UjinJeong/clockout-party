@@ -7,6 +7,8 @@
  */
 import { VIEWER_HTML } from './markup';
 import './viewer.css';
+import { QUESTIONS, playAnswer } from './docent';
+import { ANSWERS } from './answers';
 
 
 let made = null;
@@ -709,45 +711,16 @@ const DOC={
  11:'흐릿하게 번진 분홍, 보라, 초록 사이로 하얀 잉어가 돌아 나옵니다. 배경은 일부러 흐리게 두고 잉어만 또렷하게 그려서 물속 깊은 곳을 들여다보는 느낌이에요. 작은 물방울들이 고요한 움직임을 더합니다.',
  14:'각얼음 속에 물고기가 갇혀 있고, 아래로는 녹은 물이 웅덩이를 이뤄요. 파랑과 초록 붓질로 얼음의 굴절을 표현했고, 머리와 꼬리만 밖으로 나온 물고기가 상황의 아이러니를 만듭니다. 얼음이 다 녹으면 물고기는 자유로워질까요?'
 };
-const ASK_CHIPS=['먼저 어디를 보면 좋을까요?','색은 어떻게 쓰였나요?','아이에게 설명해 주세요','이 그림이 움직인다면?'];
-let samplePromise=null,sampleImgOK=false;
-function getSample(){if(!samplePromise){samplePromise=(window.claude&&window.claude.use?window.claude.use('sample'):Promise.resolve(null)).catch(()=>null)
-  .then(async s=>{if(s){try{const l=await s.limits();sampleImgOK=!!(l&&l.images);}catch(e){sampleImgOK=false;}}return s;});}return samplePromise;}
-getSample().then(s=>{if(s&&!viewer.hidden&&S.art)$('ask').hidden=false;});
-async function thumbBlob(a){const im=await loadImg(a.thumb);const c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight;c.getContext('2d').drawImage(im,0,0);
-  return await new Promise(r=>c.toBlob(r,'image/jpeg',.88));}
+/* The docent's question chips: fixed answers shown as if typed live (no Claude call). */
 let askCtl=null;
-async function ask(q){const a=S.art;if(!a||!q.trim())return;const out=$('ask-a'),go=$('ask-go');const sample=await getSample();if(!sample)return;
-  askCtl&&askCtl.abort();askCtl=new AbortController();const my=askCtl;
-  out.hidden=false;out.className='answer wait';out.textContent='도슨트가 그림을 보고 있어요…';go.disabled=true;
-  const room=ROOMS.find(r=>r.id===a.room).name;
-  const prompt=`너는 정유진 작가의 온라인 전시 「액자 밖으로」의 도슨트야.${sampleImgOK?' 첨부한 이미지는 관람객이 지금 보고 있는 작품이야.':''}
-작품 정보
-- 가제: ${a.title} (작가가 정한 제목이 아니라 전시용 가제)
-- 전시실: ${room}
-- 전시 설명: ${DOC[a.i]}
-- 이 전시에서 그림이 움직이는 방식: ${a.desc} ${a.how}
-
-관람객 질문: ${q}
-
-답변 규칙
-- 한국어 존댓말, 3~5문장, 마크다운 없이 평문.
-- 그림에서 실제로 보이는 구도, 색, 선, 질감을 근거로 말할 것.
-- 작가의 의도, 제작 연도, 정확한 재료처럼 확인할 수 없는 사실은 지어내지 말고, "그렇게 보인다"고 말하거나 작가에게 물어보길 권할 것.
-- 관람객이 그림을 한 번 더 보게 만드는 문장으로 끝낼 것.`;
-  try{let blob=null;if(sampleImgOK){try{blob=await thumbBlob(a);}catch(e){blob=null;}}
-    const opts={signal:my.signal,modelTier:'quick',onText:({text})=>{out.className='answer';out.textContent=text;}};if(blob)opts.images=[blob];
-    const r=await sample(prompt,opts);out.className='answer';out.textContent=r.text;}
-  catch(e){if(e&&e.code==='cancelled')return;out.className='answer';
-    const msg={not_granted:'도슨트를 쓰려면 Claude 사용을 허용해 주세요.',sampling_disabled:'이 계정에서는 도슨트를 쓸 수 없어요.',rate_limited:'질문이 많아요. 잠시 뒤에 다시 물어봐 주세요.',session_expired:'다시 로그인한 뒤 물어봐 주세요.',refused:'이 질문에는 답하기 어려워요. 다르게 물어봐 주세요.'}[e&&e.code];
-    out.textContent=(e&&e.text?e.text+'\n\n':'')+(msg||'답을 받지 못했어요. 다시 물어봐 주세요.');
-    if(e&&(e.code==='not_granted'||e.code==='sampling_disabled'))$('ask').hidden=true;}
-  finally{if(askCtl===my)go.disabled=false;}}
-$('ask-chips').innerHTML=ASK_CHIPS.map(c=>`<button type="button" class="chip">${c}</button>`).join('');
-$('ask-chips').addEventListener('click',e=>{const b=e.target.closest('.chip');if(b){$('ask-q').value=b.textContent;ask(b.textContent);}});
-$('ask-form').addEventListener('submit',e=>{e.preventDefault();ask($('ask-q').value);});
-function viewerDocent(a){$('v-doc').textContent=DOC[a.i]||'';askCtl&&askCtl.abort();$('ask-a').hidden=true;$('ask-q').value='';$('ask-go').disabled=false;
-  getSample().then(s=>{$('ask').hidden=!s;});}
+function ask(n){const a=S.art;if(!a)return;const text=(ANSWERS[a.i]||[])[n];if(!text)return;
+  askCtl&&askCtl.abort();askCtl=new AbortController();
+  $('ask-chips').querySelectorAll('.chip').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.n===n)));
+  playAnswer($('ask-a'),text,askCtl.signal).catch(()=>{});}
+$('ask-chips').innerHTML=QUESTIONS.map((c,n)=>`<button type="button" class="chip" data-n="${n}" aria-pressed="false">${c}</button>`).join('');
+$('ask-chips').addEventListener('click',e=>{const b=e.target.closest('.chip');if(b)ask(+b.dataset.n);});
+function viewerDocent(a){$('v-doc').textContent=DOC[a.i]||'';askCtl&&askCtl.abort();askCtl=null;$('ask-a').hidden=true;$('ask').hidden=false;
+  $('ask-chips').querySelectorAll('.chip').forEach(b=>b.setAttribute('aria-pressed','false'));}
 
   made = {
     open(artId) { const k = ART.findIndex(a => a.i === artId); if (k >= 0) openViewer(k); },

@@ -57,3 +57,15 @@
 #viewer .zhint{top:auto;bottom:62px}
 #viewer .minimap{width:96px;bottom:64px;right:12px}
 }
+
+/* docent answers that arrive like a live reply */
+#viewer .ask-lbl{display:block;margin:6px 0 8px;font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--on-dark-2)}
+#viewer .chip[aria-pressed="true"]{color:var(--dark);background:var(--on-dark);border-color:var(--on-dark)}
+#viewer .answer{cursor:default}
+#viewer .answer.typing{cursor:pointer}
+#viewer .answer .think i{font-style:normal;animation:vdot 1.2s infinite both}
+#viewer .answer .think i:nth-child(2){animation-delay:.2s}
+#viewer .answer .think i:nth-child(3){animation-delay:.4s}
+@keyframes vdot{0%,20%{opacity:.15}50%{opacity:1}100%{opacity:.15}}
+#viewer .answer .caret{display:inline-block;width:7px;height:1.05em;margin-left:2px;vertical-align:-2px;background:var(--on-dark);animation:vcaret .9s steps(1) infinite}
+@keyframes vcaret{50%{opacity:0}}
