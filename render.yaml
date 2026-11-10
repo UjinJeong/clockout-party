@@ -2,7 +2,7 @@
 # after 15 minutes with no visitors and wakes in about a minute on the next visit.
 services:
   - type: web
-    name: web-party
+    name: clockout-party
     runtime: node
     plan: free
     region: singapore

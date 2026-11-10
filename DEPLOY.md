@@ -26,7 +26,7 @@
 1. 이 프로젝트를 GitHub 저장소에 올려요. (GitLab도 연결 가능)
 2. [render.com](https://render.com)에 가입하고 **New → Blueprint**를 눌러요.
 3. 저장소를 고르면 `render.yaml`을 읽어서 자동으로 설정돼요. (무료 플랜, 싱가포르 지역)
-4. 배포가 끝나면 `https://web-party-xxxx.onrender.com` 같은 주소가 생겨요. 이 주소를 친구에게 보내면 끝이에요.
+4. 배포가 끝나면 `https://clockout-party.onrender.com` 같은 주소가 생겨요. 이 주소를 친구에게 보내면 끝이에요.
 5. 관리 페이지: `주소/admin`. 비밀번호는 Render 대시보드 → 서비스 → **Environment**의 `ADMIN_PASSWORD`에서 확인해요.
 
 > 지역 선택에서 싱가포르가 안 되면 대시보드에서 다른 지역을 고르세요. 한국에서는 싱가포르가 가장 가까워요.
@@ -40,7 +40,7 @@
 3. 서버에 접속해서 Docker를 설치하고 이 프로젝트를 받아요.
    ```bash
    curl -fsSL https://get.docker.com | sh
-   git clone <내 저장소 주소> web-party && cd web-party
+   git clone https://github.com/UjinJeong/clockout-party.git && cd clockout-party
    ADMIN_PASSWORD=원하는비밀번호 docker compose up -d --build
    ```
 4. https 주소 만들기: 아래 3번의 Cloudflare Tunnel을 이 서버에서 실행하면 돼요.
