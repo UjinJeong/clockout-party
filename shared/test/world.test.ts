@@ -47,3 +47,18 @@ describe('proximity', () => {
     expect(nearbyIds(a, [a, b, c]).sort()).toEqual(['a', 'b']);
   });
 });
+
+describe('party furniture', () => {
+  it('adds standing tables and plants you cannot walk through', async () => {
+    const { TABLES, PLANTS } = await import('../src');
+    expect(TABLES.length).toBeGreaterThanOrEqual(8);
+    expect(PLANTS.length).toBeGreaterThanOrEqual(4);
+    for (const t of [...TABLES, ...PLANTS]) expect(isWalkable({ x: t.x, z: t.z })).toBe(false);
+  });
+  it('keeps the doorways, spawn and painting viewpoints clear', async () => {
+    for (const x of [12, 24, 36, 48]) expect(isWalkable({ x, z: 0 })).toBe(true);
+    expect(isWalkable(SPAWN)).toBe(true);
+    // in front of each back-wall painting
+    for (const r of [1, 2, 3]) for (const dx of [2.4, 6, 9.6]) expect(isWalkable({ x: r * 12 + dx, z: -3.3 })).toBe(true);
+  });
+});

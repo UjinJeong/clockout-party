@@ -57,6 +57,7 @@ let last = performance.now();
 renderer.setAnimationLoop((t) => {
   const dt = Math.min(0.1, (t - last) / 1000);
   last = t;
+  gallery.tick(dt);
   if (party) party.update(dt);
   else idleCamera(dt);
   renderer.render(scene, camera);

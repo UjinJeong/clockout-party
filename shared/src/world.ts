@@ -19,11 +19,25 @@ export const PARTITIONS = [12, 24, 36, 48];
 export const DOOR_HALF = 2;
 export const WALL_T = 0.1;
 
-/** Furniture you bump into: the lobby wine bar and a viewing bench in each room. */
-export const OBSTACLES: Rect[] = [
-  { x0: 3.2, x1: 8.8, z0: -3.9, z1: -3.1 },       // lobby wine bar
-  ...[1, 2, 3, 4].map(i => ({ x0: i * ROOM_W + 4.6, x1: i * ROOM_W + 7.4, z0: 0.9, z1: 1.6 })), // benches
+/** Furniture you bump into. The client draws exactly these, the server enforces them. */
+export const BAR: Rect = { x0: 3.2, x1: 8.8, z0: -3.9, z1: -3.1 }; // lobby wine bar
+export const BENCHES: Rect[] = [1, 2, 3, 4].map(i => ({ x0: i * ROOM_W + 4.6, x1: i * ROOM_W + 7.4, z0: 0.9, z1: 1.6 }));
+
+/** Round party furniture: standing tables (with a candle) and potted plants. */
+export interface Furniture { x: number; z: number; r: number }
+export const TABLES: Furniture[] = ROOM_IDS.flatMap((_, i) => [
+  { x: i * ROOM_W + 2.2, z: 2.9, r: 0.32 },
+  { x: i * ROOM_W + 9.8, z: 2.9, r: 0.32 },
+]);
+// Only in corners that have no painting hanging on the side wall.
+export const PLANTS: Furniture[] = [
+  { x: 0.7, z: -4.35, r: 0.3 }, { x: 11.3, z: -4.35, r: 0.3 },   // lobby
+  { x: 35.3, z: -4.35, r: 0.3 },                                // face room, right corner
+  { x: 36.7, z: -4.35, r: 0.3 }, { x: 47.3, z: -4.35, r: 0.3 },  // toy room
 ];
+const square = (p: Furniture): Rect => ({ x0: p.x - p.r, x1: p.x + p.r, z0: p.z - p.r, z1: p.z + p.r });
+
+export const OBSTACLES: Rect[] = [BAR, ...BENCHES, ...TABLES.map(square), ...PLANTS.map(square)];
 
 export const SPAWN: Vec2 = { x: 6, z: 1.5 };
 

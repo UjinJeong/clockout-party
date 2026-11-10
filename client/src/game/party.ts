@@ -9,6 +9,7 @@ import type { NetPlayer, PartyConnection } from '../net/types';
 import type { Gallery, Painting } from '../world/gallery';
 import { Tag } from '../ui/bubbles';
 import type { Controls } from './controls';
+import { Sparkles } from './effects';
 
 interface Guest {
   net: NetPlayer;
@@ -49,6 +50,7 @@ export class Party {
   private listDirty = true;
   private listT = 0;
   private disposed = false;
+  private sparkles: Sparkles;
 
   constructor(
     private scene: THREE.Scene,
@@ -69,6 +71,7 @@ export class Party {
       new THREE.MeshBasicMaterial({ color: 0xf1e2bd, transparent: true, opacity: 0.8, depthWrite: false }));
     this.targetMark.rotation.x = -Math.PI / 2; this.targetMark.position.y = 0.02; this.targetMark.visible = false;
     scene.add(this.targetMark);
+    this.sparkles = new Sparkles(scene);
 
     conn.on({
       add: p => this.addGuest(p),
@@ -142,6 +145,16 @@ export class Party {
     if (!g) return;
     g.anim.play(kind);
     g.tag.emote(kind);
+    // a little burst of light in the room, from the raised glass or above the head
+    if (kind === 'cheers' || kind === 'heart' || kind === 'clap') {
+      const at = new THREE.Vector3(g.pos.x, 1.75, g.pos.y);
+      const delay = kind === 'cheers' ? 520 : 200; // when the arm is at its highest
+      setTimeout(() => {
+        if (this.disposed) return;
+        if (kind === 'cheers' && g.rig.held) g.rig.held.getWorldPosition(at).add(new THREE.Vector3(0, 0.18, 0));
+        this.sparkles.burst(at, kind === 'heart' ? ['#ff8fb1', '#ffc2d4', '#ff5d8f'] : ['#ffd27a', '#fff1c4', '#f0b04a'], kind === 'clap' ? 18 : 40);
+      }, delay);
+    }
   }
 
   private onTap = (e: PointerEvent) => {
@@ -212,6 +225,7 @@ export class Party {
       this.ring.position.set(me.pos.x, 0.015, me.pos.y);
     }
 
+    this.sparkles.tick(dt);
     this.placeTags();
     this.listT -= dt;
     if (this.listDirty || this.listT <= 0) this.emitList();
@@ -322,6 +336,7 @@ export class Party {
     this.dom.removeEventListener('wheel', this.onWheel);
     for (const id of [...this.guests.keys()]) this.removeGuest(id);
     this.ring.removeFromParent(); this.targetMark.removeFromParent();
+    this.sparkles.dispose();
   }
 }
 

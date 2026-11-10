@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import { DOOR_HALF, OBSTACLES, PARTITIONS, ROOM_D, ROOM_IDS, ROOM_W, WORLD, type RoomId } from '@party/shared';
+import { BAR, BENCHES, DOOR_HALF, PARTITIONS, ROOM_D, ROOM_IDS, ROOM_W, WORLD, type RoomId } from '@party/shared';
 import { ART, ROOM_INFO, slotsFor, wallSrc, type Artwork, type Slot } from './art';
 import { fabric, parquet, runner, textPlate } from './textures';
 import { SkyPainter, skyAt, type SkyState } from './sky';
+import { buildDecor } from './decor';
 
 const H = 4.2;      // full wall height
 const LOW = 1.0;    // cut-away wall height near the camera
@@ -14,6 +15,8 @@ export interface Gallery {
   paintings: Painting[];
   floor: THREE.Mesh;
   setTime(date: Date): SkyState;
+  /** Animate the party lights, candles and dust. */
+  tick(dt: number): void;
   /** Load the painting images (call once the first frame is up). */
   loadArt(onProgress?: (done: number, total: number) => void): Promise<void>;
 }
@@ -125,7 +128,7 @@ export function buildGallery(scene: THREE.Scene, renderer: THREE.WebGLRenderer):
     box(0.05, wh, 0.06, M.walnut, wx, wy, BACK_Z + 0.07);
     box(ww, 0.05, 0.06, M.walnut, wx, wy + 0.3, BACK_Z + 0.07);
     // bar counter (matches the shared obstacle)
-    const bar = OBSTACLES[0];
+    const bar = BAR;
     const bw = bar.x1 - bar.x0, bd = bar.z1 - bar.z0, bcx = (bar.x0 + bar.x1) / 2, bcz = (bar.z0 + bar.z1) / 2;
     box(bw, 1.05, bd, M.walnut, bcx, 0.525, bcz);
     box(bw + 0.1, 0.06, bd + 0.1, M.marble, bcx, 1.08, bcz);
@@ -147,7 +150,7 @@ export function buildGallery(scene: THREE.Scene, renderer: THREE.WebGLRenderer):
   }
 
   // ---- viewing benches (match shared obstacles) ----
-  for (const o of OBSTACLES.slice(1)) {
+  for (const o of BENCHES) {
     const w = o.x1 - o.x0, d = o.z1 - o.z0;
     box(w, 0.42, d, M.velvet, (o.x0 + o.x1) / 2, 0.21, (o.z0 + o.z1) / 2);
     for (const sx of [-1, 1]) for (const sz of [-1, 1])
@@ -199,6 +202,8 @@ export function buildGallery(scene: THREE.Scene, renderer: THREE.WebGLRenderer):
     });
   }
 
+  const decor = buildDecor(scene, paintings);
+
   // ---- lights ----
   const hemi = new THREE.HemisphereLight(0xfff3e0, 0x3a2a20, 1);
   scene.add(hemi);
@@ -218,6 +223,7 @@ export function buildGallery(scene: THREE.Scene, renderer: THREE.WebGLRenderer):
     // At night the gallery's own warm lamps take over.
     warm.intensity = 0.3 + 0.55 * s.night;
     for (const m of canvasMats) if (m.map) m.color.setScalar(0.92 + 0.08 * (1 - s.night));
+    decor.setNight(s.night);
     return s;
   };
 
@@ -236,7 +242,7 @@ export function buildGallery(scene: THREE.Scene, renderer: THREE.WebGLRenderer):
     }));
   };
 
-  return { paintings, floor, setTime, loadArt };
+  return { paintings, floor, setTime, loadArt, tick: (dt: number) => decor.tick(dt) };
 }
 
 export const roomIndex = (id: RoomId) => ROOM_IDS.indexOf(id);
