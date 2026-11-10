@@ -73,7 +73,7 @@ export class LiveRoomConnection implements PartyConnection {
   }
 
   private presence(extra: Record<string, unknown>) {
-    return { n: this.name, k: this.look.kind, c: this.look.color, p: this.look.prop, ...extra };
+    return { n: this.name, k: this.look.kind, c: this.look.color, h: this.look.hat, a: this.look.hand, o: this.look.outfit, ...extra };
   }
 
   on(h: Partial<PartyEvents>) {
@@ -103,7 +103,8 @@ const round = (v: number) => Math.round(v * 100) / 100;
 function toPlayer(p: RoomPeer): NetPlayer | null {
   const s = p.presence;
   if (typeof s.x !== 'number' || typeof s.z !== 'number' || !Number.isFinite(s.x) || !Number.isFinite(s.z)) return null;
-  const look = parseLook({ kind: s.k, color: s.c, prop: s.p });
+  // `p` is the old single prop slot, from pages opened before the split
+  const look = parseLook({ kind: s.k, color: s.c, hat: s.h, hand: s.a, outfit: s.o, prop: s.p });
   return {
     id: 'peer:' + p.peer,
     name: sanitizeName(s.n) ?? '손님',

@@ -224,3 +224,19 @@ html.touch .joystick { display: block; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* wardrobe: five rows of choices, kept compact so the card still fits a phone */
+.dress-pick { gap: 8px; }
+.invite .chips { gap: 5px; }
+.invite .chips button { padding: 4px 9px; font-size: 12.5px; }
+.invite { width: min(700px, 100%); }
+.dress { grid-template-columns: 190px 1fr; align-items: start; text-align: left; }
+.dress-look { display: grid; gap: 8px; justify-items: center; position: sticky; top: 0; }
+#preview { width: 190px; height: 209px; }
+.invite .dice { color: var(--ink); border-color: #cdbd9e; background: #fbf6ec; }
+.invite .dice:hover { background: #f3e9d6; }
+@media (max-width: 720px) {
+  .dress { grid-template-columns: 1fr; }
+  .dress-look { position: static; }
+  #preview { width: 150px; height: 165px; }
+}

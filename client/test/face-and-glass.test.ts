@@ -6,11 +6,11 @@ beforeAll(() => {
   (globalThis as any).document = { createElement: () => ({ width: 0, height: 0, getContext: () => ctx }) };
 });
 
-const KINDS = ['bear', 'cat', 'penguin', 'rabbit'] as const;
+import { KINDS } from '@party/shared';
 async function make(kind: (typeof KINDS)[number]) {
   const { buildAnimal } = await import('../src/avatar/animal');
   const { Animator } = await import('../src/avatar/animator');
-  const r = buildAnimal({ kind, color: 1, prop: 'wine' });
+  const r = buildAnimal({ kind, color: 1, hat: 'none', hand: 'wine', outfit: 'none' });
   return { r, anim: new Animator(r) };
 }
 

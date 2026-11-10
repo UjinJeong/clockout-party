@@ -1,15 +1,17 @@
 import * as THREE from 'three';
-import { KINDS, KIND_LABEL, PALETTE, PROPS, PROP_LABEL, parseLook, sanitizeName, type Look } from '@party/shared';
+import {
+  HANDS, HAND_LABEL, HATS, HAT_LABEL, KINDS, KIND_LABEL, OUTFITS, OUTFIT_LABEL, PALETTE, parseLook, sanitizeName, type Look,
+} from '@party/shared';
 import { buildAnimal, type AnimalRig } from '../avatar/animal';
 import { Animator } from '../avatar/animator';
 import { $, load, onSubmit, save } from './dom';
 
-/** The invitation card: write a name, pick an animal, colour and prop, with a turning 3D preview. */
+/** The invitation card: write a name, dress up your animal (colour, hat, paw, outfit), with a turning 3D preview. */
 export function showStart(): Promise<{ name: string; look: Look }> {
   const screen = $('start');
   screen.hidden = false;
   const saved = load<{ name?: string; look?: Look }>('party.me') ?? {};
-  let look: Look = parseLook(saved.look ?? { kind: KINDS[(Math.random() * 4) | 0], color: (Math.random() * 8) | 0, prop: 'wine' });
+  let look: Look = parseLook(saved.look ?? { ...randomLook(), hand: 'wine' });
   const nameInput = $('name') as HTMLInputElement;
   nameInput.value = saved.name ?? '';
 
@@ -17,11 +19,11 @@ export function showStart(): Promise<{ name: string; look: Look }> {
   const canvas = $('preview') as HTMLCanvasElement;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(2, devicePixelRatio));
-  renderer.setSize(170, 187, false);
+  renderer.setSize(190, 209, false);
   const scene = new THREE.Scene();
   scene.add(new THREE.HemisphereLight(0xfff3e0, 0x6b5440, 1.6));
   const sun = new THREE.DirectionalLight(0xffffff, 1.4); sun.position.set(2, 4, 3); scene.add(sun);
-  const cam = new THREE.PerspectiveCamera(30, 170 / 187, 0.1, 20);
+  const cam = new THREE.PerspectiveCamera(30, 190 / 209, 0.1, 20);
   cam.position.set(0, 1.25, 4.4); cam.lookAt(0, 0.8, 0);
   let rig: AnimalRig = buildAnimal(look);
   let anim = new Animator(rig);
@@ -42,11 +44,16 @@ export function showStart(): Promise<{ name: string; look: Look }> {
   };
 
   // ---- pickers ----
-  const kindBox = $('pick-kind'), colorBox = $('pick-color'), propBox = $('pick-prop');
+  const kindBox = $('pick-kind'), colorBox = $('pick-color');
+  const hatBox = $('pick-hat'), handBox = $('pick-hand'), outfitBox = $('pick-outfit'), dice = $('pick-random');
+  const chips = <T extends string>(list: readonly T[], label: Record<T, string>, slot: 'hat' | 'hand' | 'outfit') =>
+    list.map(v => `<button type="button" data-slot="${slot}" data-v="${v}" aria-pressed="${look[slot] === v}">${label[v]}</button>`).join('');
   const render = () => {
     kindBox.innerHTML = KINDS.map(k => `<button type="button" data-k="${k}" aria-pressed="${look.kind === k}">${KIND_LABEL[k]}</button>`).join('');
     colorBox.innerHTML = PALETTE.map((c, i) => `<button type="button" data-c="${i}" aria-pressed="${look.color === i}" aria-label="색 ${i + 1}" style="background:${c}"></button>`).join('');
-    propBox.innerHTML = PROPS.map(p => `<button type="button" data-p="${p}" aria-pressed="${look.prop === p}">${PROP_LABEL[p]}</button>`).join('');
+    hatBox.innerHTML = chips(HATS, HAT_LABEL, 'hat');
+    handBox.innerHTML = chips(HANDS, HAND_LABEL, 'hand');
+    outfitBox.innerHTML = chips(OUTFITS, OUTFIT_LABEL, 'outfit');
   };
   render();
   const onPick = (e: Event) => {
@@ -54,11 +61,14 @@ export function showStart(): Promise<{ name: string; look: Look }> {
     if (!b) return;
     if (b.dataset.k) look = { ...look, kind: b.dataset.k as Look['kind'] };
     else if (b.dataset.c) look = { ...look, color: Number(b.dataset.c) };
-    else if (b.dataset.p) look = { ...look, prop: b.dataset.p as Look['prop'] };
+    else if (b.dataset.slot && b.dataset.v) look = parseLook({ ...look, [b.dataset.slot]: b.dataset.v });
     else return;
     render(); rebuild();
   };
-  [kindBox, colorBox, propBox].forEach(el => el.addEventListener('click', onPick));
+  const boxes = [kindBox, colorBox, hatBox, handBox, outfitBox];
+  boxes.forEach(el => el.addEventListener('click', onPick));
+  const onDice = () => { look = randomLook(); render(); rebuild(); };
+  dice.addEventListener('click', onDice);
   rebuild(true);
 
   return new Promise(resolve => {
@@ -71,7 +81,8 @@ export function showStart(): Promise<{ name: string; look: Look }> {
       cancelAnimationFrame(raf);
       rig.dispose(); renderer.dispose();
       offSubmit();
-      [kindBox, colorBox, propBox].forEach(el => el.removeEventListener('click', onPick));
+      boxes.forEach(el => el.removeEventListener('click', onPick));
+      dice.removeEventListener('click', onDice);
       screen.hidden = true;
       resolve({ name, look });
     };
@@ -79,4 +90,10 @@ export function showStart(): Promise<{ name: string; look: Look }> {
     const offSubmit = onSubmit(form, submit);
     if (!nameInput.value) setTimeout(() => nameInput.focus(), 300);
   });
+}
+
+const any = <T>(list: readonly T[]) => list[(Math.random() * list.length) | 0];
+/** A whole outfit at random — for "🎲 아무거나". */
+export function randomLook(): Look {
+  return { kind: any(KINDS), color: (Math.random() * PALETTE.length) | 0, hat: any(HATS), hand: any(HANDS), outfit: any(OUTFITS) };
 }

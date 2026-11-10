@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as THREE from 'three';
 import type { AnimalRig } from '../src/avatar/animal';
+import { KINDS, type Kind } from '@party/shared';
 
 // buildAnimal draws its soft shadow on a canvas; a tiny stand-in is enough here.
 beforeAll(() => {
@@ -8,10 +9,10 @@ beforeAll(() => {
   (globalThis as any).document = { createElement: () => ({ width: 0, height: 0, getContext: () => ctx }) };
 });
 
-async function rig(kind: 'bear' | 'cat' | 'penguin' | 'rabbit') {
+async function rig(kind: Kind) {
   const { buildAnimal } = await import('../src/avatar/animal');
   const { Animator } = await import('../src/avatar/animator');
-  const r = buildAnimal({ kind, color: 0, prop: 'wine' });
+  const r = buildAnimal({ kind, color: 0, hat: 'none', hand: 'wine', outfit: 'none' });
   return { r, anim: new Animator(r) };
 }
 
@@ -37,7 +38,7 @@ function check(r: AnimalRig) {
 }
 
 describe('wine glass', () => {
-  for (const kind of ['bear', 'cat', 'penguin', 'rabbit'] as const) {
+  for (const kind of KINDS) {
     it(`${kind} holds it in front of the paw, upright, while idle`, async () => {
       const { r, anim } = await rig(kind);
       for (let i = 0; i < 30; i++) anim.update(1 / 30, false, 'charging');

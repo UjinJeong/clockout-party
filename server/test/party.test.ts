@@ -14,7 +14,7 @@ beforeAll(async () => { colyseus = await boot(app); });
 afterAll(async () => { await colyseus.shutdown(); });
 afterEach(async () => { await colyseus.cleanup(); });
 
-const look = { kind: 'cat', color: 2, prop: 'wine' };
+const look = { kind: 'fox', color: 2, hat: 'headphones', hand: 'wine', outfit: 'tie' };
 const wait = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 describe('party room', () => {
@@ -24,8 +24,8 @@ describe('party room', () => {
     await room.waitForNextPatch();
     const p = room.state.players.get(c.sessionId)!;
     expect(p.name).toBe('유진');
-    expect(p.kind).toBe('cat');
-    expect(p.prop).toBe('wine');
+    expect(p.kind).toBe('fox');
+    expect([p.hat, p.hand, p.outfit]).toEqual(['headphones', 'wine', 'tie']);
     expect(p.battery).toBe('charging');
   });
 

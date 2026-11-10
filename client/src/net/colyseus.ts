@@ -1,5 +1,5 @@
 import { Client, Callbacks, type Room } from '@colyseus/sdk';
-import { ROOM_NAME, type Battery, type Emote, type Look } from '@party/shared';
+import { ROOM_NAME, parseLook, type Battery, type Emote, type Look } from '@party/shared';
 import { Emitter, type NetPlayer, type PartyConnection, type PartyEvents } from './types';
 
 /**
@@ -41,7 +41,7 @@ export async function connectParty(req: JoinRequest, name: string, look: Look): 
 }
 
 interface ServerPlayer {
-  name: string; kind: string; color: number; prop: string;
+  name: string; kind: string; color: number; hat: string; hand: string; outfit: string;
   x: number; z: number; dir: number; moving: boolean; battery: string;
 }
 
@@ -54,7 +54,7 @@ class ColyseusConnection implements PartyConnection {
   constructor(private room: Room) {
     const cb = Callbacks.get(room as never) as any;
     const toNet = (id: string, p: ServerPlayer): NetPlayer => ({
-      id, name: p.name, look: { kind: p.kind as Look['kind'], color: p.color, prop: p.prop as Look['prop'] },
+      id, name: p.name, look: parseLook({ kind: p.kind, color: p.color, hat: p.hat, hand: p.hand, outfit: p.outfit }),
       x: p.x, z: p.z, dir: p.dir, moving: p.moving, battery: p.battery as Battery,
     });
     cb.onAdd('players', (p: ServerPlayer, id: string) => {

@@ -1,5 +1,5 @@
 import {
-  BATTERIES, CHAT_MAX, DEFAULT_LOOK, DEFAULT_TITLE, EMOTES, KINDS, NAME_MAX, PALETTE, PROPS, TITLE_MAX,
+  BATTERIES, CHAT_MAX, DEFAULT_LOOK, DEFAULT_TITLE, EMOTES, HANDS, HATS, KINDS, NAME_MAX, OUTFITS, PALETTE, TITLE_MAX,
   VOICE_MAX_BYTES, VOICE_MAX_MS, type Battery, type Emote, type Look,
 } from './constants';
 
@@ -20,8 +20,17 @@ export function parseLook(v: unknown): Look {
   const kind = (KINDS as readonly unknown[]).includes(o.kind) ? (o.kind as Look['kind']) : DEFAULT_LOOK.kind;
   const color = Number.isInteger(o.color) && (o.color as number) >= 0 && (o.color as number) < PALETTE.length
     ? (o.color as number) : DEFAULT_LOOK.color;
-  const prop = (PROPS as readonly unknown[]).includes(o.prop) ? (o.prop as Look['prop']) : DEFAULT_LOOK.prop;
-  return { kind, color, prop };
+  // Older saves had one "prop" slot: the wine glass went in the paw, beret/ribbon on the head.
+  const legacyHat = o.prop === 'beret' || o.prop === 'ribbon' ? o.prop : undefined;
+  const legacyHand = o.prop === 'wine' ? o.prop : undefined;
+  const pick = <T extends string>(list: readonly T[], v: unknown, fallback: T): T =>
+    (list as readonly unknown[]).includes(v) ? (v as T) : fallback;
+  return {
+    kind, color,
+    hat: pick(HATS, o.hat ?? legacyHat, DEFAULT_LOOK.hat),
+    hand: pick(HANDS, o.hand ?? legacyHand, DEFAULT_LOOK.hand),
+    outfit: pick(OUTFITS, o.outfit, DEFAULT_LOOK.outfit),
+  };
 }
 
 export const isEmote = (v: unknown): v is Emote => (EMOTES as readonly unknown[]).includes(v);

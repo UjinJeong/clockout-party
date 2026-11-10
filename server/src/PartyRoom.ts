@@ -67,7 +67,7 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
     // Spread newcomers out a little so they don't stack on one spot.
     const spot = nearestWalkable({ x: SPAWN.x + (Math.random() - 0.5) * 3, z: SPAWN.z + (Math.random() - 0.5) * 1.5 });
     this.state.players.set(client.sessionId, new Player({
-      name, kind: look.kind, color: look.color, prop: look.prop,
+      name, kind: look.kind, color: look.color, hat: look.hat, hand: look.hand, outfit: look.outfit,
       x: spot.x, z: spot.z, dir: 0, moving: false, battery: 'charging',
     }));
     this.tracks.set(client.sessionId, { at: Date.now(), voiceAt: 0 });

@@ -1,5 +1,5 @@
 import {
-  EMOTES, KINDS, MOVE_HZ, PROPS, SPAWN, WALK_SPEED, isNear, moveWithCollision, nearestWalkable,
+  EMOTES, KINDS, MOVE_HZ, HANDS, HATS, OUTFITS, SPAWN, WALK_SPEED, isNear, moveWithCollision, nearestWalkable,
   type Battery, type Emote, type Look,
 } from '@party/shared';
 import { Emitter, type NetPlayer, type PartyConnection, type PartyEvents } from './types';
@@ -46,7 +46,11 @@ export class DemoConnection implements PartyConnection {
     const at = nearestWalkable(SPAWN);
     this.me = { id: 'me', name, look, x: at.x, z: at.z, dir: 0, moving: false, battery: 'charging' };
     BOTS.forEach((b, i) => {
-      const lk: Look = { kind: KINDS[(i + 1) % KINDS.length], color: (i * 3 + 1) % 8, prop: PROPS[(i + 1) % PROPS.length] };
+      // every bot dressed differently, so the party shows off the wardrobe
+      const lk: Look = {
+        kind: KINDS[(i + 1) % KINDS.length], color: (i * 3 + 1) % 8,
+        hat: HATS[(i + 1) % HATS.length], hand: HANDS[(i * 3 + 1) % HANDS.length], outfit: OUTFITS[(i + 2) % OUTFITS.length],
+      };
       const p = i < 2 ? { x: 4 + i * 2.5, z: -0.5 + i } : this.spots[(i * 5) % this.spots.length];
       const pos = nearestWalkable(p);
       this.bots.push({
