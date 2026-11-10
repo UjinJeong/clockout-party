@@ -21,6 +21,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
   $('party-title').textContent = conn.title;
   $('party-private').hidden = !conn.isPrivate;
   $('demo-banner').hidden = !conn.demo;
+  if (conn.note) $('demo-banner').textContent = conn.note;
   $('invite-btn').hidden = conn.demo;
   let party: Party | null = null;
   let current: Painting | null = null;
@@ -100,7 +101,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
   const mic = $('mic-btn'), dock = $('dock'), recbar = $('recbar'), recTime = $('rec-time');
   const rec = new VoiceRecorder();
   let recTimer = 0;
-  if (!VoiceRecorder.supported()) { mic.hidden = true; }
+  mic.hidden = !conn.voiceOk || !VoiceRecorder.supported();
   const fmt = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
   const endRec = () => { clearInterval(recTimer); recbar.hidden = true; dock.hidden = false; };
   on(mic, 'click', async () => {
@@ -108,6 +109,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
       await rec.start();
     } catch {
       toast('마이크를 쓸 수 없어요. 브라우저 주소창 옆에서 마이크 권한을 허용해 주세요.', 4000);
+      if (conn.demo) mic.hidden = true;
       return;
     }
     dock.hidden = true; recbar.hidden = false; recTime.textContent = '0:00';

@@ -40,6 +40,7 @@ interface ServerPlayer {
 
 class ColyseusConnection implements PartyConnection {
   readonly demo = false;
+  readonly voiceOk = true;
   private ev = new Emitter();
   private known = new Map<string, NetPlayer>();
 

@@ -5,6 +5,7 @@ import { buildGallery } from './world/gallery';
 import { Controls } from './game/controls';
 import { Party } from './game/party';
 import { DemoConnection } from './net/demo';
+import { LiveRoomConnection, getRoom } from './net/room';
 import { connectParty, type JoinRequest } from './net/colyseus';
 import type { PartyConnection } from './net/types';
 import { showStart } from './ui/start';
@@ -77,7 +78,9 @@ async function run() {
   for (;;) {
     let conn: PartyConnection;
     if (DEMO_ONLY) {
-      conn = new DemoConnection(me.name, me.look);
+      // Inside a claude.ai artifact, everyone with the page open shares one live gallery.
+      const room = await getRoom();
+      conn = room ? new LiveRoomConnection(room, me.name, me.look) : new DemoConnection(me.name, me.look);
     } else {
       const choice = firstJoin ?? await showLobby(lobbyError);
       firstJoin = null;

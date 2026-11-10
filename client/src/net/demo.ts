@@ -35,13 +35,14 @@ export class DemoConnection implements PartyConnection {
   readonly title = '혼자 체험하기';
   readonly isPrivate = false;
   readonly demo = true;
+  readonly voiceOk = true;
   private ev = new Emitter();
   private me: NetPlayer;
   private bots: Bot[] = [];
   private timer: number;
   private spots = spots();
 
-  constructor(name: string, look: Look) {
+  constructor(name: string, look: Look, opts: { botSuffix?: string } = {}) {
     const at = nearestWalkable(SPAWN);
     this.me = { id: 'me', name, look, x: at.x, z: at.z, dir: 0, moving: false, battery: 'charging' };
     BOTS.forEach((b, i) => {
@@ -49,7 +50,7 @@ export class DemoConnection implements PartyConnection {
       const p = i < 2 ? { x: 4 + i * 2.5, z: -0.5 + i } : this.spots[(i * 5) % this.spots.length];
       const pos = nearestWalkable(p);
       this.bots.push({
-        id: `bot${i}`, name: b.name, look: lk, x: pos.x, z: pos.z, dir: Math.random() * 6, moving: false,
+        id: `bot${i}`, name: b.name + (opts.botSuffix ?? ''), look: lk, x: pos.x, z: pos.z, dir: Math.random() * 6, moving: false,
         battery: b.battery, target: null, wait: 2 + Math.random() * 6, lines: b.lines, nextLine: 3 + Math.random() * 6,
       });
     });

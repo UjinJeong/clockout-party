@@ -23,6 +23,10 @@ export interface PartyConnection {
   readonly title: string;
   readonly isPrivate: boolean;
   readonly demo: boolean;
+  /** False where voice notes can't travel (the claude.ai preview). */
+  readonly voiceOk: boolean;
+  /** A line shown at the top of the party in demo-like modes. */
+  readonly note?: string;
   on(handlers: Partial<PartyEvents>): void;
   move(x: number, z: number, dir: number, moving: boolean): void;
   chat(text: string): void;
