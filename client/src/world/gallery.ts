@@ -17,6 +17,8 @@ export interface Gallery {
   setTime(date: Date): SkyState;
   /** Animate the party lights, candles and dust. */
   tick(dt: number): void;
+  /** Fade the beams over the doorways when the camera is right behind one, so they never block your view. */
+  fadeOccluders(camera: THREE.Vector3): void;
   /** Load the painting images (call once the first frame is up). */
   loadArt(onProgress?: (done: number, total: number) => void): Promise<void>;
 }
@@ -73,6 +75,7 @@ export function buildGallery(scene: THREE.Scene, renderer: THREE.WebGLRenderer):
     void id;
   });
 
+  const lintels: { x: number; mats: THREE.MeshStandardMaterial[] }[] = [];
   // Partitions and end walls: tall at the back, low toward the camera, open doorway in the middle.
   const sideWall = (x: number, leftRoom: number, rightRoom: number, door: boolean) => {
     const backLen = door ? ROOM_D / 2 - DOOR_HALF : ROOM_D / 2 + 1.5;
@@ -91,9 +94,12 @@ export function buildGallery(scene: THREE.Scene, renderer: THREE.WebGLRenderer):
     box(0.14, LOW, frontLen, M.walnut, x, LOW / 2, frontMid);
     box(0.2, 0.05, frontLen, M.gold, x, LOW + 0.025, frontMid);
     if (door) {
-      // lintel over the doorway
-      box(0.16, 0.5, DOOR_HALF * 2 + 0.2, M.cream, x, H - 0.25, 0);
-      box(0.2, 0.06, DOOR_HALF * 2 + 0.2, M.gold, x, H - 0.53, 0);
+      // lintel over the doorway (own materials, so it can fade on its own)
+      const cream = M.cream.clone(), gold = M.gold.clone();
+      cream.transparent = gold.transparent = true;
+      box(0.16, 0.5, DOOR_HALF * 2 + 0.2, cream, x, H - 0.25, 0);
+      box(0.2, 0.06, DOOR_HALF * 2 + 0.2, gold, x, H - 0.53, 0);
+      lintels.push({ x, mats: [cream, gold] });
     }
   };
   sideWall(0, -1, 0, false);
@@ -242,7 +248,15 @@ export function buildGallery(scene: THREE.Scene, renderer: THREE.WebGLRenderer):
     }));
   };
 
-  return { paintings, floor, setTime, loadArt, tick: (dt: number) => decor.tick(dt) };
+  const fadeOccluders = (cam: THREE.Vector3) => {
+    for (const l of lintels) {
+      // fully visible 3m+ to the side, almost gone when the camera is right behind it
+      const o = Math.min(1, Math.max(0.06, (Math.abs(cam.x - l.x) - 0.6) / 2.4));
+      for (const m of l.mats) { m.opacity = o; m.depthWrite = o > 0.95; }
+    }
+  };
+
+  return { paintings, floor, setTime, loadArt, tick: (dt: number) => decor.tick(dt), fadeOccluders };
 }
 
 export const roomIndex = (id: RoomId) => ROOM_IDS.indexOf(id);

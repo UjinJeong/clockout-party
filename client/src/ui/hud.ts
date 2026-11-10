@@ -58,6 +58,17 @@ export function createHud(conn: PartyConnection, controls: Controls) {
   const clockT = setInterval(tickClock, 20_000);
   cleanups.push(() => clearInterval(clockT));
 
+  // ---- camera view: close behind you, or the overview ----
+  const viewBtn = $('view-btn');
+  const toggleView = () => {
+    if (!party) return;
+    const far = party.toggleView() > 0.5;
+    viewBtn.textContent = far ? '가까이 보기' : '멀리 보기';
+  };
+  viewBtn.textContent = '멀리 보기';
+  on(viewBtn, 'click', toggleView);
+  on(window, 'keydown', e => { if ((e.key === 'v' || e.key === 'V') && !isTyping(e) && !living.isOpen()) toggleView(); });
+
   // ---- chat ----
   const input = $('chat-input') as HTMLInputElement;
   on($('chat-form'), 'submit', e => {

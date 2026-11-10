@@ -10,6 +10,7 @@ import type { Gallery, Painting } from '../world/gallery';
 import { Tag } from '../ui/bubbles';
 import type { Controls } from './controls';
 import { Sparkles } from './effects';
+import { cameraPose } from './camera';
 
 interface Guest {
   net: NetPlayer;
@@ -28,7 +29,6 @@ export interface PartyHooks {
   arrived(p: Painting): void;
 }
 
-const CAM_OFFSET = new THREE.Vector3(0, 9.4, 11);
 
 /**
  * Runs the party: owns every guest's avatar, moves you, follows you with the
@@ -44,7 +44,12 @@ export class Party {
   private walkTo: Painting | null = null;
   private ring: THREE.Mesh;
   private targetMark: THREE.Mesh;
-  private zoom = 1;
+  /** 0 = close behind you (동물의 숲), 1 = overview. `zoomGoal` is where the wheel/button want it. */
+  private zoom = 0;
+  private zoomGoal = 0;
+  private pinch: { d: number; zoom: number } | null = null;
+  private touches = new Map<number, { x: number; y: number }>();
+  private afterPinch = false; // the fingers of a pinch lifting one by one are not taps
   private camTarget = new THREE.Vector3();
   private ray = new THREE.Raycaster();
   private listDirty = true;
@@ -85,6 +90,9 @@ export class Party {
 
     dom.addEventListener('pointerup', this.onTap);
     dom.addEventListener('wheel', this.onWheel, { passive: true });
+    dom.addEventListener('pointerdown', this.onPointerDown);
+    dom.addEventListener('pointermove', this.onPointerMove);
+    dom.addEventListener('pointercancel', this.onPointerEnd);
   }
 
   self() { return this.guests.get(this.conn.selfId); }
@@ -158,6 +166,10 @@ export class Party {
   }
 
   private onTap = (e: PointerEvent) => {
+    const wasPinch = this.touches.size > 1 || !!this.pinch || this.afterPinch;
+    this.onPointerEnd(e);
+    if (this.touches.size === 0) this.afterPinch = false;
+    if (wasPinch) return;
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     const r = this.dom.getBoundingClientRect();
     const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
@@ -177,22 +189,41 @@ export class Party {
   };
 
   private onWheel = (e: WheelEvent) => {
-    this.zoom = Math.min(1.45, Math.max(0.65, this.zoom * (e.deltaY > 0 ? 1.08 : 0.93)));
+    this.zoomGoal = Math.min(1, Math.max(0, this.zoomGoal + (e.deltaY > 0 ? 0.12 : -0.12)));
   };
 
-  private snapCamera() {
-    const off = CAM_OFFSET.clone().multiplyScalar(this.zoomFactor());
-    this.camera.position.copy(this.camTarget).add(off);
-    this.camera.lookAt(this.camTarget.x, 0.6, this.camTarget.z - 0.6);
+  // two fingers: pinch to zoom between the close view and the overview
+  private onPointerDown = (e: PointerEvent) => {
+    if (e.pointerType !== 'touch') return;
+    this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (this.touches.size === 2) { this.pinch = { d: this.touchSpread(), zoom: this.zoomGoal }; this.controls.target = null; }
+  };
+  private onPointerMove = (e: PointerEvent) => {
+    if (!this.touches.has(e.pointerId)) return;
+    this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (this.pinch && this.touches.size === 2) {
+      this.zoomGoal = Math.min(1, Math.max(0, this.pinch.zoom + (this.pinch.d - this.touchSpread()) / 300));
+    }
+  };
+  private onPointerEnd = (e: PointerEvent) => {
+    this.touches.delete(e.pointerId);
+    if (this.pinch) this.afterPinch = true;
+    if (this.touches.size < 2) this.pinch = null;
+  };
+  private touchSpread() {
+    const [a, b] = [...this.touches.values()];
+    return Math.hypot(a.x - b.x, a.y - b.y);
   }
 
-  private zoomFactor() {
-    // Portrait phones see much less width: widen the lens and pull back so
-    // roughly the same slice of the room fits across the screen.
+  /** Switch between the close view and the overview (the HUD's view button). */
+  toggleView() { this.zoomGoal = this.zoomGoal < 0.5 ? 1 : 0; return this.zoomGoal; }
+
+  private snapCamera() {
     const aspect = this.dom.clientWidth / Math.max(1, this.dom.clientHeight);
-    const fov = aspect < 1 ? Math.min(62, 40 + (1 - aspect) * 40) : 40;
-    if (Math.abs(this.camera.fov - fov) > 0.1) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
-    return this.zoom * (aspect < 1 ? 1.2 : 1);
+    const pose = cameraPose(this.camTarget, this.zoom, aspect);
+    if (Math.abs(this.camera.fov - pose.fov) > 0.05) { this.camera.fov = pose.fov; this.camera.updateProjectionMatrix(); }
+    this.camera.position.copy(pose.position);
+    this.camera.lookAt(pose.lookAt);
   }
 
   update(dt: number) {
@@ -217,11 +248,16 @@ export class Party {
 
     // camera follows you
     if (me) {
-      const tx = Math.min(WORLD.x1 - 4.5, Math.max(4.5, me.pos.x));
-      const k = 1 - Math.exp(-dt * 4);
+      // close view follows you fully; the overview keeps the old gentle framing
+      const edge = 3.5 + this.zoom * 1;
+      const tx = Math.min(WORLD.x1 - edge, Math.max(edge, me.pos.x));
+      const tz = me.pos.y * (1 - this.zoom) + Math.max(-1.5, Math.min(1.5, me.pos.y * 0.5)) * this.zoom;
+      const k = 1 - Math.exp(-dt * 5);
       this.camTarget.x += (tx - this.camTarget.x) * k;
-      this.camTarget.z += (Math.max(-1.5, Math.min(1.5, me.pos.y * 0.5)) - this.camTarget.z) * k;
+      this.camTarget.z += (tz - this.camTarget.z) * k;
+      this.zoom += (this.zoomGoal - this.zoom) * (1 - Math.exp(-dt * 6));
       this.snapCamera();
+      this.gallery.fadeOccluders(this.camera.position);
       this.ring.position.set(me.pos.x, 0.015, me.pos.y);
     }
 
@@ -334,6 +370,9 @@ export class Party {
     this.disposed = true;
     this.dom.removeEventListener('pointerup', this.onTap);
     this.dom.removeEventListener('wheel', this.onWheel);
+    this.dom.removeEventListener('pointerdown', this.onPointerDown);
+    this.dom.removeEventListener('pointermove', this.onPointerMove);
+    this.dom.removeEventListener('pointercancel', this.onPointerEnd);
     for (const id of [...this.guests.keys()]) this.removeGuest(id);
     this.ring.removeFromParent(); this.targetMark.removeFromParent();
     this.sparkles.dispose();
