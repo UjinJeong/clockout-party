@@ -81,7 +81,14 @@ async function run() {
     if (DEMO_ONLY) {
       // Inside a claude.ai artifact, everyone with the page open shares one live gallery.
       const room = await getRoom();
-      conn = room ? new LiveRoomConnection(room, me.name, me.look) : new DemoConnection(me.name, me.look);
+      try {
+        conn = room ? new LiveRoomConnection(room, me.name, me.look) : new DemoConnection(me.name, me.look);
+      } catch (err) {
+        // The shared room failed: still let them in, just with the bot guests.
+        console.error(err);
+        toast(`같이 둘러보기 연결이 안 돼서 혼자 체험으로 들어가요.\n[같이 둘러보기] ${describe(err)}`, 12000);
+        conn = new DemoConnection(me.name, me.look);
+      }
     } else {
       const choice = firstJoin ?? await showLobby(lobbyError);
       firstJoin = null;
@@ -100,27 +107,40 @@ async function run() {
 
     let hud: ReturnType<typeof createHud> | null = null;
     let how: string;
+    let step = '화면 준비';
     try {
       hud = createHud(conn, controls);
+      step = '파티장 만들기';
       party = new Party(scene, camera, canvas, gallery, conn, controls, $('tags'), hud.hooks);
+      step = '화면 연결';
       hud.attach(party);
+      step = '입장 완료';
       if (!conn.demo && conn.isPrivate) toast('친구만 들어오는 파티예요. 위의 "초대하기"로 링크를 보내 주세요.', 4000);
       setUrl(conn.demo ? location.pathname : `?room=${encodeURIComponent(conn.roomId)}`);
       how = await hud.closed;
     } catch (err) {
       // Never leave someone stuck behind a half-built party: clean up and go back.
       console.error(err);
-      toast('파티장에 들어가다 문제가 생겼어요. 다시 시도해 주세요.', 4000);
+      // Say where and why, so a screenshot of this message is enough to fix it.
+      toast(`파티장에 들어가다 문제가 생겼어요. 다시 시도해 주세요.\n[${step}] ${describe(err)}`, 12000);
       try { conn.leave(); } catch { /* already gone */ }
       how = 'lost';
     }
     try { party?.dispose(); } catch (err) { console.error(err); }
     party = null;
     try { hud?.dispose(); } catch (err) { console.error(err); }
+    $('hud').hidden = true; // even if the HUD broke halfway through being built
     setUrl(location.pathname);
     if (how === 'lost') lobbyError = '파티 연결이 끊겼어요. 다시 들어가 보세요.';
     if (DEMO_ONLY) { me = await showStart(); }
   }
+}
+
+/** A short, readable "what went wrong" for on-screen error notes. */
+function describe(err: unknown): string {
+  const e = err as { name?: string; message?: string; stack?: string } | null;
+  const where = e?.stack?.split('\n').find(l => /at /.test(l))?.trim().replace(/\(?https?:\/\/[^)]*\//, '(').slice(0, 80) ?? '';
+  return `${e?.name ?? 'Error'}: ${String(e?.message ?? err).slice(0, 140)}${where ? ' · ' + where : ''}`;
 }
 
 /** Sandboxed frames (claude.ai artifacts) may refuse URL changes; that must never stop the party. */
@@ -132,7 +152,7 @@ function setUrl(url: string) {
 addEventListener('error', e => { console.error(e.error ?? e.message); });
 addEventListener('unhandledrejection', e => {
   console.error(e.reason);
-  toast('문제가 생겼어요. 새로고침하면 대부분 해결돼요.', 4000);
+  toast(`문제가 생겼어요. 새로고침하면 대부분 해결돼요.\n${describe(e.reason)}`, 8000);
 });
 
 async function join(req: JoinRequest, name: string, look: Look) {
@@ -148,5 +168,5 @@ function describeJoinError(err: unknown, req: JoinRequest): string {
 
 void run().catch(err => {
   console.error(err);
-  toast('문제가 생겼어요. 새로고침해 주세요.', 6000);
+  toast(`문제가 생겼어요. 새로고침해 주세요.\n${describe(err)}`, 12000);
 });

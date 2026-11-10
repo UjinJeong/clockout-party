@@ -198,7 +198,7 @@ html.touch .joystick { display: block; }
 
 .loading { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: var(--night); font: 400 18px/1.4 var(--serif); color: #e8d6b2; transition: opacity .6s; }
 .loading.done { opacity: 0; pointer-events: none; }
-.toast { position: fixed; z-index: 70; left: 50%; bottom: calc(84px + var(--safe-b)); transform: translate(-50%, 20px); opacity: 0; background: var(--plate); color: var(--ink); padding: 9px 16px; font-size: 14px; border-bottom: 2px solid var(--gilt); pointer-events: none; transition: opacity .25s, transform .25s; max-width: calc(100% - 28px); text-align: center; }
+.toast { position: fixed; z-index: 70; left: 50%; bottom: calc(84px + var(--safe-b)); transform: translate(-50%, 20px); opacity: 0; background: var(--plate); color: var(--ink); padding: 9px 16px; font-size: 14px; border-bottom: 2px solid var(--gilt); pointer-events: none; transition: opacity .25s, transform .25s; max-width: calc(100% - 28px); text-align: center; white-space: pre-line; overflow-wrap: anywhere; }
 .toast.on { opacity: 1; transform: translate(-50%, 0); }
 
 /* ---------- small screens ---------- */
