@@ -117,9 +117,11 @@ export function buildHome(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
     const glassDoor = d.x === GLASS_X;
     const post = glassDoor ? M.frame : M.trim;
     for (const z of [d.z0, d.z1]) box(0.2, DOOR_H, 0.12, post, d.x, DOOR_H / 2, z + (z === d.z0 ? 0.06 : -0.06));
-    const wallM = (glassDoor ? M.frame : paintSide).clone() as THREE.MeshStandardMaterial;
+    // over the glass slider the header is glass too, so it doesn't read as a black slab
+    const wallM = (glassDoor ? M.glass : paintSide).clone() as THREE.MeshStandardMaterial;
     const trimM = (glassDoor ? M.frame : M.trim).clone() as THREE.MeshStandardMaterial;
     wallM.transparent = trimM.transparent = true;
+    for (const m of [wallM, trimM]) m.userData.base = m.opacity;
     box(0.14, H - DOOR_H, d.z1 - d.z0, wallM, d.x, DOOR_H + (H - DOOR_H) / 2, (d.z0 + d.z1) / 2);
     box(0.22, 0.1, d.z1 - d.z0 + 0.24, trimM, d.x, DOOR_H, (d.z0 + d.z1) / 2);
     headers.push({ x: d.x, mats: [wallM, trimM] });
@@ -423,7 +425,7 @@ export function buildHome(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
       for (const h of headers) {
         // fully there 3m+ to the side, almost gone when the camera is right behind it
         const o = Math.min(1, Math.max(0.08, (Math.abs(cam.x - h.x) - 0.6) / 2.4));
-        for (const m of h.mats) { m.opacity = o; m.depthWrite = o > 0.95; }
+        for (const m of h.mats) { m.opacity = (m.userData.base as number) * o; m.depthWrite = o > 0.95 && m.userData.base === 1; }
       }
     },
     tick(dt: number) {
