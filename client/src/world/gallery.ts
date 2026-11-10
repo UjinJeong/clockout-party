@@ -54,7 +54,7 @@ export function buildGallery(scene: THREE.Scene, renderer: THREE.WebGLRenderer):
   run.rotation.x = -Math.PI / 2;
   (M.runner.map as THREE.Texture).wrapS = THREE.RepeatWrapping;
   (M.runner.map as THREE.Texture).repeat.set(12, 1);
-  // the gallery sits on a dark stage in front; behind the back wall you see the sky
+  // the gallery sits on a dark stage in front; behind the back wall it stays dark
   const stage = add(new THREE.PlaneGeometry(400, 200), new THREE.MeshBasicMaterial({ color: 0x1a1214 }), WORLD.x1 / 2, -0.3, WORLD.z1 + 100);
   stage.rotation.x = -Math.PI / 2;
   // a dark plinth around the open front edge so the diorama reads as a cut-away
@@ -219,10 +219,13 @@ export function buildGallery(scene: THREE.Scene, renderer: THREE.WebGLRenderer):
   const warm = new THREE.AmbientLight(0xffd9a8, 0.35);
   scene.add(warm);
 
+  // Above and behind the walls: a dark exhibition-hall backdrop, like a gallery
+  // after hours. The visitor's local sky lives only in the lobby window.
+  scene.background = backdrop();
+
   const setTime = (date: Date) => {
     const s = skyAt(date);
     sky.paint(s);
-    scene.background = s.top.clone().lerp(s.bottom, 0.35);
     hemi.intensity = s.hemi;
     sun.color.copy(s.sun);
     sun.intensity = s.sunI;
@@ -260,3 +263,19 @@ export function buildGallery(scene: THREE.Scene, renderer: THREE.WebGLRenderer):
 }
 
 export const roomIndex = (id: RoomId) => ROOM_IDS.indexOf(id);
+
+/** A warm, dark backdrop: deep at the top, a faint glow just above the walls. */
+function backdrop(): THREE.Texture {
+  const c = document.createElement('canvas');
+  c.width = 4; c.height = 256;
+  const g = c.getContext('2d')!;
+  const grad = g.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0, '#0d090b');
+  grad.addColorStop(0.55, '#1a1215');
+  grad.addColorStop(1, '#2a1c1d');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 4, 256);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}

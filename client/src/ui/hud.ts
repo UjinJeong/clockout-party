@@ -8,7 +8,7 @@ import { PHASE_ICON, phaseOf } from '../world/sky';
 import { VoiceRecorder } from '../audio/recorder';
 import type { Controls } from '../game/controls';
 import { isTyping } from '../game/controls';
-import { $, esc, load, save, toast } from './dom';
+import { $, esc, load, onSubmit, save, toast } from './dom';
 
 const EMOTE_LABEL = { cheers: '건배', laugh: '웃음', clap: '박수', heart: '좋아요', wow: '놀람', wave: '손 흔들기' } as const;
 
@@ -71,13 +71,12 @@ export function createHud(conn: PartyConnection, controls: Controls) {
 
   // ---- chat ----
   const input = $('chat-input') as HTMLInputElement;
-  on($('chat-form'), 'submit', e => {
-    e.preventDefault();
+  cleanups.push(onSubmit($('chat-form') as HTMLFormElement, () => {
     const text = input.value.trim();
     if (!text) return;
     conn.chat(text);
     input.value = '';
-  });
+  }));
   on(window, 'keydown', e => {
     if (living.isOpen()) return; // the painting room handles its own keys
     if (e.key === 'Enter' && !isTyping(e)) { input.focus(); e.preventDefault(); }

@@ -1,6 +1,6 @@
 import { MAX_PLAYERS } from '@party/shared';
 import { listRooms, type JoinRequest, type RoomListing } from '../net/colyseus';
-import { $, esc } from './dom';
+import { $, esc, onSubmit } from './dom';
 
 export type LobbyChoice = JoinRequest | { mode: 'demo' } | { mode: 'back' };
 
@@ -67,8 +67,7 @@ export function showLobby(error?: string): Promise<LobbyChoice> {
       screen.hidden = true;
       list.removeEventListener('click', onList);
       seg.removeEventListener('click', onSeg);
-      $('create-form').removeEventListener('submit', onCreate);
-      $('code-form').removeEventListener('submit', onCode);
+      offCreate(); offCode();
       $('demo-btn').removeEventListener('click', onDemo);
       $('lobby-back').removeEventListener('click', onBack);
       resolve(c);
@@ -97,8 +96,8 @@ export function showLobby(error?: string): Promise<LobbyChoice> {
     const onBack = () => done({ mode: 'back' });
     list.addEventListener('click', onList);
     seg.addEventListener('click', onSeg);
-    $('create-form').addEventListener('submit', onCreate);
-    $('code-form').addEventListener('submit', onCode);
+    const offCreate = onSubmit($('create-form') as HTMLFormElement, onCreate);
+    const offCode = onSubmit($('code-form') as HTMLFormElement, onCode);
     $('demo-btn').addEventListener('click', onDemo);
     $('lobby-back').addEventListener('click', onBack);
   });

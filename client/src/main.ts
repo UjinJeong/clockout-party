@@ -98,20 +98,42 @@ async function run() {
       }
     }
 
-    const hud = createHud(conn, controls);
-    party = new Party(scene, camera, canvas, gallery, conn, controls, $('tags'), hud.hooks);
-    hud.attach(party);
-    if (!conn.demo && conn.isPrivate) toast('친구만 들어오는 파티예요. 위의 "초대하기"로 링크를 보내 주세요.', 4000);
-    history.replaceState(null, '', conn.demo ? location.pathname : `?room=${encodeURIComponent(conn.roomId)}`);
-
-    const how = await hud.closed;
-    party.dispose(); party = null;
-    hud.dispose();
-    history.replaceState(null, '', location.pathname);
+    let hud: ReturnType<typeof createHud> | null = null;
+    let how: string;
+    try {
+      hud = createHud(conn, controls);
+      party = new Party(scene, camera, canvas, gallery, conn, controls, $('tags'), hud.hooks);
+      hud.attach(party);
+      if (!conn.demo && conn.isPrivate) toast('친구만 들어오는 파티예요. 위의 "초대하기"로 링크를 보내 주세요.', 4000);
+      setUrl(conn.demo ? location.pathname : `?room=${encodeURIComponent(conn.roomId)}`);
+      how = await hud.closed;
+    } catch (err) {
+      // Never leave someone stuck behind a half-built party: clean up and go back.
+      console.error(err);
+      toast('파티장에 들어가다 문제가 생겼어요. 다시 시도해 주세요.', 4000);
+      try { conn.leave(); } catch { /* already gone */ }
+      how = 'lost';
+    }
+    try { party?.dispose(); } catch (err) { console.error(err); }
+    party = null;
+    try { hud?.dispose(); } catch (err) { console.error(err); }
+    setUrl(location.pathname);
     if (how === 'lost') lobbyError = '파티 연결이 끊겼어요. 다시 들어가 보세요.';
     if (DEMO_ONLY) { me = await showStart(); }
   }
 }
+
+/** Sandboxed frames (claude.ai artifacts) may refuse URL changes; that must never stop the party. */
+function setUrl(url: string) {
+  try { history.replaceState(null, '', url); } catch { /* not allowed here: fine */ }
+}
+
+// Anything unexpected shows up as a toast instead of a silently frozen screen.
+addEventListener('error', e => { console.error(e.error ?? e.message); });
+addEventListener('unhandledrejection', e => {
+  console.error(e.reason);
+  toast('문제가 생겼어요. 새로고침하면 대부분 해결돼요.', 4000);
+});
 
 async function join(req: JoinRequest, name: string, look: Look) {
   return connectParty(req, name, look);
@@ -124,4 +146,7 @@ function describeJoinError(err: unknown, req: JoinRequest): string {
   return '파티 서버에 연결하지 못했어요. 잠시 후 다시 시도하거나 혼자 체험하기로 둘러보세요.';
 }
 
-void run();
+void run().catch(err => {
+  console.error(err);
+  toast('문제가 생겼어요. 새로고침해 주세요.', 6000);
+});

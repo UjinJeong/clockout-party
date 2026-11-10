@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { KINDS, KIND_LABEL, PALETTE, PROPS, PROP_LABEL, parseLook, sanitizeName, type Look } from '@party/shared';
 import { buildAnimal, type AnimalRig } from '../avatar/animal';
 import { Animator } from '../avatar/animator';
-import { $, load, save } from './dom';
+import { $, load, onSubmit, save } from './dom';
 
 /** The invitation card: write a name, pick an animal, colour and prop, with a turning 3D preview. */
 export function showStart(): Promise<{ name: string; look: Look }> {
@@ -70,13 +70,13 @@ export function showStart(): Promise<{ name: string; look: Look }> {
       save('party.me', { name, look });
       cancelAnimationFrame(raf);
       rig.dispose(); renderer.dispose();
-      form.removeEventListener('submit', submit);
+      offSubmit();
       [kindBox, colorBox, propBox].forEach(el => el.removeEventListener('click', onPick));
       screen.hidden = true;
       resolve({ name, look });
     };
     nameInput.addEventListener('input', () => nameInput.setCustomValidity(''));
-    form.addEventListener('submit', submit);
+    const offSubmit = onSubmit(form, submit);
     if (!nameInput.value) setTimeout(() => nameInput.focus(), 300);
   });
 }
