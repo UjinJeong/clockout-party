@@ -43,6 +43,7 @@ export async function connectParty(req: JoinRequest, name: string, look: Look): 
 interface ServerPlayer {
   name: string; kind: string; color: number; hat: string; hand: string; outfit: string;
   x: number; z: number; dir: number; moving: boolean; battery: string;
+  energy: number; seat: number; dozing: boolean;
 }
 
 class ColyseusConnection implements PartyConnection {
@@ -56,6 +57,7 @@ class ColyseusConnection implements PartyConnection {
     const toNet = (id: string, p: ServerPlayer): NetPlayer => ({
       id, name: p.name, look: parseLook({ kind: p.kind, color: p.color, hat: p.hat, hand: p.hand, outfit: p.outfit }),
       x: p.x, z: p.z, dir: p.dir, moving: p.moving, battery: p.battery as Battery,
+      energy: p.energy ?? 0, seat: p.seat ?? -1, dozing: !!p.dozing,
     });
     cb.onAdd('players', (p: ServerPlayer, id: string) => {
       const np = toNet(id, p);
@@ -93,7 +95,8 @@ class ColyseusConnection implements PartyConnection {
     // The server doesn't echo voice notes back to the sender, so show ours right away.
     this.ev.emit('voice', this.selfId, blob, ms);
   }
-  battery(level: Battery) { this.room.send('battery', { level }); }
+  sit(seatId: number) { this.room.send('sit', { seat: seatId }); }
+  stand() { this.room.send('stand', {}); }
   leave() { void this.room.leave(true); }
 }
 

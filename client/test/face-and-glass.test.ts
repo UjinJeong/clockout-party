@@ -47,11 +47,11 @@ describe('sleepy eyes', () => {
         expect(Math.max(c.r, c.g, c.b)).toBeLessThan(0.08);
       }
     });
-    it(`${kind} looks half-asleep, and sleepier with a low battery`, async () => {
+    it(`${kind} looks half-asleep, and sleepier when drained`, async () => {
       const { r, anim } = await make(kind);
-      for (let i = 0; i < 10; i++) anim.update(1 / 30, false, 'charging');
+      for (let i = 0; i < 10; i++) anim.update(1 / 30, { moving: false, energy: 80, pose: 'stand', dozing: false, baseY: 0 });
       const awake = r.eyes[0].pupil.scale.y;
-      for (let i = 0; i < 10; i++) anim.update(1 / 30, false, 'low');
+      for (let i = 0; i < 10; i++) anim.update(1 / 30, { moving: false, energy: 10, pose: 'stand', dozing: false, baseY: 0 });
       const low = r.eyes[0].pupil.scale.y;
       expect(awake).toBeLessThan(0.75);     // never wide open: these are tired animals
       expect(low).toBeLessThan(awake * 0.6);

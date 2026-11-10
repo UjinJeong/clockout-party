@@ -4,6 +4,11 @@ import type { Battery, Emote, Look, Theme } from '@party/shared';
 export interface NetPlayer {
   id: string; name: string; look: Look;
   x: number; z: number; dir: number; moving: boolean; battery: Battery;
+  /** 0–100, see shared/energy. */
+  energy: number;
+  /** Seat id, or -1 when on your feet. */
+  seat: number;
+  dozing: boolean;
 }
 
 export interface PartyEvents {
@@ -34,7 +39,9 @@ export interface PartyConnection {
   chat(text: string): void;
   emote(kind: Emote): void;
   voice(blob: Blob, ms: number): Promise<void>;
-  battery(level: Battery): void;
+  /** Sit on a seat you're standing next to (the party decides if you may). */
+  sit(seatId: number): void;
+  stand(): void;
   leave(): void;
 }
 

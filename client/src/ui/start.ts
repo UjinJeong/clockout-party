@@ -42,7 +42,7 @@ export function showStart(opts: StartOptions = {}): Promise<{ name: string; look
     const dt = Math.min(0.05, (t - last) / 1000); last = t;
     spin += dt * 0.6;
     rig.root.rotation.y = Math.sin(spin) * 0.6;
-    anim.update(dt, false, 'charging');
+    anim.update(dt, { moving: false, energy: 55, pose: 'stand', dozing: false, baseY: 0 });
     renderer.render(scene, cam);
     raf = requestAnimationFrame(loop);
   };

@@ -13,6 +13,12 @@ export const Player = schema({
   dir: t.float32(),
   moving: t.boolean(),
   battery: t.string(),
+  /** 0–100. Everyone arrives tired and recharges at the party (see shared/energy). */
+  energy: t.uint8(),
+  /** The seat you're sitting on, or -1. */
+  seat: t.int16(),
+  /** Nodding off after a while doing nothing. */
+  dozing: t.boolean(),
 }, 'Player');
 export type Player = SchemaType<typeof Player>;
 

@@ -21,10 +21,11 @@ export const AVATAR_RADIUS = 0.35;
 /** Client sends its position this many times per second. */
 export const MOVE_HZ = 10;
 
-export const EMOTES = ['cheers', 'laugh', 'clap', 'heart', 'wow', 'wave'] as const;
+/** Reactions. The last two are for when you have no energy to talk: nod along, or zone out together. */
+export const EMOTES = ['cheers', 'laugh', 'clap', 'heart', 'wow', 'wave', 'nod', 'zone'] as const;
 export type Emote = (typeof EMOTES)[number];
 export const EMOTE_ICON: Record<Emote, string> = {
-  cheers: '🥂', laugh: '😂', clap: '👏', heart: '❤️', wow: '😮', wave: '👋',
+  cheers: '🥂', laugh: '😂', clap: '👏', heart: '❤️', wow: '😮', wave: '👋', nod: '😌', zone: '🫥',
 };
 
 export const KINDS = ['bear', 'cat', 'penguin', 'rabbit', 'fox', 'dog', 'frog'] as const;

@@ -1,5 +1,5 @@
 import {
-  THEME_LABEL, isEmote, isNear, parseLook, sanitizeChat, sanitizeName, type Battery, type Emote, type Look, type Theme,
+  ENERGY, THEME_LABEL, batteryOf, isEmote, isNear, parseLook, sanitizeChat, sanitizeName, type Emote, type Look, type Theme,
 } from '@party/shared';
 import { DemoConnection } from './demo';
 import { Emitter, type NetPlayer, type PartyConnection, type PartyEvents } from './types';
@@ -83,7 +83,18 @@ export class LiveRoomConnection implements PartyConnection {
       else if (isEmote(d.kind)) this.ev.emit('emote', from.id, d.kind);
     });
     this.offs.push(heard('chat'), heard('emote'));
-    void room.presence(this.presence({ battery: 'charging' })).catch(() => {});
+    void room.presence(this.presence({ e: ENERGY.start, s: -1, dz: false })).catch(() => {});
+    // your energy, seat and dozing come from the same simulation as the bots';
+    // share them when they change (whole numbers, so this stays rare)
+    let shared = { e: ENERGY.start, s: -1, dz: false };
+    this.bots.on({
+      change: p => {
+        if (p.id !== 'me') return;
+        if (p.energy === shared.e && p.seat === shared.s && p.dozing === shared.dz) return;
+        shared = { e: p.energy, s: p.seat, dz: p.dozing };
+        void this.room.presence({ e: p.energy, s: p.seat, dz: p.dozing }).catch(() => {});
+      },
+    });
   }
 
   private presence(extra: Record<string, unknown>) {
@@ -104,7 +115,8 @@ export class LiveRoomConnection implements PartyConnection {
   chat(text: string) { this.bots.chat(text); void this.room.emit('chat', { text }).catch(() => {}); }
   emote(kind: Emote) { this.bots.emote(kind); void this.room.emit('emote', { kind }).catch(() => {}); }
   async voice() { /* not available in the preview */ }
-  battery(level: Battery) { this.bots.battery(level); void this.room.presence({ b: level }).catch(() => {}); }
+  sit(seatId: number) { this.bots.sit(seatId); }
+  stand() { this.bots.stand(); }
   leave() {
     this.offs.forEach(f => f());
     void this.room.presence({ x: null, z: null, n: null }).catch(() => {});
@@ -125,6 +137,12 @@ function toPlayer(p: RoomPeer): NetPlayer | null {
     name: sanitizeName(s.n) ?? '손님',
     look,
     x: s.x, z: s.z, dir: typeof s.d === 'number' ? s.d : 0, moving: s.m === true,
-    battery: s.b === 'low' ? 'low' : 'charging',
+    // presence is untrusted: clamp everything to what it could be
+    ...(() => {
+      const energy = typeof s.e === 'number' && Number.isFinite(s.e) ? Math.max(0, Math.min(ENERGY.max, Math.floor(s.e))) : 60;
+      return { energy, battery: batteryOf(energy) };
+    })(),
+    seat: typeof s.s === 'number' && Number.isInteger(s.s) ? s.s : -1,
+    dozing: s.dz === true,
   };
 }

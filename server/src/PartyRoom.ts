@@ -1,14 +1,20 @@
 import { Room, type Client } from '@colyseus/core';
 import {
-  MAX_PLAYERS, MAX_SPEED, finite, isBattery, isEmote, isTheme, mapFor, moveWithCollision, nearbyIds,
-  nearestWalkable, type WorldMap, parseLook, sanitizeChat, sanitizeName, sanitizeTitle, validateVoice,
+  DOZE_AFTER, ENERGY, MAX_PLAYERS, MAX_SPEED, batteryOf, chargeRate, finite, isEmote, isTheme, mapFor,
+  moveWithCollision, nearbyIds, nearestWalkable, stepEnergy, type WorldMap, parseLook, sanitizeChat, sanitizeName, sanitizeTitle, validateVoice,
 } from '@party/shared';
 import { PartyState, Player } from './schema';
 import { stats } from './stats';
 
 export interface PartyMetadata { title: string; theme: string; private: boolean }
 
-interface Track { at: number; voiceAt: number }
+interface Track {
+  at: number; voiceAt: number;
+  /** Exact energy; the synced field is whole numbers. */
+  energy: number;
+  /** Seconds since the player last did anything. */
+  idle: number;
+}
 
 /**
  * A party in one of the places (gallery, home, pool). The server is the referee: it keeps everyone's
@@ -29,12 +35,18 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
     move: (client: Client, m: unknown) => this.onMove(client, m),
     chat: (client: Client, m: unknown) => {
       const text = sanitizeChat((m as { text?: unknown } | null)?.text);
-      if (text) this.toNearby(client, 'chat', { from: client.sessionId, text, ts: Date.now() });
+      if (!text) return;
+      this.active(client.sessionId);
+      this.toNearby(client, 'chat', { from: client.sessionId, text, ts: Date.now() });
     },
     emote: (client: Client, m: unknown) => {
       const kind = (m as { kind?: unknown } | null)?.kind;
-      if (isEmote(kind)) this.toNearby(client, 'emote', { from: client.sessionId, kind });
+      if (!isEmote(kind)) return;
+      this.active(client.sessionId);
+      this.toNearby(client, 'emote', { from: client.sessionId, kind });
     },
+    sit: (client: Client, m: unknown) => this.onSit(client, (m as { seat?: unknown } | null)?.seat),
+    stand: (client: Client) => { this.standUp(client.sessionId); this.active(client.sessionId); },
     voice: (client: Client, m: unknown) => {
       const note = validateVoice(m);
       const track = this.tracks.get(client.sessionId);
@@ -43,11 +55,6 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
       if (now - track.voiceAt < 1500) return; // no voice-note spam
       track.voiceAt = now;
       this.toNearby(client, 'voice', { from: client.sessionId, ...note }, true);
-    },
-    battery: (client: Client, m: unknown) => {
-      const level = (m as { level?: unknown } | null)?.level;
-      const p = this.state.players.get(client.sessionId);
-      if (p && isBattery(level)) p.battery = level;
     },
   };
 
@@ -59,6 +66,7 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
     this.state.title = title;
     this.state.theme = theme;
     this.state.isPrivate = isPrivate;
+    this.clock.setInterval(() => this.advance(0.5), 500);
     await this.setMatchmaking({
       metadata: { title, theme, private: isPrivate },
       private: isPrivate,
@@ -73,9 +81,10 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
     const spot = nearestWalkable({ x: s.x + (Math.random() - 0.5) * 3, z: s.z + (Math.random() - 0.5) * 1.5 }, this.map);
     this.state.players.set(client.sessionId, new Player({
       name, kind: look.kind, color: look.color, hat: look.hat, hand: look.hand, outfit: look.outfit,
-      x: spot.x, z: spot.z, dir: 0, moving: false, battery: 'charging',
+      x: spot.x, z: spot.z, dir: 0, moving: false,
+      energy: ENERGY.start, battery: batteryOf(ENERGY.start), seat: -1, dozing: false,
     }));
-    this.tracks.set(client.sessionId, { at: Date.now(), voiceAt: 0 });
+    this.tracks.set(client.sessionId, { at: Date.now(), voiceAt: 0, energy: ENERGY.start, idle: 0 });
     stats.join({ id: client.sessionId, name, roomId: this.roomId, roomTitle: this.state.title, isPrivate: this.state.isPrivate, tz: options.tz });
   }
 
@@ -92,6 +101,9 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
     const { x, z, dir, moving } = m as Record<string, unknown>;
     if (!finite(x) || !finite(z)) return;
 
+    // walking off a seat: stand up first, then take the step from the floor in front of it
+    if (p.seat >= 0) this.standUp(client.sessionId);
+
     const now = Date.now();
     const dt = Math.min(1, Math.max(0.05, (now - track.at) / 1000));
     track.at = now;
@@ -105,7 +117,59 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
     p.z = pos.z;
     if (finite(dir)) p.dir = dir;
     p.moving = moving === true;
+    if (p.moving || dist > 0.01) this.active(client.sessionId);
     if (Math.abs(pos.x - x) > 0.3 || Math.abs(pos.z - z) > 0.3) client.send('snap', { x: pos.x, z: pos.z });
+  }
+
+  /** Sit on a seat you're standing next to, if nobody else is on it. */
+  private onSit(client: Client, seatId: unknown) {
+    const p = this.state.players.get(client.sessionId);
+    const seat = this.map.seats.find(s => s.id === seatId);
+    if (!p || !seat || p.seat === seat.id) return;
+    const close = Math.min(Math.hypot(seat.stand.x - p.x, seat.stand.z - p.z), Math.hypot(seat.x - p.x, seat.z - p.z));
+    if (close > 1.8) return;
+    for (const [id, other] of this.state.players) if (id !== client.sessionId && other.seat === seat.id) return;
+    p.seat = seat.id;
+    p.x = seat.x; p.z = seat.z; p.dir = seat.dir; p.moving = false;
+    this.active(client.sessionId);
+  }
+
+  private standUp(id: string) {
+    const p = this.state.players.get(id);
+    if (!p || p.seat < 0) return;
+    const seat = this.map.seats.find(s => s.id === p.seat);
+    p.seat = -1;
+    if (seat) { p.x = seat.stand.x; p.z = seat.stand.z; }
+  }
+
+  /** The player did something: they're awake. */
+  private active(id: string) {
+    const t = this.tracks.get(id);
+    if (t) t.idle = 0;
+    const p = this.state.players.get(id);
+    if (p) p.dozing = false;
+  }
+
+  /**
+   * Time passes at the party: everyone recharges (faster sitting or lying
+   * down), and anyone who has done nothing for a while nods off. Runs twice a
+   * second; tests call it directly to fast-forward.
+   */
+  advance(dt: number) {
+    for (const [id, p] of this.state.players) {
+      const t = this.tracks.get(id);
+      if (!t) continue;
+      t.idle += dt;
+      const dozing = t.idle >= DOZE_AFTER;
+      if (p.dozing !== dozing) p.dozing = dozing;
+      const seat = p.seat >= 0 ? this.map.seats.find(s => s.id === p.seat) : undefined;
+      const pose = seat ? seat.pose : p.moving ? 'walk' : 'stand';
+      t.energy = stepEnergy(t.energy, chargeRate(pose, dozing), dt);
+      const whole = Math.floor(t.energy);
+      if (p.energy !== whole) p.energy = whole;
+      const battery = batteryOf(t.energy);
+      if (p.battery !== battery) p.battery = battery;
+    }
   }
 
   /** Send to everyone near the sender (sender included, so their own bubble is confirmed). */

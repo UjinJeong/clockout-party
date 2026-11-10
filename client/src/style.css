@@ -267,3 +267,15 @@ html.touch .joystick { display: block; }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   #start .invite { background: rgba(241, 231, 211, .93); }
 }
+
+/* energy meter: 🪫 → 🔋 → ⚡ with a bar that fills as you recharge */
+.battery .bm { display: inline-block; width: 46px; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, .14); overflow: hidden; }
+.battery .bm i { display: block; height: 100%; width: 20%; border-radius: 4px; background: linear-gradient(90deg, #e8a85e, #9be38b); transition: width .6s ease; }
+.battery[aria-pressed="true"] .bm i { background: linear-gradient(90deg, #d6604f, #e8a85e); }
+.battery .bl { min-width: 3.1em; text-align: right; font-variant-numeric: tabular-nums; }
+/* the seat button sits off to the right above the dock, so it never covers your character */
+.seat-chip { left: auto; right: 18px; transform: none; bottom: calc(84px + var(--safe-b)); }
+@media (max-width: 720px) {
+  .seat-chip { right: 12px; bottom: calc(118px + var(--safe-b)); }
+  .battery .bm { width: 30px; }
+}

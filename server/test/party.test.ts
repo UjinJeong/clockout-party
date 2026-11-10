@@ -8,6 +8,7 @@ import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { boot, type ColyseusTestServer } from '@colyseus/testing';
 import app from '../src/app';
 import type { PartyRoom } from '../src/PartyRoom';
+import { DOZE_AFTER, ENERGY, MAPS } from '@party/shared';
 
 let colyseus: ColyseusTestServer;
 beforeAll(async () => { colyseus = await boot(app); });
@@ -26,7 +27,7 @@ describe('party room', () => {
     expect(p.name).toBe('유진');
     expect(p.kind).toBe('fox');
     expect([p.hat, p.hand, p.outfit]).toEqual(['headphones', 'wine', 'tie']);
-    expect(p.battery).toBe('charging');
+    expect(p.battery).toBe('low'); // everyone arrives tired
   });
 
   it('gives a fallback name when none is sent', async () => {
@@ -132,13 +133,6 @@ describe('party room', () => {
     expect(got).toEqual(['아직 연결돼 있어요']);
   });
 
-  it('toggles the battery status', async () => {
-    const room = await colyseus.createRoom<PartyRoom>('party', {});
-    const a = await colyseus.connectTo(room, { name: 'A', look });
-    a.send('battery', { level: 'low' });
-    await wait(80);
-    expect(room.state.players.get(a.sessionId)!.battery).toBe('low');
-  });
 
   it('lists public rooms and hides private ones', async () => {
     await colyseus.createRoom('party', { title: '공개', private: false });
@@ -154,6 +148,114 @@ describe('party room', () => {
     const friend = await colyseus.sdk.joinById(room.roomId, { name: '친구', look });
     expect(friend.roomId).toBe(room.roomId);
     await friend.leave();
+  });
+});
+
+describe('퇴근 → 충전', () => {
+  const home = MAPS.home;
+  const sofa = home.seats[0];
+  /** Put a player on the stand-up spot of a seat, as if they had walked there. */
+  const standAt = (room: PartyRoom, id: string, x: number, z: number) => {
+    const p = room.state.players.get(id)!; p.x = x; p.z = z;
+  };
+
+  it('everyone arrives tired, standing, awake', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', { theme: 'home' });
+    const a = await colyseus.connectTo(room, { name: 'A', look });
+    await room.waitForNextPatch();
+    const p = room.state.players.get(a.sessionId)!;
+    expect(p.energy).toBe(ENERGY.start);
+    expect(p.seat).toBe(-1);
+    expect(p.dozing).toBe(false);
+    expect(p.battery).toBe('low');
+  });
+
+  it('you can sit on a seat you are standing next to', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', { theme: 'home' });
+    const a = await colyseus.connectTo(room, { name: 'A', look });
+    await room.waitForNextPatch();
+    standAt(room, a.sessionId, sofa.stand.x, sofa.stand.z);
+    a.send('sit', { seat: sofa.id });
+    await wait(80);
+    const p = room.state.players.get(a.sessionId)!;
+    expect(p.seat).toBe(sofa.id);
+    expect([p.x, p.z]).toEqual([sofa.x, sofa.z]);
+  });
+
+  it('but not from across the room, and not on someone', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', { theme: 'home' });
+    const a = await colyseus.connectTo(room, { name: 'A', look });
+    const b = await colyseus.connectTo(room, { name: 'B', look });
+    await room.waitForNextPatch();
+    standAt(room, a.sessionId, 30, 2);
+    a.send('sit', { seat: sofa.id });
+    await wait(80);
+    expect(room.state.players.get(a.sessionId)!.seat).toBe(-1);
+    standAt(room, a.sessionId, sofa.stand.x, sofa.stand.z);
+    standAt(room, b.sessionId, sofa.stand.x + 0.2, sofa.stand.z);
+    a.send('sit', { seat: sofa.id });
+    await wait(80);
+    b.send('sit', { seat: sofa.id });
+    await wait(80);
+    expect(room.state.players.get(b.sessionId)!.seat).toBe(-1);
+    b.send('sit', { seat: 9999 });
+    await wait(50);
+    expect(room.state.players.get(b.sessionId)!.seat).toBe(-1);
+  });
+
+  it('sitting charges you up much faster than standing', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', { theme: 'home' });
+    const a = await colyseus.connectTo(room, { name: 'A', look });
+    const b = await colyseus.connectTo(room, { name: 'B', look });
+    await room.waitForNextPatch();
+    standAt(room, a.sessionId, sofa.stand.x, sofa.stand.z);
+    a.send('sit', { seat: sofa.id });
+    await wait(80);
+    room.advance(10);
+    const sat = room.state.players.get(a.sessionId)!.energy, stood = room.state.players.get(b.sessionId)!.energy;
+    expect(sat).toBeGreaterThan(stood + 10);
+    room.advance(60);
+    expect(room.state.players.get(a.sessionId)!.energy).toBe(ENERGY.max);
+    expect(room.state.players.get(a.sessionId)!.battery).toBe('charging');
+  });
+
+  it('standing up puts you back on the floor in front of the seat', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', { theme: 'home' });
+    const a = await colyseus.connectTo(room, { name: 'A', look });
+    await room.waitForNextPatch();
+    standAt(room, a.sessionId, sofa.stand.x, sofa.stand.z);
+    a.send('sit', { seat: sofa.id });
+    await wait(80);
+    a.send('stand', {});
+    await wait(80);
+    const p = room.state.players.get(a.sessionId)!;
+    expect(p.seat).toBe(-1);
+    expect([p.x, p.z]).toEqual([sofa.stand.x, sofa.stand.z]);
+  });
+
+  it('walking off a seat stands you up first', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', { theme: 'home' });
+    const a = await colyseus.connectTo(room, { name: 'A', look });
+    await room.waitForNextPatch();
+    standAt(room, a.sessionId, sofa.stand.x, sofa.stand.z);
+    a.send('sit', { seat: sofa.id });
+    await wait(150);
+    a.send('move', { x: sofa.stand.x + 0.2, z: sofa.stand.z, dir: 0, moving: true });
+    await wait(80);
+    const p = room.state.players.get(a.sessionId)!;
+    expect(p.seat).toBe(-1);
+    expect(p.x).toBeCloseTo(sofa.stand.x + 0.2, 1);
+  });
+
+  it('doze off after a while doing nothing; wake up when you do something', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', { theme: 'home' });
+    const a = await colyseus.connectTo(room, { name: 'A', look });
+    await room.waitForNextPatch();
+    room.advance(DOZE_AFTER + 1);
+    expect(room.state.players.get(a.sessionId)!.dozing).toBe(true);
+    a.send('emote', { kind: 'nod' });
+    await wait(80);
+    expect(room.state.players.get(a.sessionId)!.dozing).toBe(false);
   });
 });
 

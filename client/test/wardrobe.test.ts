@@ -57,11 +57,11 @@ describe('wardrobe', () => {
       const r = await build({ kind, hand });
       const anim = new Animator(r);
       anim.play('cheers');
-      for (let i = 0; i < 22; i++) anim.update(1 / 30, false, 'charging');
+      for (let i = 0; i < 22; i++) anim.update(1 / 30, { moving: false, energy: 80, pose: 'stand', dozing: false, baseY: 0 });
       r.root.updateMatrixWorld(true);
       const up = () => new THREE.Vector3(0, 1, 0).applyQuaternion(r.held!.getWorldQuaternion(new THREE.Quaternion())).y;
       expect(up()).toBeGreaterThan(0.95);
-      for (let i = 0; i < 40; i++) anim.update(1 / 30, true, 'charging');
+      for (let i = 0; i < 40; i++) anim.update(1 / 30, { moving: true, energy: 80, pose: 'stand', dozing: false, baseY: 0 });
       r.root.updateMatrixWorld(true);
       expect(up()).toBeGreaterThan(0.95);
     }

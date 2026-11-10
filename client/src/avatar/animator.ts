@@ -1,63 +1,99 @@
 import * as THREE from 'three';
-import type { Battery, Emote } from '@party/shared';
+import { ENERGY, type Emote } from '@party/shared';
 import type { AnimalRig } from './animal';
 
-/** Code-driven motion: walking, idle breathing, and a short gesture for each emote. */
+/** How a guest is doing right now, as the animator needs it. */
+export interface BodyState {
+  moving: boolean;
+  /** 0–100: drained → recharged. Shows in the eyes and the posture. */
+  energy: number;
+  pose: 'stand' | 'sit' | 'lie';
+  dozing: boolean;
+  /** Height of the root: a seat (minus hip height), or below the waterline in the pool. */
+  baseY: number;
+}
+
+/** Code-driven motion: walking, idle breathing, sitting, lying, dozing, and a short gesture per emote. */
 export class Animator {
   private t = Math.random() * 3; // first blink comes after a second or so
   private walk = 0;            // 0..1 blend between idle and walk
+  private sit = 0;             // 0..1 blend into sitting
+  private lie = 0;             // 0..1 blend into lying back
+  private doze = 0;            // 0..1 blend into nodding off
   private emote: Emote | null = null;
   private emoteT = 0;
   static readonly EMOTE_TIME = 1.5;
 
-  constructor(private rig: AnimalRig) {}
+  constructor(private rig: AnimalRig) {
+    rig.root.rotation.order = 'YXZ'; // turn first, then lean back (lying on a lounger)
+  }
 
   play(kind: Emote) { this.emote = kind; this.emoteT = 0; }
 
-  update(dt: number, moving: boolean, battery: Battery) {
+  update(dt: number, b: BodyState) {
     const r = this.rig;
     this.t += dt;
-    this.walk += ((moving ? 1 : 0) - this.walk) * Math.min(1, dt * 8);
-    const w = this.walk, t = this.t;
+    const ease = (v: number, to: number, k: number) => v + (to - v) * Math.min(1, dt * k);
+    this.walk = ease(this.walk, b.moving ? 1 : 0, 8);
+    this.sit = ease(this.sit, b.pose === 'sit' ? 1 : 0, 7);
+    this.lie = ease(this.lie, b.pose === 'lie' ? 1 : 0, 5);
+    this.doze = ease(this.doze, b.dozing ? 1 : 0, 2);
+    const w = this.walk, t = this.t, seated = Math.max(this.sit, this.lie);
+    const charge = Math.min(1, Math.max(0, b.energy / ENERGY.max));
+    const tired = 1 - charge;
 
-    // walk cycle
-    const step = Math.sin(t * 9);
-    r.legL.rotation.x = step * 0.6 * w;
-    r.legR.rotation.x = -step * 0.6 * w;
-    r.armL.rotation.x = -step * 0.5 * w;
+    // walk cycle (folded away while seated)
+    const step = Math.sin(t * 9) * (1 - seated);
+    r.legL.rotation.x = step * 0.6 * w - 1.5 * seated;
+    r.legR.rotation.x = -step * 0.6 * w - 1.5 * seated;
+    r.armL.rotation.x = -step * 0.5 * w - 0.45 * this.sit;
     // holding a drink: elbow forward, and only a small swing so it doesn't slosh
-    r.armR.rotation.x = r.held ? -0.55 + step * 0.18 * w : step * 0.5 * w;
-    r.armL.rotation.z = -0.18;
-    r.armR.rotation.z = 0.18;
+    r.armR.rotation.x = r.held ? -0.55 + step * 0.18 * w : step * 0.5 * w - 0.45 * this.sit;
+    r.armL.rotation.z = -0.18 - 0.5 * this.lie;
+    r.armR.rotation.z = 0.18 + (r.held ? 0 : 0.5 * this.lie);
     r.bodyPivot.position.y = Math.abs(Math.cos(t * 9)) * 0.05 * w;
 
-    // idle: slow breathing, a tired sway; low battery slumps a little more
-    const tired = battery === 'low' ? 1 : 0.35;
-    const breath = Math.sin(t * 1.6) * 0.012 * (1 - w);
+    // idle: slow breathing and a tired sway; drained guests slump, recharged ones sit up
+    const breath = Math.sin(t * (1.6 - 0.5 * this.doze)) * (0.012 + 0.01 * this.doze) * (1 - w);
     r.bodyPivot.scale.set(1, 1 + breath, 1);
-    r.head.rotation.z = Math.sin(t * 0.7) * 0.06 * tired * (1 - w);
-    r.head.rotation.x = 0.12 * tired * (1 - w);
-    r.bodyPivot.rotation.x = 0;
+    r.bodyPivot.rotation.x = (0.05 + 0.13 * tired) * (1 - w) * (1 - this.lie);
     r.bodyPivot.rotation.z = 0;
-    r.root.position.y = 0;
+    r.head.rotation.z = Math.sin(t * 0.7) * 0.06 * (0.35 + 0.65 * tired) * (1 - w);
+    // nodding off: the head sinks and bobs back up now and then
+    const nod = this.doze * (0.38 + Math.max(0, Math.sin(t * 0.9)) * 0.14);
+    r.head.rotation.x = (0.04 + 0.16 * tired) * (1 - w) + nod;
 
-    // half-shut eyes, nearly shut when the battery is low, with a slow blink now and then
+    // lying back on a lounger (around the feet), sitting on a seat
+    r.root.rotation.x = -1.2 * this.lie;
+    r.root.position.y = b.baseY;
+
+    // eyes: barely open when drained, a little more as you recharge; shut when dozing; a slow blink
     const blink = (t % 4.3) > 4.1;
-    const target = blink ? 0.06 : battery === 'low' ? 0.2 : 0.55;
+    const open = 0.14 + 0.48 * charge;
+    const target = this.doze > 0.5 ? 0.04 : blink ? 0.06 : open;
     for (const e of r.eyes) e.pupil.scale.y += (target - e.pupil.scale.y) * Math.min(1, dt * 15);
 
     this.gesture(dt);
     this.keepUpright();
   }
 
-  /** Whatever the arm does, the glass stays level with the body (no spilled wine). */
+  /**
+   * Whatever the arm and body do (cheers, walking, lying back), the held item
+   * stays level with the floor, turned the way you face. No spilled drinks.
+   */
   private keepUpright() {
     const r = this.rig;
     if (!r.held) return;
-    r.armR.updateMatrix();
-    r.held.quaternion.copy(Animator.tmp.setFromRotationMatrix(r.armR.matrix)).invert();
+    const q = Animator.q1.setFromEuler(r.root.rotation)
+      .multiply(Animator.q2.setFromEuler(r.bodyPivot.rotation))
+      .multiply(Animator.q3.setFromEuler(r.armR.rotation));
+    const facing = Animator.q2.setFromAxisAngle(Animator.Y, r.root.rotation.y);
+    r.held.quaternion.copy(q.invert().multiply(facing));
   }
-  private static tmp = new THREE.Quaternion();
+  private static q1 = new THREE.Quaternion();
+  private static q2 = new THREE.Quaternion();
+  private static q3 = new THREE.Quaternion();
+  private static Y = new THREE.Vector3(0, 1, 0);
 
   private gesture(dt: number) {
     const r = this.rig;
@@ -87,7 +123,7 @@ export class Animator {
         r.bodyPivot.position.y += Math.abs(Math.sin(this.emoteT * 22)) * 0.04 * env;
         break;
       case 'heart':
-        r.root.position.y = Math.max(0, Math.sin(p * Math.PI * 2)) * 0.35;
+        r.root.position.y += Math.max(0, Math.sin(p * Math.PI * 2)) * 0.35 * (1 - this.sit - this.lie);
         r.armL.rotation.z = -2.2 * env; r.armR.rotation.z = 2.2 * env;
         break;
       case 'wow':
@@ -95,6 +131,19 @@ export class Animator {
         r.head.rotation.x = -0.25 * env;
         r.armL.rotation.z = -1.1 * env; r.armR.rotation.z = 1.1 * env;
         break;
+      case 'nod':
+        // slow, agreeable nods: "mm, mm"
+        r.head.rotation.x += Math.abs(Math.sin(this.emoteT * 6.5)) * 0.32 * env;
+        break;
+      case 'zone':
+        // staring into the middle distance, head tipped, a slow sway
+        r.head.rotation.z += 0.28 * env;
+        r.head.rotation.x -= 0.1 * env;
+        r.bodyPivot.rotation.z = Math.sin(this.emoteT * 2) * 0.04 * env;
+        for (const e of r.eyes) e.pupil.scale.y = Math.min(e.pupil.scale.y, 0.3);
+        break;
     }
+    // keep the held item level through the gesture too
+    this.keepUpright();
   }
 }

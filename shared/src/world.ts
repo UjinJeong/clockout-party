@@ -1,4 +1,5 @@
 import { AVATAR_RADIUS } from './constants';
+import type { Seat } from './energy';
 
 /**
  * The party maps, shared so the server and clients agree on where you can walk.
@@ -33,7 +34,14 @@ export interface WorldMap {
   spawn: Vec2;
   /** Where bot guests like to hang out. */
   spots: Vec2[];
+  /** Places to sit down and recharge. */
+  seats: Seat[];
 }
+
+let seatNo = 0;
+/** A seat facing `dir`, with its stand-up spot `out` metres in front of it (or at `stand`). */
+const seat = (x: number, z: number, y: number, dir: number, pose: 'sit' | 'lie', stand: Vec2): Seat =>
+  ({ id: seatNo++, x, z, y, dir, pose, stand });
 
 const square = (p: Furniture): Rect => ({ x0: p.x - p.r, x1: p.x + p.r, z0: p.z - p.r, z1: p.z + p.r });
 export const WALL_T = 0.1;
@@ -81,6 +89,11 @@ export const GALLERY_MAP: WorldMap = {
   spawn: SPAWN,
   spots: [1, 2, 3, 4].flatMap(r => [2.4, 6, 9.6].map(dx => ({ x: r * ROOM_W + dx, z: -2.6 })))
     .concat([{ x: 3.5, z: -2.2 }, { x: 8, z: -2.2 }, { x: 6, z: 3.6 }]),
+  // the viewing benches: three seats each, facing the paintings
+  seats: BENCHES.flatMap(b => [-0.85, 0, 0.85].map(dx => {
+    const x = (b.x0 + b.x1) / 2 + dx;
+    return seat(x, (b.z0 + b.z1) / 2, 0.42, Math.PI, 'sit', { x, z: 0.4 });
+  })),
 };
 
 // ───────────────────────── 🏠 home party: a city apartment ─────────────────────────
@@ -122,6 +135,17 @@ export const HOME_MAP: WorldMap = {
     { x: 18, z: -2.9 }, { x: 14, z: -2.8 }, { x: 18, z: 0.6 }, { x: 22, z: 1.5 },
     { x: 28.4, z: -1.5 }, { x: 32.5, z: -2.6 }, { x: 31.2, z: 3.2 }, { x: 26.5, z: 2.5 },
   ],
+  seats: [
+    // the sofa, three cushions facing the room
+    ...[3.6, 5.0, 6.4].map(x => seat(x, -4.0, 0.58, 0, 'sit', { x, z: -3.05 })),
+    // the armchair, angled toward the coffee table
+    seat(1.5, -1.7, 0.5, 0.85, 'sit', { x: 1.5 + Math.sin(0.85) * 1.2, z: -1.7 + Math.cos(0.85) * 1.2 }),
+    // stools at the kitchen island, facing it
+    ...[16.3, 18, 19.7].map(x => seat(x, -0.3, 0.78, Math.PI, 'sit', { x, z: 0.45 })),
+    // bean bags on the terrace: sink right in
+    seat(27.4, -2.6, 0.36, 0.3, 'sit', { x: 27.4, z: -1.6 }),
+    seat(29.3, -3.5, 0.36, -0.2, 'sit', { x: 29.3, z: -2.5 }),
+  ],
 };
 
 // ───────────────────────── 🏖️ pool party: outdoors ─────────────────────────
@@ -156,6 +180,12 @@ export const POOL_MAP: WorldMap = {
     { x: 4.5, z: -1.8 }, { x: 7.2, z: -1.8 }, { x: 9.5, z: 1.2 },
     { x: 17.5, z: -0.6 }, { x: 22.5, z: 0.2 }, { x: 25.5, z: -1.6 }, { x: 19.5, z: 3.2 }, { x: 24.5, z: -3.05 },
     { x: 33.2, z: -1.2 }, { x: 35.8, z: 2.8 }, { x: 36.8, z: -2.9 },
+  ],
+  seats: [
+    // stretch out on a lounger: the seat point is at the feet, you lie back from there
+    ...[15.6, 18.1, 20.6, 23.1, 25.6].map(x => seat(x, -3.5, 0.38, 0, 'lie', { x, z: -2.95 })),
+    // stools at the cabana bar
+    ...[3.6, 5.5, 7.4].map(x => seat(x, -2.75, 0.78, Math.PI, 'sit', { x, z: -1.95 })),
   ],
 };
 

@@ -1,21 +1,23 @@
 import {
-  EMOTES, KINDS, MOVE_HZ, HANDS, HATS, OUTFITS, WALK_SPEED, isNear, mapFor, moveWithCollision, nearestWalkable,
-  type Battery, type Emote, type Look, type Theme, type WorldMap,
+  DOZE_AFTER, EMOTES, ENERGY, KINDS, MOVE_HZ, HANDS, HATS, OUTFITS, WALK_SPEED, batteryOf, chargeRate, isNear, mapFor,
+  moveWithCollision, nearestWalkable, stepEnergy,
+  type Emote, type Look, type Seat, type Theme, type WorldMap,
 } from '@party/shared';
 import { Emitter, type NetPlayer, type PartyConnection, type PartyEvents } from './types';
 
 /**
  * A pretend party for trying things out without a server: a few tired bot guests
- * wander between the favourite spots of the place, chat when you are near, and
- * react to your emotes. It follows the same rules as the real server (only
- * nearby players hear you, same walls and furniture).
+ * wander between the favourite spots of the place, sit down to recharge, nod
+ * off, chat when you are near, and react to your emotes. It follows the same
+ * rules as the real server: only nearby players hear you, same walls and
+ * furniture, same seats and the same charging.
  */
-const BOTS: { name: string; battery: Battery }[] = [
-  { name: '월요병', battery: 'low' },
-  { name: '소금빵', battery: 'charging' },
-  { name: '야근요정', battery: 'charging' },
-  { name: '꿀잠', battery: 'low' },
-  { name: '하루', battery: 'charging' },
+const BOTS: { name: string; energy: number }[] = [
+  { name: '월요병', energy: 12 },
+  { name: '소금빵', energy: 55 },
+  { name: '야근요정', energy: 30 },
+  { name: '꿀잠', energy: 8 },
+  { name: '하루', energy: 70 },
 ];
 /** What each bot says, per place (same order as BOTS). */
 const LINES: Record<Theme, string[][]> = {
@@ -43,7 +45,14 @@ const LINES: Record<Theme, string[][]> = {
 };
 const REPLIES = ['ㅋㅋㅋ 맞아요', '오 그래요?', '저도요!', '와 공감해요', '좋네요 🥂', '천천히 쉬다 가요'];
 
-interface Bot extends NetPlayer { target: { x: number; z: number } | null; wait: number; lines: string[]; nextLine: number }
+/** The simulated body behind one guest: exact energy and how long they've been idle. */
+interface Sim { energy: number; idle: number }
+interface Bot extends NetPlayer, Sim {
+  target: { x: number; z: number } | null;
+  /** The seat a bot is heading to, to sit down on when it gets there. */
+  wantSeat: Seat | null;
+  wait: number; lines: string[]; nextLine: number;
+}
 
 export class DemoConnection implements PartyConnection {
   readonly selfId = 'me';
@@ -53,7 +62,7 @@ export class DemoConnection implements PartyConnection {
   readonly demo = true;
   readonly voiceOk = true;
   private ev = new Emitter();
-  private me: NetPlayer;
+  private me: NetPlayer & Sim;
   private bots: Bot[] = [];
   private timer: number;
   private map: WorldMap;
@@ -63,7 +72,10 @@ export class DemoConnection implements PartyConnection {
     this.map = mapFor(opts.theme);
     this.theme = this.map.theme;
     const at = nearestWalkable(this.map.spawn, this.map);
-    this.me = { id: 'me', name, look, x: at.x, z: at.z, dir: 0, moving: false, battery: 'charging' };
+    this.me = {
+      id: 'me', name, look, x: at.x, z: at.z, dir: 0, moving: false,
+      energy: ENERGY.start, battery: batteryOf(ENERGY.start), seat: -1, dozing: false, idle: 0,
+    };
     BOTS.forEach((b, i) => {
       // every bot dressed differently, so the party shows off the wardrobe
       const lk: Look = {
@@ -76,24 +88,48 @@ export class DemoConnection implements PartyConnection {
       const pos = nearestWalkable(p, this.map);
       this.bots.push({
         id: `bot${i}`, name: b.name + (opts.botSuffix ?? ''), look: lk, x: pos.x, z: pos.z, dir: Math.random() * 6, moving: false,
-        battery: b.battery, target: null, wait: 2 + Math.random() * 6, lines: LINES[this.theme][i], nextLine: 3 + Math.random() * 6,
+        energy: b.energy, battery: batteryOf(b.energy), seat: -1, dozing: false, idle: Math.random() * 20,
+        target: null, wantSeat: null, wait: 2 + Math.random() * 6, lines: LINES[this.theme][i], nextLine: 3 + Math.random() * 6,
       });
     });
+    // the most drained guest has already flopped onto a seat
+    const tired = [...this.bots].sort((a, b) => a.energy - b.energy)[0];
+    const firstSeat = this.map.seats[(this.map.seats.length / 2) | 0];
+    if (tired && firstSeat) this.seatBot(tired, firstSeat);
     this.timer = window.setInterval(() => this.tick(1 / MOVE_HZ), 1000 / MOVE_HZ);
   }
 
   on(h: Partial<PartyEvents>) {
     this.ev.on(h);
-    h.add?.({ ...this.me });
+    h.add?.(strip(this.me));
     for (const b of this.bots) h.add?.(strip(b));
   }
 
   move(x: number, z: number, dir: number, moving: boolean) {
+    if (this.me.seat >= 0) this.standUp(this.me);
     const p = moveWithCollision({ x: this.me.x, z: this.me.z }, { x, z }, this.map);
+    if (moving || Math.hypot(p.x - this.me.x, p.z - this.me.z) > 0.01) this.wake(this.me);
     Object.assign(this.me, { x: p.x, z: p.z, dir, moving });
   }
 
+  sit(seatId: number) {
+    const seat = this.map.seats.find(s => s.id === seatId);
+    if (!seat || !this.free(seat)) return;
+    const close = Math.min(Math.hypot(seat.stand.x - this.me.x, seat.stand.z - this.me.z), Math.hypot(seat.x - this.me.x, seat.z - this.me.z));
+    if (close > 1.8) return;
+    Object.assign(this.me, { seat: seat.id, x: seat.x, z: seat.z, dir: seat.dir, moving: false });
+    this.wake(this.me);
+    this.ev.emit('change', strip(this.me));
+  }
+
+  stand() {
+    this.standUp(this.me);
+    this.wake(this.me);
+    this.ev.emit('change', strip(this.me));
+  }
+
   chat(text: string) {
+    this.wake(this.me);
     this.ev.emit('chat', 'me', text);
     const near = this.bots.filter(b => isNear(b, this.me));
     if (!near.length) return;
@@ -102,9 +138,12 @@ export class DemoConnection implements PartyConnection {
   }
 
   emote(kind: Emote) {
+    this.wake(this.me);
     this.ev.emit('emote', 'me', kind);
     for (const b of this.bots) if (isNear(b, this.me) && Math.random() < 0.7) {
-      const back: Emote = kind === 'cheers' ? 'cheers' : EMOTES[(Math.random() * EMOTES.length) | 0];
+      // tired guests answer with tired reactions
+      const pool: Emote[] = b.energy < ENERGY.low ? ['nod', 'zone', 'wave'] : [...EMOTES];
+      const back: Emote = kind === 'cheers' ? 'cheers' : kind === 'nod' || kind === 'zone' ? kind : pool[(Math.random() * pool.length) | 0];
       window.setTimeout(() => this.ev.emit('emote', b.id, back), 400 + Math.random() * 900);
     }
   }
@@ -114,45 +153,77 @@ export class DemoConnection implements PartyConnection {
     this.ev.emit('voice', 'me', blob, ms);
   }
 
-  battery(level: Battery) {
-    this.me.battery = level;
-    this.ev.emit('change', { ...this.me });
-  }
-
   leave() {
     window.clearInterval(this.timer);
     this.ev.emit('closed', 'left');
   }
 
+  private free(seat: Seat) {
+    return this.me.seat !== seat.id && !this.bots.some(b => b.seat === seat.id || b.wantSeat?.id === seat.id);
+  }
+  private seatBot(b: Bot, seat: Seat) {
+    Object.assign(b, { seat: seat.id, x: seat.x, z: seat.z, dir: seat.dir, moving: false, wantSeat: null, target: null });
+    b.wait = 12 + Math.random() * 20;
+  }
+  private standUp(p: NetPlayer) {
+    const seat = this.map.seats.find(s => s.id === p.seat);
+    p.seat = -1;
+    if (seat) { p.x = seat.stand.x; p.z = seat.stand.z; }
+  }
+  private wake(p: NetPlayer & Sim) { p.idle = 0; p.dozing = false; }
+
+  /** The same charging as the real server: see shared/energy. */
+  private live(p: NetPlayer & Sim, dt: number) {
+    p.idle += dt;
+    p.dozing = p.idle >= DOZE_AFTER;
+    const seat = p.seat >= 0 ? this.map.seats.find(s => s.id === p.seat) : undefined;
+    const pose = seat ? seat.pose : p.moving ? 'walk' : 'stand';
+    p.energy = stepEnergy(p.energy, chargeRate(pose, p.dozing), dt);
+    p.battery = batteryOf(p.energy);
+  }
+
   private tick(dt: number) {
+    this.live(this.me, dt);
+    this.ev.emit('change', strip(this.me));
     for (const b of this.bots) {
-      if (b.target) {
+      this.live(b, dt);
+      if (b.seat >= 0) {
+        // stay seated until recharged (or bored), then get up and wander
+        if ((b.wait -= dt) <= 0 && (b.energy >= ENERGY.max - 1 || Math.random() < 0.02)) { this.standUp(b); b.wait = 1 + Math.random() * 3; b.idle = 0; }
+      } else if (b.target) {
         const dx = b.target.x - b.x, dz = b.target.z - b.z, d = Math.hypot(dx, dz);
-        if (d < 0.15) { b.target = null; b.moving = false; b.wait = 3 + Math.random() * 9; }
-        else {
+        if (d < 0.15) {
+          b.target = null; b.moving = false; b.wait = 3 + Math.random() * 9;
+          if (b.wantSeat) { const s = b.wantSeat; b.wantSeat = null; if (this.free(s)) this.seatBot(b, s); }
+        } else {
           const s = Math.min(d, WALK_SPEED * 0.75 * dt);
           const p = moveWithCollision(b, { x: b.x + (dx / d) * s, z: b.z + (dz / d) * s }, this.map);
-          if (Math.hypot(p.x - b.x, p.z - b.z) < s * 0.2) { b.target = null; b.moving = false; b.wait = 1; }
-          else { b.dir = Math.atan2(dx, dz); b.x = p.x; b.z = p.z; b.moving = true; }
+          if (Math.hypot(p.x - b.x, p.z - b.z) < s * 0.2) { b.target = null; b.wantSeat = null; b.moving = false; b.wait = 1; }
+          else { b.dir = Math.atan2(dx, dz); b.x = p.x; b.z = p.z; b.moving = true; b.idle = 0; }
         }
       } else if ((b.wait -= dt) <= 0) {
-        // low-battery guests mostly stay put
-        if (b.battery === 'low' && Math.random() < 0.6) { b.wait = 6 + Math.random() * 8; }
-        else {
+        // drained guests look for somewhere to sit; the rest wander between favourite spots
+        const seats = this.map.seats.filter(s => this.free(s));
+        if (b.energy < 60 && seats.length && Math.random() < 0.7) {
+          const s = seats[(Math.random() * seats.length) | 0];
+          b.wantSeat = s; b.target = { ...s.stand };
+        } else if (b.energy < ENERGY.low && Math.random() < 0.5) {
+          b.wait = 6 + Math.random() * 8; // too tired to move just yet
+        } else {
           const spots = this.map.spots;
           const s = spots[(Math.random() * spots.length) | 0];
           b.target = nearestWalkable({ x: s.x + (Math.random() - 0.5), z: s.z + (Math.random() - 0.5) * 0.6 }, this.map);
         }
       }
-      // chatting with you when you are close
-      if (isNear(b, this.me)) {
+      // chatting with you when you are close (unless they've nodded off)
+      if (isNear(b, this.me) && !b.dozing) {
         b.nextLine -= dt;
         if (b.nextLine <= 0) {
           b.nextLine = 9 + Math.random() * 12;
-          if (b.battery === 'charging' || Math.random() < 0.3) {
+          if (b.energy >= ENERGY.low || Math.random() < 0.3) {
             this.ev.emit('chat', b.id, b.lines[(Math.random() * b.lines.length) | 0]);
-            if (!b.moving) b.dir = Math.atan2(this.me.x - b.x, this.me.z - b.z);
-          } else this.ev.emit('emote', b.id, 'wave');
+            if (!b.moving && b.seat < 0) b.dir = Math.atan2(this.me.x - b.x, this.me.z - b.z);
+          } else this.ev.emit('emote', b.id, Math.random() < 0.5 ? 'nod' : 'wave');
         }
       }
       this.ev.emit('change', strip(b));
@@ -160,9 +231,12 @@ export class DemoConnection implements PartyConnection {
     // once in a while somebody across the room cheers
     if (Math.random() < 0.004) {
       const b = this.bots[(Math.random() * this.bots.length) | 0];
-      if (isNear(b, this.me)) this.ev.emit('emote', b.id, 'cheers');
+      if (isNear(b, this.me) && !b.dozing) this.ev.emit('emote', b.id, 'cheers');
     }
   }
 }
 
-const strip = (b: Bot): NetPlayer => ({ id: b.id, name: b.name, look: b.look, x: b.x, z: b.z, dir: b.dir, moving: b.moving, battery: b.battery });
+const strip = (b: NetPlayer): NetPlayer => ({
+  id: b.id, name: b.name, look: b.look, x: b.x, z: b.z, dir: b.dir, moving: b.moving,
+  battery: b.battery, energy: Math.floor(b.energy), seat: b.seat, dozing: b.dozing,
+});

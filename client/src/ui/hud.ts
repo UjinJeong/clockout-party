@@ -1,4 +1,4 @@
-import { BATTERY_LABEL, EMOTES, EMOTE_ICON, VOICE_MAX_MS, type Battery, type MapRoom } from '@party/shared';
+import { BATTERY_LABEL, EMOTES, EMOTE_ICON, ENERGY, VOICE_MAX_MS, type Battery, type MapRoom, type Seat } from '@party/shared';
 import type { Party } from '../game/party';
 import type { PartyConnection } from '../net/types';
 import type { Artwork } from '../world/art';
@@ -10,7 +10,7 @@ import type { Controls } from '../game/controls';
 import { isTyping } from '../game/controls';
 import { $, esc, load, onSubmit, save, toast } from './dom';
 
-const EMOTE_LABEL = { cheers: '건배', laugh: '웃음', clap: '박수', heart: '좋아요', wow: '놀람', wave: '손 흔들기' } as const;
+const EMOTE_LABEL = { cheers: '건배', laugh: '웃음', clap: '박수', heart: '좋아요', wow: '놀람', wave: '손 흔들기', nod: '끄덕끄덕', zone: '같이 멍때리기' } as const;
 
 /**
  * Everything on screen during the party. Returns hooks for the Party and a
@@ -26,7 +26,6 @@ export function createHud(conn: PartyConnection, controls: Controls) {
   $('invite-btn').hidden = conn.demo;
   let party: Party | null = null;
   let current: Painting | null = null;
-  let battery: Battery = 'charging';
   const cleanups: (() => void)[] = [];
   const on = <K extends keyof HTMLElementEventMap>(el: EventTarget, ev: K, fn: (e: HTMLElementEventMap[K]) => void) => {
     el.addEventListener(ev, fn as EventListener);
@@ -93,20 +92,25 @@ export function createHud(conn: PartyConnection, controls: Controls) {
     if (b && party) party.emote(b.dataset.e as (typeof EMOTES)[number]);
   });
 
-  // ---- battery ----
+  // ---- energy: 퇴근 → 충전 ----
   const batBtn = $('battery-btn');
-  const setBattery = (b: Battery) => {
-    battery = b;
-    batBtn.setAttribute('aria-pressed', String(b === 'low'));
-    batBtn.querySelector('.bi')!.textContent = b === 'low' ? '🪫' : '🔋';
-    batBtn.querySelector('.bl')!.textContent = b === 'low' ? '방전' : '충전 중';
-    batBtn.title = `${BATTERY_LABEL[b]} (눌러서 바꾸기)`;
+  const showEnergy = (e: number) => {
+    const low = e < ENERGY.low;
+    batBtn.setAttribute('aria-pressed', String(low));
+    batBtn.querySelector('.bi')!.textContent = low ? '🪫' : e >= ENERGY.max ? '⚡' : '🔋';
+    batBtn.querySelector('.bl')!.textContent = `${Math.floor(e)}%`;
+    (batBtn.querySelector('.bm i') as HTMLElement).style.width = `${Math.max(3, Math.min(100, e))}%`;
+    batBtn.title = e >= ENERGY.max ? '충전 완료! 오늘도 수고했어요' : `${BATTERY_LABEL[low ? 'low' : 'charging']} · 앉으면 더 빨리 충전돼요`;
   };
-  setBattery('charging');
-  on(batBtn, 'click', () => {
-    setBattery(battery === 'charging' ? 'low' : 'charging');
-    conn.battery(battery);
-    toast(battery === 'low' ? '방전 상태로 바꿨어요. 다들 구경만 하고 싶은 걸 알 수 있어요.' : '충전 중으로 바꿨어요. 말 걸어도 된다는 표시예요.');
+  showEnergy(ENERGY.start);
+  on(batBtn, 'click', () => toast('가만히 있어도 조금씩 충전돼요. 소파나 의자에 앉으면 훨씬 빨라요 🛋️', 3200));
+
+  // ---- seats: sit down nearby, or get up ----
+  const seatChip = $('seat-chip');
+  let offered: { seat: Seat; seated: boolean } | null = null;
+  on(seatChip, 'click', () => {
+    if (!offered || !party) return;
+    if (offered.seated) party.standUp(); else party.goSit(offered.seat);
   });
 
   // ---- voice notes ----
@@ -181,6 +185,13 @@ export function createHud(conn: PartyConnection, controls: Controls) {
       if (p) chip.textContent = `「${p.art.title}」 살아난 그림 보기`;
     },
     arrived: (p: Painting) => openArt(p.art),
+    seat: (o: { seat: Seat; seated: boolean } | null) => {
+      offered = o;
+      seatChip.hidden = !o;
+      if (o) seatChip.textContent = o.seated ? '🚶 일어나기' : o.seat.pose === 'lie' ? '🏖️ 누워서 충전하기' : '🛋️ 앉아서 충전하기';
+    },
+    energy: (e: number) => showEnergy(e),
+    charged: () => toast('⚡ 충전 완료! 오늘도 수고했어요', 4200),
     guests: (list: { id: string; name: string; battery: Battery; near: boolean; self: boolean; muted: boolean }[]) => {
       const near = list.filter(g => g.near).length;
       $('who').textContent = near ? `${list.length}명 있어요, 근처에 ${near}명` : `${list.length}명 있어요`;

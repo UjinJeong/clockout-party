@@ -41,18 +41,18 @@ describe('wine glass', () => {
   for (const kind of KINDS) {
     it(`${kind} holds it in front of the paw, upright, while idle`, async () => {
       const { r, anim } = await rig(kind);
-      for (let i = 0; i < 30; i++) anim.update(1 / 30, false, 'charging');
+      for (let i = 0; i < 30; i++) anim.update(1 / 30, { moving: false, energy: 80, pose: 'stand', dozing: false, baseY: 0 });
       check(r);
     });
     it(`${kind} keeps it upright mid-cheers`, async () => {
       const { r, anim } = await rig(kind);
       anim.play('cheers');
-      for (let i = 0; i < 22; i++) anim.update(1 / 30, false, 'charging'); // ~0.7s, arm at its highest
+      for (let i = 0; i < 22; i++) anim.update(1 / 30, { moving: false, energy: 80, pose: 'stand', dozing: false, baseY: 0 }); // ~0.7s, arm at its highest
       check(r);
     });
     it(`${kind} keeps it upright while walking`, async () => {
       const { r, anim } = await rig(kind);
-      for (let i = 0; i < 40; i++) anim.update(1 / 30, true, 'charging');
+      for (let i = 0; i < 40; i++) anim.update(1 / 30, { moving: true, energy: 80, pose: 'stand', dozing: false, baseY: 0 });
       check(r);
     });
   }

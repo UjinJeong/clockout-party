@@ -110,12 +110,13 @@
     </aside>
 
     <button id="art-chip" class="art-chip" type="button" hidden></button>
+    <button id="seat-chip" class="art-chip seat-chip" type="button" hidden></button>
 
     <div class="joystick" id="joystick" aria-hidden="true"><span class="knob"></span></div>
 
     <div class="dock" id="dock">
-      <button class="battery" id="battery-btn" type="button" aria-pressed="false" title="상태 바꾸기">
-        <span class="bi">🔋</span><span class="bl">충전 중</span>
+      <button class="battery" id="battery-btn" type="button" aria-pressed="true" title="에너지">
+        <span class="bi">🪫</span><span class="bm" aria-hidden="true"><i></i></span><span class="bl">20%</span>
       </button>
       <form id="chat-form" class="chat" autocomplete="off">
         <input id="chat-input" maxlength="120" placeholder="근처 사람에게 말하기" aria-label="근처 사람에게 말하기" enterkeyhint="send" />
