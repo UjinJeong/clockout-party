@@ -12,7 +12,8 @@ export interface AnimalRig {
   head: THREE.Group;
   armL: THREE.Group; armR: THREE.Group;
   legL: THREE.Group; legR: THREE.Group;
-  lids: THREE.Mesh[];    // eyelids: lower = sleepier
+  /** Sleepy eyes: a black half-moon under a heavy black lid line. Squash `pupil.scale.y` to close them. */
+  eyes: { pupil: THREE.Mesh; lid: THREE.Mesh }[];
   /** Something held in the right paw (the wine glass); the animator keeps it upright. */
   held: THREE.Group | null;
   look: Look;
@@ -27,8 +28,9 @@ const G = {
   roundEar: new THREE.SphereGeometry(0.11, 8, 6),
   coneEar: new THREE.ConeGeometry(0.12, 0.22, 4),
   longEar: new THREE.CapsuleGeometry(0.07, 0.32, 3, 6),
-  eye: new THREE.SphereGeometry(0.045, 8, 6),
-  lid: new THREE.SphereGeometry(0.052, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2),
+  // lower half of a sphere: flat on top, round underneath — a half-shut eye
+  pupil: new THREE.SphereGeometry(0.05, 14, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
+  lidLine: new THREE.CapsuleGeometry(0.013, 0.09, 2, 8),
   muzzle: new THREE.SphereGeometry(0.13, 8, 6),
   nose: new THREE.SphereGeometry(0.035, 6, 5),
   beak: new THREE.ConeGeometry(0.07, 0.16, 6),
@@ -45,6 +47,7 @@ function mat(color: string, opts: Partial<THREE.MeshStandardMaterialParameters> 
   if (!m) { m = new THREE.MeshStandardMaterial({ color, roughness: 0.75, flatShading: true, ...opts }); matCache.set(key, m); }
   return m;
 }
+const EYE_BLACK = new THREE.MeshBasicMaterial({ color: '#141012' });
 const tint = (hex: string, k: number) => '#' + new THREE.Color(hex).lerp(new THREE.Color(k > 0 ? '#ffffff' : '#000000'), Math.abs(k)).getHexString();
 
 export function buildAnimal(look: Look): AnimalRig {
@@ -53,7 +56,6 @@ export function buildAnimal(look: Look): AnimalRig {
   const fur = mat(isPenguin ? tint(base, -0.35) : base);
   const light = mat(isPenguin ? '#f6f1e6' : tint(base, 0.55));
   const dark = mat('#231a1c', { roughness: 0.4 });
-  const lidMat = mat(tint(base, isPenguin ? -0.25 : -0.12));
   const pink = mat('#f19aa8', { roughness: 0.9 });
 
   const root = new THREE.Group();
@@ -95,13 +97,22 @@ export function buildAnimal(look: Look): AnimalRig {
   add(head, G.head, fur, 0, 0, 0, [1.05, 0.96, 1]);
   if (isPenguin) add(head, G.head, light, 0, -0.04, 0.1, [0.78, 0.72, 0.82]);
 
-  // sleepy eyes: dark eyes with heavy lids
-  const lids: THREE.Mesh[] = [];
+  // Sleepy eyes. Unlit black so lighting can never wash them out to grey;
+  // the outer corners droop a little, like someone who just got off work.
+  const eyes: AnimalRig['eyes'] = [];
+  const eyeZ = isPenguin ? 0.33 : 0.312;
   for (const side of [-1, 1]) {
-    add(head, G.eye, dark, side * 0.13, 0.03, 0.3);
-    const lid = add(head, G.lid, lidMat, side * 0.13, 0.03, 0.302);
-    lid.rotation.x = -0.2;
-    lids.push(lid);
+    const eye = new THREE.Group();
+    eye.position.set(side * 0.13, 0.045, eyeZ);
+    eye.rotation.set(0, side * 0.38, -side * 0.2, 'YXZ');
+    head.add(eye);
+    const pupil = new THREE.Mesh(G.pupil, EYE_BLACK);
+    pupil.scale.set(1.15, 0.55, 0.45);
+    const lid = new THREE.Mesh(G.lidLine, EYE_BLACK);
+    lid.rotation.z = Math.PI / 2;
+    lid.position.set(0, 0.002, 0.008);
+    eye.add(pupil, lid);
+    eyes.push({ pupil, lid });
     const ch = add(head, G.cheek, pink, side * 0.2, -0.07, 0.29);
     ch.lookAt(head.position.clone().add(new THREE.Vector3(side * 0.6, -0.2, 2)));
     (ch.material as THREE.Material).transparent = true;
@@ -143,7 +154,7 @@ export function buildAnimal(look: Look): AnimalRig {
 
   root.traverse(o => { if ((o as THREE.Mesh).isMesh) o.castShadow = false; });
   return {
-    root, bodyPivot, head, armL, armR, legL, legR, lids, held, look,
+    root, bodyPivot, head, armL, armR, legL, legR, eyes, held, look,
     dispose() { root.removeFromParent(); (shadow.material as THREE.Material).dispose(); },
   };
 }
@@ -153,17 +164,27 @@ function addProp(look: Look, head: THREE.Group, armR: THREE.Group, paw: THREE.Ma
     case 'wine': {
       // Pivot at the paw; the glass stands just in front of it, held by the stem.
       const g = new THREE.Group(); g.position.set(0, -0.33, 0); armR.add(g);
-      const glass = mat('#e6eef0', { transparent: true, opacity: 0.5, roughness: 0.05, flatShading: false });
+      const glass = mat('#e6eef0', { transparent: true, opacity: 0.45, roughness: 0.05, flatShading: false, side: THREE.DoubleSide, depthWrite: false });
       const z = 0.12;
       const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.012, 10), glass); foot.position.set(0, -0.075, z);
       const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.15, 6), glass); stem.position.set(0, 0, z);
-      const bowl = new THREE.Mesh(new THREE.SphereGeometry(0.075, 12, 8, 0, Math.PI * 2, Math.PI / 2.4, Math.PI / 1.7), glass);
-      bowl.position.set(0, 0.16, z); bowl.rotation.x = Math.PI;
-      const wine = new THREE.Mesh(new THREE.SphereGeometry(0.062, 12, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), mat('#7c1d2c', { roughness: 0.3, flatShading: false }));
-      wine.position.set(0, 0.15, z); wine.rotation.x = Math.PI;
+      // The cup is the lower part of a sphere, cut a little above its widest
+      // point so the rim narrows like a real wine glass. It already opens upward.
+      const R = 0.075, cy = 0.075 + R; // sits right on top of the stem
+      const bowl = new THREE.Mesh(new THREE.SphereGeometry(R, 14, 8, 0, Math.PI * 2, Math.PI * 0.3, Math.PI * 0.7), glass);
+      bowl.name = 'bowl';
+      bowl.position.set(0, cy, z);
+      // wine fills the bottom of the cup, with a flat surface on top
+      const wr = R * 0.92, fill = Math.PI * 0.62;
+      const red = mat('#7c1d2c', { roughness: 0.3, flatShading: false, side: THREE.DoubleSide });
+      const wine = new THREE.Mesh(new THREE.SphereGeometry(wr, 14, 6, 0, Math.PI * 2, fill, Math.PI - fill), red);
+      wine.position.set(0, cy, z);
+      const surface = new THREE.Mesh(new THREE.CircleGeometry(wr * Math.sin(fill), 14), mat('#5e1220', { roughness: 0.2, flatShading: false }));
+      surface.rotation.x = -Math.PI / 2;
+      surface.position.set(0, cy + wr * Math.cos(fill) + 0.001, z);
       // a curled paw wrapped around the stem
       const grip = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), paw); grip.position.set(0, -0.005, z - 0.035); grip.scale.set(1.1, 0.9, 0.9);
-      g.add(foot, stem, bowl, wine, grip);
+      g.add(foot, stem, bowl, wine, surface, grip);
       return g;
     }
     case 'beret': {

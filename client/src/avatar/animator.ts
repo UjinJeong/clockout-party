@@ -4,7 +4,7 @@ import type { AnimalRig } from './animal';
 
 /** Code-driven motion: walking, idle breathing, and a short gesture for each emote. */
 export class Animator {
-  private t = Math.random() * 10;
+  private t = Math.random() * 3; // first blink comes after a second or so
   private walk = 0;            // 0..1 blend between idle and walk
   private emote: Emote | null = null;
   private emoteT = 0;
@@ -41,10 +41,10 @@ export class Animator {
     r.bodyPivot.rotation.z = 0;
     r.root.position.y = 0;
 
-    // heavy eyelids, with an occasional slow blink
-    const blink = (t % 4.3) < 0.18 ? 1 : 0;
-    const open = battery === 'low' ? 0.15 : 0.55;
-    for (const lid of r.lids) lid.rotation.x = -0.2 + (1 - open) * 1.3 + blink * 1.2;
+    // half-shut eyes, nearly shut when the battery is low, with a slow blink now and then
+    const blink = (t % 4.3) > 4.1;
+    const target = blink ? 0.06 : battery === 'low' ? 0.2 : 0.55;
+    for (const e of r.eyes) e.pupil.scale.y += (target - e.pupil.scale.y) * Math.min(1, dt * 15);
 
     this.gesture(dt);
     this.keepUpright();
