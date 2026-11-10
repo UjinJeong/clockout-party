@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import {
-  MOVE_HZ, NEAR_RADIUS, WALK_SPEED, WORLD, isNear, moveWithCollision, roomAt,
-  type Battery, type Emote, type RoomId,
+  MOVE_HZ, NEAR_RADIUS, WALK_SPEED, inWater, isNear, moveWithCollision, roomAt,
+  type Battery, type Emote, type MapRoom,
 } from '@party/shared';
 import { buildAnimal, type AnimalRig } from '../avatar/animal';
 import { Animator } from '../avatar/animator';
 import type { NetPlayer, PartyConnection } from '../net/types';
-import type { Gallery, Painting } from '../world/gallery';
+import type { Painting } from '../world/gallery';
+import type { World } from '../world/world';
 import { Tag } from '../ui/bubbles';
 import type { Controls } from './controls';
 import { Sparkles } from './effects';
@@ -20,10 +21,18 @@ interface Guest {
   pos: THREE.Vector2; // rendered position (smoothed for others, exact for self)
   dir: number;
   lookKey: string;
+  /** 0 on dry land, 1 bobbing in the pool on a swim ring. */
+  wet: number;
+  floatie: THREE.Mesh | null;
 }
 
+/** How far a guest sinks when standing in the pool (the ring keeps them up). */
+const WADE_DEPTH = 0.5;
+const FLOATIE_COLORS = ['#ff7aa2', '#ffd166', '#6fd3c7', '#ff9f68'];
+const floatieGeo = new THREE.TorusGeometry(0.46, 0.14, 10, 22);
+
 export interface PartyHooks {
-  room(id: RoomId): void;
+  room(room: MapRoom): void;
   painting(p: Painting | null): void;
   guests(list: { id: string; name: string; battery: Battery; near: boolean; self: boolean; muted: boolean }[]): void;
   arrived(p: Painting): void;
@@ -39,7 +48,7 @@ export class Party {
   private muted = new Set<string>();
   private sendT = 0;
   private lastSent = { x: 0, z: 0, dir: 0, moving: false };
-  private room: RoomId | null = null;
+  private room: MapRoom | null = null;
   private painting: Painting | null = null;
   private walkTo: Painting | null = null;
   private ring: THREE.Mesh;
@@ -61,7 +70,7 @@ export class Party {
     private scene: THREE.Scene,
     private camera: THREE.PerspectiveCamera,
     private dom: HTMLCanvasElement,
-    private gallery: Gallery,
+    private world: World,
     private conn: PartyConnection,
     private controls: Controls,
     private tagLayer: HTMLElement,
@@ -115,7 +124,7 @@ export class Party {
     tag.setBattery(p.battery);
     this.guests.set(p.id, {
       net: { ...p }, rig, anim: new Animator(rig), tag, pos: new THREE.Vector2(p.x, p.z), dir: p.dir,
-      lookKey: JSON.stringify(p.look),
+      lookKey: JSON.stringify(p.look), wet: 0, floatie: null,
     });
     if (isSelf) { this.camTarget.set(p.x, 0, p.z); this.snapCamera(); }
     this.listDirty = true;
@@ -135,7 +144,7 @@ export class Party {
       const rig = buildAnimal(p.look);
       rig.root.position.copy(g.rig.root.position); rig.root.rotation.y = g.rig.root.rotation.y;
       g.rig.dispose(); this.scene.add(rig.root);
-      g.rig = rig; g.anim = new Animator(rig); g.lookKey = key;
+      g.rig = rig; g.anim = new Animator(rig); g.lookKey = key; g.floatie = null;
     }
     this.listDirty = true;
   }
@@ -174,12 +183,12 @@ export class Party {
     const r = this.dom.getBoundingClientRect();
     const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     this.ray.setFromCamera(ndc, this.camera);
-    const paintingHit = this.ray.intersectObjects(this.gallery.paintings.map(p => p.mesh), false)[0];
+    const paintingHit = this.ray.intersectObjects(this.world.paintings.map(p => p.mesh), false)[0];
     if (paintingHit) {
-      const p = this.gallery.paintings.find(q => q.mesh === paintingHit.object);
+      const p = this.world.paintings.find(q => q.mesh === paintingHit.object);
       if (p) { this.goTo(p); return; }
     }
-    const hit = this.ray.intersectObject(this.gallery.floor, false)[0];
+    const hit = this.ray.intersectObject(this.world.floor, false)[0];
     if (hit) {
       this.walkTo = null;
       this.controls.target = { x: hit.point.x, z: hit.point.z };
@@ -242,6 +251,7 @@ export class Party {
       g.rig.root.position.x = g.pos.x;
       g.rig.root.position.z = g.pos.y;
       g.rig.root.rotation.y = g.dir;
+      this.wade(g, dt);
       const moving = id === this.conn.selfId ? g.net.moving : g.net.moving || Math.hypot(g.net.x - g.pos.x, g.net.z - g.pos.y) > 0.05;
       g.anim.update(dt, moving, g.net.battery);
     }
@@ -250,14 +260,15 @@ export class Party {
     if (me) {
       // close view follows you fully; the overview keeps the old gentle framing
       const edge = 3.5 + this.zoom * 1;
-      const tx = Math.min(WORLD.x1 - edge, Math.max(edge, me.pos.x));
+      const b = this.world.map.bounds;
+      const tx = Math.min(b.x1 - edge, Math.max(b.x0 + edge, me.pos.x));
       const tz = me.pos.y * (1 - this.zoom) + Math.max(-1.5, Math.min(1.5, me.pos.y * 0.5)) * this.zoom;
       const k = 1 - Math.exp(-dt * 5);
       this.camTarget.x += (tx - this.camTarget.x) * k;
       this.camTarget.z += (tz - this.camTarget.z) * k;
       this.zoom += (this.zoomGoal - this.zoom) * (1 - Math.exp(-dt * 6));
       this.snapCamera();
-      this.gallery.fadeOccluders(this.camera.position);
+      this.world.fadeOccluders(this.camera.position);
       this.ring.position.set(me.pos.x, 0.015, me.pos.y);
     }
 
@@ -288,7 +299,8 @@ export class Party {
     const moving = dx !== 0 || dz !== 0;
     if (moving) {
       const step = WALK_SPEED * dt;
-      const next = moveWithCollision({ x: me.pos.x, z: me.pos.y }, { x: me.pos.x + dx * step, z: me.pos.y + dz * step });
+      const wading = me.wet > 0.5 ? 0.7 : 1; // the water slows you down a little
+      const next = moveWithCollision({ x: me.pos.x, z: me.pos.y }, { x: me.pos.x + dx * step * wading, z: me.pos.y + dz * step * wading }, this.world.map);
       const moved = Math.hypot(next.x - me.pos.x, next.z - me.pos.y);
       if (moved < step * 0.1 && this.controls.target) { this.controls.target = null; this.targetMark.visible = false; this.walkTo = null; }
       me.pos.set(next.x, next.z);
@@ -306,16 +318,34 @@ export class Party {
       this.lastSent = { x: me.pos.x, z: me.pos.y, dir: me.dir, moving };
     }
 
-    const room = roomAt(me.pos.x);
-    if (room !== this.room) { this.room = room; this.hooks.room(room); }
+    const room = roomAt(me.pos.x, this.world.map);
+    if (room.id !== this.room?.id) { this.room = room; this.hooks.room(room); }
 
     // the painting you are standing in front of
     let best: Painting | null = null, bestD = 2.3;
-    for (const p of this.gallery.paintings) {
+    for (const p of this.world.paintings) {
       const d = Math.hypot(p.stand.x - me.pos.x, p.stand.z - me.pos.y);
       if (d < bestD) { bestD = d; best = p; }
     }
     if (best !== this.painting) { this.painting = best; this.hooks.painting(best); }
+  }
+
+  /** In the pool, sink to the waist on a swim ring and bob gently; climb out on land. */
+  private wade(g: Guest, dt: number) {
+    const wet = inWater({ x: g.pos.x, z: g.pos.y }, this.world.map) ? 1 : 0;
+    g.wet += (wet - g.wet) * (1 - Math.exp(-dt * 6));
+    if (g.wet < 0.01 && !g.floatie) { g.rig.root.position.y = 0; return; }
+    if (!g.floatie) {
+      const color = FLOATIE_COLORS[[...g.net.id].reduce((a, c) => a + c.charCodeAt(0), 0) % FLOATIE_COLORS.length];
+      g.floatie = new THREE.Mesh(floatieGeo, new THREE.MeshStandardMaterial({ color, roughness: 0.35 }));
+      g.floatie.rotation.x = Math.PI / 2;
+      g.floatie.position.y = 0.48;
+      g.rig.root.add(g.floatie);
+    }
+    const t = performance.now() / 1000 + g.pos.x;
+    g.rig.root.position.y = -WADE_DEPTH * g.wet + Math.sin(t * 2.2) * 0.025 * g.wet;
+    g.floatie.visible = g.wet > 0.15;
+    g.floatie.scale.setScalar(0.6 + 0.4 * g.wet);
   }
 
   private placeTags() {

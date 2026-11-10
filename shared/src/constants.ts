@@ -67,5 +67,4 @@ export const BATTERY_LABEL: Record<Battery, string> = {
   charging: '충전 중 · 말 걸어도 돼요', low: '방전 · 구경만 할래요',
 };
 
-export const THEME = 'gallery';
 export const DEFAULT_TITLE = '오프닝 파티';

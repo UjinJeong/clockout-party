@@ -1,5 +1,5 @@
 import {
-  isEmote, isNear, parseLook, sanitizeChat, sanitizeName, type Battery, type Emote, type Look,
+  THEME_LABEL, isEmote, isNear, parseLook, sanitizeChat, sanitizeName, type Battery, type Emote, type Look, type Theme,
 } from '@party/shared';
 import { DemoConnection } from './demo';
 import { Emitter, type NetPlayer, type PartyConnection, type PartyEvents } from './types';
@@ -18,6 +18,10 @@ interface RoomApi {
   emit(topic: string, data?: unknown): Promise<void>;
   on(topic: string, fn: (m: RoomMsg) => void, onError?: (e: unknown) => void): () => void;
   onPeers(fn: (c: { joined: readonly RoomPeer[]; updated: readonly RoomPeer[]; left: readonly RoomPeer[] }) => void, onError?: (e: unknown) => void): () => void;
+  /** A named room inside this one (only the lobby has it). */
+  join?(name: string): Promise<RoomApi>;
+  /** Leave a named room. */
+  leave?(): Promise<void>;
 }
 
 declare global { interface Window { claude?: { use(name: string): Promise<unknown> } } }
@@ -30,22 +34,32 @@ export async function getRoom(): Promise<RoomApi | null> {
   } catch { return null; }
 }
 
+/**
+ * Each place is its own gathering: the gallery uses the page's main room, the
+ * home and pool parties each a named room inside it. Null if that room can't be joined.
+ */
+export async function themeRoom(lobby: RoomApi, theme: Theme): Promise<RoomApi | null> {
+  if (theme === 'gallery') return lobby;
+  if (!lobby.join) return null;
+  try { return await lobby.join(theme); } catch { return null; }
+}
+
 export class LiveRoomConnection implements PartyConnection {
   readonly selfId = 'me';
   readonly roomId = 'live';
-  readonly title = '같이 둘러보기';
+  get title() { return `같이 ${THEME_LABEL[this.theme]}`; }
   readonly isPrivate = false;
   readonly demo = true;
   readonly voiceOk = false;
-  readonly note = '이 페이지를 연 사람들과 같은 전시장에 있어요. 🤖 표시는 봇 손님이에요.';
+  get note() { return `이 페이지를 연 사람들과 같은 ${THEME_LABEL[this.theme]}에 있어요. 🤖 표시는 봇 손님이에요.`; }
   private ev = new Emitter();
   private bots: DemoConnection;
   private peers = new Map<string, NetPlayer>();
   private me = { x: 0, z: 0 };
   private offs: (() => void)[] = [];
 
-  constructor(private room: RoomApi, private name: string, private look: Look) {
-    this.bots = new DemoConnection(name, look, { botSuffix: ' 🤖' });
+  constructor(private room: RoomApi, private name: string, private look: Look, readonly theme: Theme = 'gallery') {
+    this.bots = new DemoConnection(name, look, { botSuffix: ' 🤖', theme });
     this.offs.push(room.onPeers(c => {
       for (const p of [...c.joined, ...c.updated]) {
         if (p.isMe && p.sameTab) continue;
@@ -94,6 +108,7 @@ export class LiveRoomConnection implements PartyConnection {
   leave() {
     this.offs.forEach(f => f());
     void this.room.presence({ x: null, z: null, n: null }).catch(() => {});
+    if (this.theme !== 'gallery') void this.room.leave?.().catch(() => {});
     this.bots.leave();
   }
 }

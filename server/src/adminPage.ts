@@ -71,7 +71,7 @@ async function load(){
     $('regions').innerHTML=s.byRegion.length?s.byRegion.map(x=>'<div class="bar"><span>'+esc(x.country===x.city?x.country:x.country+' '+x.city)+'</span><i style="width:'+(x.online/max*100)+'%"></i><b>'+x.online+'</b></div>').join(''):'<p class="empty">지금 들어와 있는 사람이 없어요.</p>';
     const wmax=Math.max(1,...s.week.map(d=>d.visits));
     $('week').innerHTML=s.week.map(d=>'<div><b>'+d.visits+'</b><i style="height:'+(d.visits/wmax*90)+'px"></i><span>'+d.day+'</span></div>').join('');
-    $('rooms').innerHTML=s.rooms.length?s.rooms.map(x=>row([esc(x.title),x.private?'<span class="badge">친구만</span>':'<span class="badge open">누구나</span>',x.clients+' / '+x.maxClients,'<code>'+esc(x.roomId)+'</code>'])).join(''):empty(4,'열린 파티가 없어요.');
+    $('rooms').innerHTML=s.rooms.length?s.rooms.map(x=>row([({gallery:'🖼️ ',home:'🏠 ',pool:'🏖️ '}[x.theme]||'')+esc(x.title),x.private?'<span class="badge">친구만</span>':'<span class="badge open">누구나</span>',x.clients+' / '+x.maxClients,'<code>'+esc(x.roomId)+'</code>'])).join(''):empty(4,'열린 파티가 없어요.');
     $('people').innerHTML=s.people.length?s.people.map(p=>row([esc(p.name),esc(p.room)+(p.private?' <span class="badge">친구만</span>':''),esc(p.region),mins(p.minutes)])).join(''):empty(4,'지금 파티에 있는 사람이 없어요.');
     $('recent').innerHTML=s.recent.length?s.recent.map(p=>row([esc(p.name),esc(p.room),esc(p.region),mins(p.minutes),new Date(p.leftAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'})])).join(''):empty(5,'아직 기록이 없어요.');
     $('updated').textContent='5초마다 새로고침 · 마지막 '+new Date().toLocaleTimeString('ko-KR');

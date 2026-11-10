@@ -1,16 +1,25 @@
 import * as THREE from 'three';
 import {
-  HANDS, HAND_LABEL, HATS, HAT_LABEL, KINDS, KIND_LABEL, OUTFITS, OUTFIT_LABEL, PALETTE, parseLook, sanitizeName, type Look,
+  HANDS, HAND_LABEL, HATS, HAT_LABEL, KINDS, KIND_LABEL, OUTFITS, OUTFIT_LABEL, PALETTE, THEMES, THEME_ICON, THEME_LABEL,
+  isTheme, parseLook, sanitizeName, type Look, type Theme,
 } from '@party/shared';
 import { buildAnimal, type AnimalRig } from '../avatar/animal';
 import { Animator } from '../avatar/animator';
 import { $, load, onSubmit, save } from './dom';
 
 /** The invitation card: write a name, dress up your animal (colour, hat, paw, outfit), with a turning 3D preview. */
-export function showStart(): Promise<{ name: string; look: Look }> {
+export interface StartOptions {
+  /** Let the visitor pick the place here (pages without a lobby, like the claude.ai one). */
+  places?: boolean;
+  /** Called whenever the picked place changes, so the world behind the card can follow. */
+  onPlace?: (theme: Theme) => void;
+}
+
+export function showStart(opts: StartOptions = {}): Promise<{ name: string; look: Look; theme: Theme }> {
   const screen = $('start');
   screen.hidden = false;
-  const saved = load<{ name?: string; look?: Look }>('party.me') ?? {};
+  const saved = load<{ name?: string; look?: Look; theme?: Theme }>('party.me') ?? {};
+  let theme: Theme = isTheme(saved.theme) ? saved.theme : 'gallery';
   let look: Look = parseLook(saved.look ?? { ...randomLook(), hand: 'wine' });
   const nameInput = $('name') as HTMLInputElement;
   nameInput.value = saved.name ?? '';
@@ -71,20 +80,38 @@ export function showStart(): Promise<{ name: string; look: Look }> {
   dice.addEventListener('click', onDice);
   rebuild(true);
 
+  // ---- where the party is ----
+  const placeRow = $('place-row'), placeBox = $('pick-place');
+  placeRow.hidden = !opts.places;
+  const inviteLine = screen.querySelector<HTMLElement>('.invite-line');
+  const INVITE: Record<Theme, string> = { gallery: '오프닝 파티에 초대합니다', home: '홈파티에 초대합니다', pool: '풀파티에 초대합니다' };
+  const renderPlaces = () => {
+    if (inviteLine) inviteLine.textContent = INVITE[theme];
+    placeBox.innerHTML = THEMES.map(t => `<button type="button" role="radio" data-place="${t}" aria-checked="${theme === t}">`
+      + `<span class="pi" aria-hidden="true">${THEME_ICON[t]}</span>${THEME_LABEL[t]}</button>`).join('');
+  };
+  const onPlacePick = (e: Event) => {
+    const t = (e.target as HTMLElement).closest<HTMLButtonElement>('button')?.dataset.place;
+    if (!isTheme(t) || t === theme) return;
+    theme = t; renderPlaces(); opts.onPlace?.(t);
+  };
+  if (opts.places) { renderPlaces(); placeBox.addEventListener('click', onPlacePick); opts.onPlace?.(theme); }
+
   return new Promise(resolve => {
     const form = $('start-form') as HTMLFormElement;
     const submit = (e: Event) => {
       e.preventDefault();
       const name = sanitizeName(nameInput.value);
       if (!name) { nameInput.focus(); nameInput.setCustomValidity('이름을 적어 주세요'); nameInput.reportValidity(); return; }
-      save('party.me', { name, look });
+      save('party.me', { name, look, theme });
       cancelAnimationFrame(raf);
-      rig.dispose(); renderer.dispose();
+      rig.dispose(); renderer.dispose(); // the canvas keeps its one context for next time
+      placeBox.removeEventListener('click', onPlacePick);
       offSubmit();
       boxes.forEach(el => el.removeEventListener('click', onPick));
       dice.removeEventListener('click', onDice);
       screen.hidden = true;
-      resolve({ name, look });
+      resolve({ name, look, theme });
     };
     nameInput.addEventListener('input', () => nameInput.setCustomValidity(''));
     const offSubmit = onSubmit(form, submit);

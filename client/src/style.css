@@ -240,3 +240,16 @@ html.touch .joystick { display: block; }
   .dress-look { position: static; }
   #preview { width: 150px; height: 165px; }
 }
+
+/* places: three side by side when opening a party, a small label in the list */
+.seg.theme-seg { grid-template-columns: repeat(3, 1fr); margin-bottom: 8px; }
+.room-theme { font-style: normal; font-size: 11.5px; margin-left: 8px; padding: 1px 7px; border: 1px solid currentColor; border-radius: 10px; opacity: .7; }
+/* on the invitation card (pages without a lobby) */
+.place-row { margin: 4px 0 14px; text-align: left; }
+.places { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.places button {
+  appearance: none; display: grid; justify-items: center; gap: 3px; padding: 9px 6px 8px; cursor: pointer;
+  border: 1px solid #cdbd9e; background: #fbf6ec; color: var(--ink); border-radius: 4px; font-size: 13.5px; font-weight: 500;
+}
+.places button .pi { font-size: 22px; line-height: 1; }
+.places button[aria-checked="true"] { background: var(--ink); color: var(--plate); border-color: var(--ink); }

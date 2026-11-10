@@ -18,6 +18,8 @@ export type Player = SchemaType<typeof Player>;
 
 export const PartyState = schema({
   title: t.string(),
+  /** Which place the party is in: gallery, home or pool. Decides the map and the 3D world. */
+  theme: t.string(),
   isPrivate: t.boolean(),
   players: t.map(Player),
 }, 'PartyState');

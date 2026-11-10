@@ -157,6 +157,44 @@ describe('party room', () => {
   });
 });
 
+describe('party themes', () => {
+  it('a pool party room tells everyone its theme', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', { title: '풀파티', theme: 'pool' });
+    const c = await colyseus.connectTo(room, { name: 'A', look });
+    await room.waitForNextPatch();
+    await wait(50);
+    expect((c.state as any).theme).toBe('pool');
+  });
+
+  it('an unknown theme becomes the gallery', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', { theme: 'moon' });
+    expect(room.state.theme).toBe('gallery');
+  });
+
+  it('walls follow the room theme: the gallery partition is not in the pool party', async () => {
+    // x=11→13 at z=-4 crosses the gallery's first partition; the pool party is open air
+    for (const [theme, blocked] of [['gallery', true], ['pool', false]] as const) {
+      const room = await colyseus.createRoom<PartyRoom>('party', { theme });
+      const c = await colyseus.connectTo(room, { name: 'A', look });
+      await room.waitForNextPatch();
+      const p = room.state.players.get(c.sessionId)!;
+      p.x = 11.6; p.z = -2.4;
+      await wait(120);
+      c.send('move', { x: 12.4, z: -2.4, dir: 0, moving: true });
+      await wait(120);
+      if (blocked) expect(p.x).toBeLessThan(12);
+      else expect(p.x).toBeCloseTo(12.4, 1);
+    }
+  });
+
+  it('lists each room with its theme', async () => {
+    await colyseus.createRoom('party', { title: '우리집', theme: 'home' });
+    const res = await colyseus.http.get('/rooms');
+    const home = (res.data as any[]).find(r => r.title === '우리집');
+    expect(home.theme).toBe('home');
+  });
+});
+
 describe('room info', () => {
   it('syncs the title and privacy to clients', async () => {
     const room = await colyseus.createRoom<PartyRoom>('party', { title: '금요일 밤', private: true });

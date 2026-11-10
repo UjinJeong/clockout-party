@@ -1,8 +1,8 @@
-import { MAX_PLAYERS } from '@party/shared';
+import { MAX_PLAYERS, THEMES, THEME_ICON, THEME_LABEL, isTheme, type Theme } from '@party/shared';
 import { listRooms, type JoinRequest, type RoomListing } from '../net/colyseus';
 import { $, esc, onSubmit } from './dom';
 
-export type LobbyChoice = JoinRequest | { mode: 'demo' } | { mode: 'back' };
+export type LobbyChoice = JoinRequest | { mode: 'demo'; theme: Theme } | { mode: 'back' };
 
 /** Pull a room id out of whatever was pasted: a bare code or a full invite link. */
 export function parseCode(raw: string): string | null {
@@ -18,6 +18,7 @@ export function showLobby(error?: string): Promise<LobbyChoice> {
   const list = $('room-list');
   const errBox = $('lobby-error');
   let isPrivate = false;
+  let theme: Theme = 'gallery';
   let alive = true;
   let reachable = true;
 
@@ -27,7 +28,7 @@ export function showLobby(error?: string): Promise<LobbyChoice> {
   const renderRooms = (rooms: RoomListing[]) => {
     if (!rooms.length) { list.innerHTML = '<li class="empty">지금 열린 파티가 없어요. 오른쪽에서 첫 파티를 열어 보세요.</li>'; return; }
     list.innerHTML = rooms.map(r => `<li class="room-row">
-      <span><b>${esc(r.title)}</b></span>
+      <span><b>${isTheme(r.theme) ? THEME_ICON[r.theme] + ' ' : ''}${esc(r.title)}</b>${isTheme(r.theme) ? `<em class="room-theme">${THEME_LABEL[r.theme]}</em>` : ''}</span>
       <small>${r.clients} / ${r.maxClients || MAX_PLAYERS}명</small>
       <button class="btn small primary" type="button" data-id="${esc(r.roomId)}" ${r.clients >= (r.maxClients || MAX_PLAYERS) ? 'disabled' : ''}>들어가기</button>
     </li>`).join('');
@@ -50,8 +51,17 @@ export function showLobby(error?: string): Promise<LobbyChoice> {
   void refresh();
   const timer = window.setInterval(refresh, 5000);
 
+  // where the new party is: gallery, home, pool
+  const themeSeg = $('theme-seg');
+  themeSeg.innerHTML = THEMES.map(t => `<button type="button" role="radio" data-theme="${t}">${THEME_ICON[t]} ${THEME_LABEL[t]}</button>`).join('');
+  const setTheme = (t: Theme) => {
+    theme = t;
+    themeSeg.querySelectorAll<HTMLButtonElement>('button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.theme === t)));
+  };
+  setTheme('gallery');
+
   // privacy toggle
-  const seg = screen.querySelector('.seg')!;
+  const seg = $('privacy-seg');
   const segButtons = [...seg.querySelectorAll<HTMLButtonElement>('button')];
   const setPrivate = (v: boolean) => {
     isPrivate = v;
@@ -67,6 +77,7 @@ export function showLobby(error?: string): Promise<LobbyChoice> {
       screen.hidden = true;
       list.removeEventListener('click', onList);
       seg.removeEventListener('click', onSeg);
+      themeSeg.removeEventListener('click', onTheme);
       offCreate(); offCode();
       $('demo-btn').removeEventListener('click', onDemo);
       $('lobby-back').removeEventListener('click', onBack);
@@ -80,10 +91,14 @@ export function showLobby(error?: string): Promise<LobbyChoice> {
       const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button');
       if (b) setPrivate(b.dataset.private === 'true');
     };
+    const onTheme = (e: Event) => {
+      const t = (e.target as HTMLElement).closest<HTMLButtonElement>('button')?.dataset.theme;
+      if (isTheme(t)) setTheme(t);
+    };
     const onCreate = (e: Event) => {
       e.preventDefault();
       const title = ($('create-title') as HTMLInputElement).value.trim();
-      done({ mode: 'create', title: title || '오프닝 파티', private: isPrivate });
+      done({ mode: 'create', title: title || `${THEME_LABEL[theme]} 파티`, private: isPrivate, theme });
     };
     const onCode = (e: Event) => {
       e.preventDefault();
@@ -92,10 +107,11 @@ export function showLobby(error?: string): Promise<LobbyChoice> {
       if (!id) { setError('초대 코드를 다시 확인해 주세요. 링크를 통째로 붙여 넣어도 돼요.'); input.focus(); return; }
       done({ mode: 'join', roomId: id });
     };
-    const onDemo = () => done({ mode: 'demo' });
+    const onDemo = () => done({ mode: 'demo', theme });
     const onBack = () => done({ mode: 'back' });
     list.addEventListener('click', onList);
     seg.addEventListener('click', onSeg);
+    themeSeg.addEventListener('click', onTheme);
     const offCreate = onSubmit($('create-form') as HTMLFormElement, onCreate);
     const offCode = onSubmit($('code-form') as HTMLFormElement, onCode);
     $('demo-btn').addEventListener('click', onDemo);

@@ -36,7 +36,7 @@ export function mountAdmin(app: Application) {
     res.set('Cache-Control', 'no-store').json({
       ...stats.snapshot(),
       rooms: rooms
-        .map(r => ({ roomId: r.roomId, title: r.metadata?.title ?? '파티', private: !!r.private, clients: r.clients, maxClients: r.maxClients }))
+        .map(r => ({ roomId: r.roomId, title: r.metadata?.title ?? '파티', theme: r.metadata?.theme ?? 'gallery', private: !!r.private, clients: r.clients, maxClients: r.maxClients }))
         .sort((a, b) => b.clients - a.clients),
     });
   });

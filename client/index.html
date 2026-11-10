@@ -27,6 +27,10 @@
           <span>이름표에 쓸 이름</span>
           <input id="name" name="name" maxlength="12" required placeholder="예: 퇴근한 유진" />
         </label>
+        <fieldset id="place-row" class="place-row" hidden>
+          <legend>파티 장소</legend>
+          <div id="pick-place" class="places" role="radiogroup" aria-label="파티 장소"></div>
+        </fieldset>
         <div class="dress">
           <div class="dress-look">
             <canvas id="preview" width="200" height="220" aria-label="내 캐릭터 미리보기"></canvas>
@@ -62,7 +66,8 @@
           <form id="create-form" class="block">
             <h3>새 파티 열기</h3>
             <label class="field"><span>파티 이름</span><input id="create-title" maxlength="24" placeholder="금요일 밤 퇴근 파티" /></label>
-            <div class="seg" role="radiogroup" aria-label="누가 들어올 수 있나요">
+            <div id="theme-seg" class="seg theme-seg" role="radiogroup" aria-label="파티 장소"></div>
+            <div id="privacy-seg" class="seg" role="radiogroup" aria-label="누가 들어올 수 있나요">
               <button type="button" role="radio" aria-checked="true" data-private="false">누구나</button>
               <button type="button" role="radio" aria-checked="false" data-private="true">친구만</button>
             </div>

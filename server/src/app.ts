@@ -24,7 +24,7 @@ export default config({
       const rooms = await matchMaker.query({ name: ROOM_NAME });
       res.json(rooms
         .filter(r => !r.private && !r.unlisted && !r.locked)
-        .map(r => ({ roomId: r.roomId, title: r.metadata?.title ?? '파티', clients: r.clients, maxClients: r.maxClients }))
+        .map(r => ({ roomId: r.roomId, title: r.metadata?.title ?? '파티', theme: r.metadata?.theme ?? 'gallery', clients: r.clients, maxClients: r.maxClients }))
         .sort((a, b) => b.clients - a.clients));
     });
     // The built web client (client/dist) is served from the same address, so a host

@@ -1,4 +1,4 @@
-import type { Battery, Emote, Look } from '@party/shared';
+import type { Battery, Emote, Look, Theme } from '@party/shared';
 
 /** Everything the game needs from "the party", whether it is a real server or the demo. */
 export interface NetPlayer {
@@ -22,6 +22,8 @@ export interface PartyConnection {
   readonly roomId: string;
   readonly title: string;
   readonly isPrivate: boolean;
+  /** Which place the party is in; decides the map and the 3D world. */
+  readonly theme: Theme;
   readonly demo: boolean;
   /** False where voice notes can't travel (the claude.ai preview). */
   readonly voiceOk: boolean;

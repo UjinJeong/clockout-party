@@ -1,5 +1,5 @@
 import { Client, Callbacks, type Room } from '@colyseus/sdk';
-import { ROOM_NAME, parseLook, type Battery, type Emote, type Look } from '@party/shared';
+import { ROOM_NAME, isTheme, parseLook, type Battery, type Emote, type Look, type Theme } from '@party/shared';
 import { Emitter, type NetPlayer, type PartyConnection, type PartyEvents } from './types';
 
 /**
@@ -15,7 +15,7 @@ export function serverUrl(): string {
   return location.origin;
 }
 
-export interface RoomListing { roomId: string; title: string; clients: number; maxClients: number }
+export interface RoomListing { roomId: string; title: string; theme?: Theme; clients: number; maxClients: number }
 
 export async function listRooms(signal?: AbortSignal): Promise<RoomListing[]> {
   const res = await fetch(`${serverUrl()}/rooms`, { signal });
@@ -24,7 +24,7 @@ export async function listRooms(signal?: AbortSignal): Promise<RoomListing[]> {
 }
 
 export type JoinRequest =
-  | { mode: 'create'; title: string; private: boolean }
+  | { mode: 'create'; title: string; private: boolean; theme: Theme }
   | { mode: 'join'; roomId: string };
 
 export async function connectParty(req: JoinRequest, name: string, look: Look): Promise<PartyConnection> {
@@ -32,7 +32,7 @@ export async function connectParty(req: JoinRequest, name: string, look: Look): 
   // The time zone paints the visitor's sky and tells the manager page roughly where they are.
   const tz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return undefined; } })();
   const room = req.mode === 'create'
-    ? await client.create(ROOM_NAME, { title: req.title, private: req.private, name, look, tz })
+    ? await client.create(ROOM_NAME, { title: req.title, private: req.private, theme: req.theme, name, look, tz })
     : await client.joinById(req.roomId, { name, look, tz });
   const conn = new ColyseusConnection(room);
   // Wait for the first full state so the room title and the guest list are ready.
@@ -77,6 +77,7 @@ class ColyseusConnection implements PartyConnection {
   get roomId() { return this.room.roomId; }
   get title() { return (this.room.state as { title?: string }).title || '오프닝 파티'; }
   get isPrivate() { return (this.room.state as { isPrivate?: boolean }).isPrivate ?? false; }
+  get theme(): Theme { const t = (this.room.state as { theme?: string }).theme; return isTheme(t) ? t : 'gallery'; }
 
   on(h: Partial<PartyEvents>) {
     this.ev.on(h);

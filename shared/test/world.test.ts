@@ -33,9 +33,9 @@ describe('world', () => {
   });
 
   it('roomAt', () => {
-    expect(roomAt(3)).toBe('lobby');
-    expect(roomAt(13)).toBe('garden');
-    expect(roomAt(50)).toBe('pond');
+    expect(roomAt(3).id).toBe('lobby');
+    expect(roomAt(13).id).toBe('garden');
+    expect(roomAt(50).id).toBe('pond');
   });
 });
 

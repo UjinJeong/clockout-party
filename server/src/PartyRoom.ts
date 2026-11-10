@@ -1,7 +1,7 @@
 import { Room, type Client } from '@colyseus/core';
 import {
-  MAX_PLAYERS, MAX_SPEED, SPAWN, THEME, finite, isBattery, isEmote, moveWithCollision, nearbyIds,
-  nearestWalkable, parseLook, sanitizeChat, sanitizeName, sanitizeTitle, validateVoice,
+  MAX_PLAYERS, MAX_SPEED, finite, isBattery, isEmote, isTheme, mapFor, moveWithCollision, nearbyIds,
+  nearestWalkable, type WorldMap, parseLook, sanitizeChat, sanitizeName, sanitizeTitle, validateVoice,
 } from '@party/shared';
 import { PartyState, Player } from './schema';
 import { stats } from './stats';
@@ -11,7 +11,7 @@ export interface PartyMetadata { title: string; theme: string; private: boolean 
 interface Track { at: number; voiceAt: number }
 
 /**
- * A party in the gallery. The server is the referee: it keeps everyone's
+ * A party in one of the places (gallery, home, pool). The server is the referee: it keeps everyone's
  * position honest and decides who is close enough to receive each chat line,
  * emote or voice note. Voice notes are relayed and never stored.
  */
@@ -22,6 +22,7 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
   state = new PartyState();
 
   private tracks = new Map<string, Track>();
+  private map: WorldMap = mapFor('gallery');
   private guestNo = 0;
 
   messages = {
@@ -53,10 +54,13 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
   async onCreate(options: Record<string, unknown> = {}) {
     const isPrivate = options.private === true;
     const title = sanitizeTitle(options.title);
+    const theme = isTheme(options.theme) ? options.theme : 'gallery';
+    this.map = mapFor(theme);
     this.state.title = title;
+    this.state.theme = theme;
     this.state.isPrivate = isPrivate;
     await this.setMatchmaking({
-      metadata: { title, theme: THEME, private: isPrivate },
+      metadata: { title, theme, private: isPrivate },
       private: isPrivate,
     });
   }
@@ -65,7 +69,8 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
     const look = parseLook(options.look);
     const name = sanitizeName(options.name) ?? `손님${++this.guestNo}`;
     // Spread newcomers out a little so they don't stack on one spot.
-    const spot = nearestWalkable({ x: SPAWN.x + (Math.random() - 0.5) * 3, z: SPAWN.z + (Math.random() - 0.5) * 1.5 });
+    const s = this.map.spawn;
+    const spot = nearestWalkable({ x: s.x + (Math.random() - 0.5) * 3, z: s.z + (Math.random() - 0.5) * 1.5 }, this.map);
     this.state.players.set(client.sessionId, new Player({
       name, kind: look.kind, color: look.color, hat: look.hat, hand: look.hand, outfit: look.outfit,
       x: spot.x, z: spot.z, dir: 0, moving: false, battery: 'charging',
@@ -95,7 +100,7 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
       client.send('snap', { x: p.x, z: p.z });
       return;
     }
-    const pos = moveWithCollision({ x: p.x, z: p.z }, { x, z });
+    const pos = moveWithCollision({ x: p.x, z: p.z }, { x, z }, this.map);
     p.x = pos.x;
     p.z = pos.z;
     if (finite(dir)) p.dir = dir;

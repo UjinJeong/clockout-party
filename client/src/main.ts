@@ -1,11 +1,11 @@
 import './style.css';
 import * as THREE from 'three';
-import type { Look } from '@party/shared';
-import { buildGallery } from './world/gallery';
+import type { Look, Theme } from '@party/shared';
+import { buildWorld, type World } from './world/world';
 import { Controls } from './game/controls';
 import { Party } from './game/party';
 import { DemoConnection } from './net/demo';
-import { LiveRoomConnection, getRoom } from './net/room';
+import { LiveRoomConnection, getRoom, themeRoom } from './net/room';
 import { connectParty, type JoinRequest } from './net/colyseus';
 import type { PartyConnection } from './net/types';
 import { showStart } from './ui/start';
@@ -28,9 +28,20 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 120);
-const gallery = buildGallery(scene, renderer);
-gallery.setTime(new Date());
-setInterval(() => gallery.setTime(new Date()), 60_000);
+// The place on screen. It changes when you join a party somewhere else.
+let world: World = buildWorld('gallery', scene, renderer);
+world.setTime(new Date());
+setInterval(() => world.setTime(new Date()), 60_000);
+let artLoaded = false;
+
+function useWorld(theme: Theme) {
+  if (world.map.theme === theme) return;
+  world.dispose();
+  world = buildWorld(theme, scene, renderer);
+  world.setTime(new Date());
+  idleT = 0;
+  if (artLoaded) void world.loadArt();
+}
 
 const resize = () => {
   const w = innerWidth, h = innerHeight;
@@ -45,10 +56,12 @@ const controls = new Controls($('joystick'));
 let party: Party | null = null;
 let idleT = 0;
 
-// Behind the invitation and lobby the camera drifts slowly past the paintings.
+// Behind the invitation and lobby the camera drifts slowly along the place.
 function idleCamera(dt: number) {
   idleT += dt * 0.05;
-  const x = 30 + Math.sin(idleT) * 24;
+  const b = world.map.bounds;
+  const mid = (b.x0 + b.x1) / 2, reach = Math.max(0, (b.x1 - b.x0) / 2 - 6);
+  const x = mid + Math.sin(idleT) * reach;
   camera.position.set(x, 7.5, 9.5);
   camera.lookAt(x, 1.4, -2);
 }
@@ -57,7 +70,7 @@ let last = performance.now();
 renderer.setAnimationLoop((t) => {
   const dt = Math.min(0.1, (t - last) / 1000);
   last = t;
-  gallery.tick(dt);
+  world.tick(dt);
   if (party) party.update(dt);
   else idleCamera(dt);
   renderer.render(scene, camera);
@@ -65,13 +78,17 @@ renderer.setAnimationLoop((t) => {
 
 // Fonts are drawn into canvas textures, so wait for them before the first look.
 void (document.fonts?.ready ?? Promise.resolve()).then(() => {
-  void gallery.loadArt().then(() => $('loading').classList.add('done'));
+  artLoaded = true;
+  void world.loadArt().then(() => $('loading').classList.add('done'));
   setTimeout(() => $('loading').classList.add('done'), 4000);
 });
 
 // ---- the visit: invitation → lobby → party → back to lobby ----
 async function run() {
-  let me = await showStart();
+  // Without a lobby (the claude.ai page) the invitation card also asks where to party,
+  // and the world behind it changes as you pick.
+  const startOpts = DEMO_ONLY ? { places: true, onPlace: useWorld } : {};
+  let me = await showStart(startOpts);
   const invited = parseCode(new URLSearchParams(location.search).get('room') ?? '');
   let firstJoin: JoinRequest | null = invited ? { mode: 'join', roomId: invited } : null;
   let lobbyError: string | undefined;
@@ -79,22 +96,25 @@ async function run() {
   for (;;) {
     let conn: PartyConnection;
     if (DEMO_ONLY) {
-      // Inside a claude.ai artifact, everyone with the page open shares one live gallery.
-      const room = await getRoom();
+      // Inside a claude.ai artifact, everyone with the page open who picked the
+      // same place shares one live party there.
+      const theme = me.theme;
+      const lobby = await getRoom();
+      const room = lobby ? await themeRoom(lobby, theme) : null;
       try {
-        conn = room ? new LiveRoomConnection(room, me.name, me.look) : new DemoConnection(me.name, me.look);
+        conn = room ? new LiveRoomConnection(room, me.name, me.look, theme) : new DemoConnection(me.name, me.look, { theme });
       } catch (err) {
         // The shared room failed: still let them in, just with the bot guests.
         console.error(err);
         toast(`같이 둘러보기 연결이 안 돼서 혼자 체험으로 들어가요.\n[같이 둘러보기] ${describe(err)}`, 12000);
-        conn = new DemoConnection(me.name, me.look);
+        conn = new DemoConnection(me.name, me.look, { theme });
       }
     } else {
       const choice = firstJoin ?? await showLobby(lobbyError);
       firstJoin = null;
       lobbyError = undefined;
       if (choice.mode === 'back') { me = await showStart(); continue; }
-      if (choice.mode === 'demo') conn = new DemoConnection(me.name, me.look);
+      if (choice.mode === 'demo') conn = new DemoConnection(me.name, me.look, { theme: choice.theme });
       else {
         try {
           conn = await join(choice, me.name, me.look);
@@ -107,11 +127,14 @@ async function run() {
 
     let hud: ReturnType<typeof createHud> | null = null;
     let how: string;
-    let step = '화면 준비';
+    let step = '장소 준비';
     try {
+      step = '장소 준비';
+      useWorld(conn.theme);
+      step = '화면 준비';
       hud = createHud(conn, controls);
       step = '파티장 만들기';
-      party = new Party(scene, camera, canvas, gallery, conn, controls, $('tags'), hud.hooks);
+      party = new Party(scene, camera, canvas, world, conn, controls, $('tags'), hud.hooks);
       step = '화면 연결';
       hud.attach(party);
       step = '입장 완료';
@@ -132,7 +155,7 @@ async function run() {
     $('hud').hidden = true; // even if the HUD broke halfway through being built
     setUrl(location.pathname);
     if (how === 'lost') lobbyError = '파티 연결이 끊겼어요. 다시 들어가 보세요.';
-    if (DEMO_ONLY) { me = await showStart(); }
+    if (DEMO_ONLY) { me = await showStart(startOpts); }
   }
 }
 

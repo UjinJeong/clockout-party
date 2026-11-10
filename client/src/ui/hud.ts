@@ -1,7 +1,7 @@
-import { BATTERY_LABEL, EMOTES, EMOTE_ICON, VOICE_MAX_MS, type Battery, type RoomId } from '@party/shared';
+import { BATTERY_LABEL, EMOTES, EMOTE_ICON, VOICE_MAX_MS, type Battery, type MapRoom } from '@party/shared';
 import type { Party } from '../game/party';
 import type { PartyConnection } from '../net/types';
-import { ROOM_INFO, type Artwork } from '../world/art';
+import type { Artwork } from '../world/art';
 import { createLivingViewer } from '../living/viewer';
 import type { Painting } from '../world/gallery';
 import { PHASE_ICON, phaseOf } from '../world/sky';
@@ -174,7 +174,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
   on(chip, 'click', () => { if (current) openArt(current.art); });
 
   const hooks = {
-    room: (id: RoomId) => { $('where').textContent = ROOM_INFO[id].name; },
+    room: (r: MapRoom) => { $('where').textContent = r.name; },
     painting: (p: Painting | null) => {
       current = p;
       chip.hidden = !p;

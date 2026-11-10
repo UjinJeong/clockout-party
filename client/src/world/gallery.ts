@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { WorldParts } from './world';
 import { BAR, BENCHES, DOOR_HALF, PARTITIONS, ROOM_D, ROOM_IDS, ROOM_W, WORLD, type RoomId } from '@party/shared';
 import { livingCanvas, tickLivingWall } from './livingWall';
 import { ART, ROOM_INFO, slotsFor, wallSrc, type Artwork, type Slot } from './art';
@@ -12,19 +13,8 @@ const BACK_Z = WORLD.z0;
 
 export interface Painting { art: Artwork; slot: Slot; mesh: THREE.Mesh; stand: { x: number; z: number } }
 
-export interface Gallery {
-  paintings: Painting[];
-  floor: THREE.Mesh;
-  setTime(date: Date): SkyState;
-  /** Animate the party lights, candles and dust. */
-  tick(dt: number): void;
-  /** Fade the beams over the doorways when the camera is right behind one, so they never block your view. */
-  fadeOccluders(camera: THREE.Vector3): void;
-  /** Load the painting images (call once the first frame is up). */
-  loadArt(onProgress?: (done: number, total: number) => void): Promise<void>;
-}
-
-export function buildGallery(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Gallery {
+/** 「액자 밖으로」: five rooms of paintings, a wine bar and party lights. */
+export function buildGallery(scene: THREE.Scene, renderer: THREE.WebGLRenderer): WorldParts {
   const maxAniso = renderer.capabilities.getMaxAnisotropy();
   const M = {
     floor: new THREE.MeshStandardMaterial({ map: parquet(), roughness: 0.55 }),
