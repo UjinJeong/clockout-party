@@ -2,12 +2,17 @@ import { Client, Callbacks, type Room } from '@colyseus/sdk';
 import { ROOM_NAME, type Battery, type Emote, type Look } from '@party/shared';
 import { Emitter, type NetPlayer, type PartyConnection, type PartyEvents } from './types';
 
-/** Where the party server lives. Override with VITE_SERVER_URL (e.g. https://party.example.com). */
+/**
+ * Where the party server lives.
+ * - VITE_SERVER_URL wins when set (e.g. https://party.example.com).
+ * - While developing (vite on :5173) the server runs beside it on :2567.
+ * - In a real deploy the server hands out this page itself, so it's the same address.
+ */
 export function serverUrl(): string {
   const env = import.meta.env.VITE_SERVER_URL as string | undefined;
   if (env) return env.replace(/\/$/, '');
-  const proto = location.protocol === 'https:' ? 'https' : 'http';
-  return `${proto}://${location.hostname || 'localhost'}:2567`;
+  if (import.meta.env.DEV) return `${location.protocol}//${location.hostname || 'localhost'}:2567`;
+  return location.origin;
 }
 
 export interface RoomListing { roomId: string; title: string; clients: number; maxClients: number }

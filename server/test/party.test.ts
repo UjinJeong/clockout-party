@@ -1,4 +1,9 @@
 process.env.ADMIN_PASSWORD = 'test-pass';
+// a tiny stand-in for the built web client, so the server can be checked serving it
+import { mkdtempSync as __mk, writeFileSync as __wr } from 'node:fs';
+import { tmpdir as __tmp } from 'node:os';
+process.env.CLIENT_DIST = __mk(__tmp() + '/client-');
+__wr(process.env.CLIENT_DIST + '/index.html', '<title>액자 밖으로 오프닝 파티</title>');
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { boot, type ColyseusTestServer } from '@colyseus/testing';
 import app from '../src/app';
@@ -185,5 +190,17 @@ describe('manager page', () => {
     const auth = 'Basic ' + Buffer.from('admin:test-pass').toString('base64');
     const res = await fetch('http://localhost:2568/admin', { headers: { authorization: auth } });
     expect(await res.text()).toContain('파티 관리');
+  });
+});
+
+describe('one server for everything', () => {
+  it('serves the web page from the same address as the game', async () => {
+    const res = await fetch('http://localhost:2568/');
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('액자 밖으로');
+  });
+  it('still answers the game routes', async () => {
+    expect((await fetch('http://localhost:2568/health')).status).toBe(200);
+    expect(Array.isArray(await (await fetch('http://localhost:2568/rooms')).json())).toBe(true);
   });
 });

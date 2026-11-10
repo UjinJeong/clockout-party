@@ -1,0 +1,14 @@
+# For a server you run yourself (Oracle Cloud free VM, or your own PC):
+#   ADMIN_PASSWORD=원하는비밀번호 docker compose up -d --build
+services:
+  party:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "2567:2567"
+    environment:
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD를 정해 주세요}
+    volumes:
+      - party-data:/app/server/data   # visit history survives restarts
+volumes:
+  party-data:

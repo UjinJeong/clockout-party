@@ -1,0 +1,16 @@
+# Render "Blueprint": New → Blueprint → pick this repository. The free plan sleeps
+# after 15 minutes with no visitors and wakes in about a minute on the next visit.
+services:
+  - type: web
+    name: web-party
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci --legacy-peer-deps && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: ADMIN_PASSWORD
+        generateValue: true

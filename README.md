@@ -20,9 +20,11 @@ npm run dev          # 서버(2567) + 웹(5173) 동시에 실행
 | `npm test` | 규칙(shared) + 서버 테스트 |
 | `npm run build` | 웹 클라이언트 빌드 → `client/dist` |
 | `npm run build:demo -w client` | 서버 없이 도는 혼자 체험판 → `client/dist-demo` |
-| `npm start` | 서버만 실행 |
+| `npm start` | 서버 실행 (빌드된 웹 화면도 같이 내보냄 → http://localhost:2567) |
 
 웹을 다른 주소의 서버에 연결하려면 빌드할 때 `VITE_SERVER_URL=https://서버주소` 를 지정하세요.
+
+**인터넷에 올리기(무료 방법 포함)는 [DEPLOY.md](DEPLOY.md)를 보세요.**
 
 ## 구조
 
@@ -84,4 +86,4 @@ docs/     설계 문서와 구현 계획
 - 홈파티·풀파티 테마 추가 (지도 `shared/src/world.ts`와 장면 `client/src/world/*`를 테마별로)
 - 귓속말(1:1 음성), 같이 맞추는 퍼즐, 벽에 걸린 그림도 은은하게 움직이기
 - Unity 클라이언트: Colyseus Unity SDK로 같은 서버에 접속, `shared` 규칙을 C#으로 옮기기
-- 배포: 서버는 Colyseus Cloud나 작은 VPS, 웹은 정적 호스팅
+- 배포: [DEPLOY.md](DEPLOY.md) — Render 무료, Oracle Cloud 평생 무료, 내 PC + Cloudflare Tunnel
