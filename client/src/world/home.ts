@@ -94,7 +94,7 @@ export function buildHome(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
   back(12, 24, M.kitchenWall);
   box(12, 0.12, 0.04, M.trim, 6, 0.06, BACK + 0.02);         // skirting
   box(11.4, 0.9, 0.03, M.subway, 18, 1.35, BACK + 0.02);     // splashback tiles
-  box(12, 0.14, 0.14, M.trim, 18, H - 0.07, BACK + 0.07);     // crown moulding (kitchen)
+  box(24 - HOUSE.bedX1, 0.14, 0.14, M.trim, (HOUSE.bedX1 + 24) / 2, H - 0.07, BACK + 0.07); // crown moulding (kitchen, past the guest room's floor)
   box(12, 0.14, 0.14, M.trim, 6, H2 - 0.07, BACK + 0.07);     // and up at the top of the living room
   // the closed outer wall on the left: tall at the back, low toward the camera
   const outerWall = (x: number, mat: THREE.Material) => {
@@ -117,7 +117,13 @@ export function buildHome(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
     box(0.2, 0.05, B.z1 - 1.0, M.trim, 0, LOW, (1.0 + B.z1) / 2);
   }
   // the right-hand wall of the tall living room, above the kitchen's ceiling height
-  box(0.14, H2 - H, -1.5 - BACK, paintSide, 12, H + (H2 - H) / 2, (BACK - 1.5) / 2);
+  {
+    // with the guest room's door in it (up on the landing)
+    const d = HOUSE.door, DH = 2.15, top = H2 - H;
+    box(0.14, top, d.z0 - BACK, paintSide, 12, H + top / 2, (BACK + d.z0) / 2);
+    box(0.14, top, -1.5 - d.z1, paintSide, 12, H + top / 2, (d.z1 - 1.5) / 2);
+    box(0.14, H2 - (UP + DH), d.z1 - d.z0, paintSide, 12, (UP + DH + H2) / 2, (d.z0 + d.z1) / 2);
+  }
   // Inner walls come straight from the shared map, so every doorway you can
   // walk through is one you can see. The kitchen→terrace wall is glass.
   const pieces = wallPieces(HOME_MAP, H, LOW);
@@ -307,7 +313,8 @@ export function buildHome(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
     // a banner and flags on the left
     const banner = textPlate([{ text: '🎉 퇴근 축하해요 🎉', font: '700 46px "Gowun Batang", serif', color: '#2a2024', y: 72 }], 512, 112, '#f6e7c8');
     add(new THREE.PlaneGeometry(3.4, 0.74), new THREE.MeshBasicMaterial({ map: banner }), 15.8, 2.35, BACK + 0.05);
-    bunting(group, new THREE.Vector3(12.4, 3.05, BACK + 0.1), new THREE.Vector3(19.0, 3.05, BACK + 0.1));
+    // flags hang from the edge of the guest room's floor above
+    bunting(group, new THREE.Vector3(12.4, UP - SLAB - 0.05, HOUSE.edge + 0.08), new THREE.Vector3(HOUSE.bedX1 - 0.4, UP - SLAB - 0.05, HOUSE.edge + 0.08));
   }
   // island full of party food
   {
@@ -421,8 +428,9 @@ export function buildHome(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
   lights.strand(new THREE.Vector3(24.15, 3.0, -4.6), new THREE.Vector3(B.x1 - 0.25, 2.85, -2.5), 0.32, 12, 0.5);
   lights.strand(new THREE.Vector3(24.15, 3.0, -0.6), new THREE.Vector3(B.x1 - 0.25, 2.85, 1.0), 0.32, 12, 0.5);
   // indoor strands along the crown moulding
-  lights.strand(new THREE.Vector3(12.2, H - 0.18, BACK + 0.16), new THREE.Vector3(23.8, H - 0.18, BACK + 0.16), 0.3, 1.5, 0.14);
+  lights.strand(new THREE.Vector3(HOUSE.bedX1 + 0.2, H - 0.18, BACK + 0.16), new THREE.Vector3(23.8, H - 0.18, BACK + 0.16), 0.3, 1.5, 0.14);
   const upstairs = buildUpstairs(group, M, paintSide, lights, sky.texture);
+  const guestRoom = buildGuestRoom(group, M, paintSide, lights, sky.texture);
   lights.done();
 
   // ---- lights ----
@@ -444,6 +452,7 @@ export function buildHome(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
     fireLight.intensity = 0.8 + 1.4 * s.night;
     kitchenLight.intensity = 0.4 + 0.8 * s.night;
     upstairs.light.intensity = 0.35 + 0.9 * s.night;
+    guestRoom.light.intensity = 0.3 + 1.0 * s.night;
     return s;
   };
 
@@ -652,7 +661,7 @@ function buildUpstairs(
   const rug = u.add(new THREE.PlaneGeometry(9, 1.0), std('#3d5a6c', { roughness: 1 }), 6.6, 0.005, -3.2); rug.rotation.x = -Math.PI / 2;
   const rugBorder = u.add(new THREE.PlaneGeometry(8.6, 0.7), std('#d9c79f', { roughness: 1 }), 6.6, 0.007, -3.2); rugBorder.rotation.x = -Math.PI / 2;
   // two doors along the back wall, with their plaques
-  for (const [x, label] of [[4.1, '손님방 🛏️'], [8.05, '작업실 🎨']] as const) {
+  for (const [x, label] of [[4.1, '욕실 🛁'], [8.05, '작업실 🎨']] as const) {
     u.box(1.04, 2.2, 0.06, white, x, 1.1, BACK + 0.03);                       // frame
     u.box(0.86, 2.05, 0.05, std('#b98a5e', { roughness: 0.55 }), x, 1.03, BACK + 0.06);
     for (const [py, ph] of [[1.55, 0.7], [0.55, 0.7]] as const) u.box(0.62, ph, 0.02, std('#a77a4f', { roughness: 0.6 }), x, py, BACK + 0.09);
@@ -751,4 +760,102 @@ function buildUpstairs(
       tvTex.needsUpdate = true;
     },
   };
+}
+
+
+/**
+ * 🛏️ The guest room: up through the door at the end of the landing, over the
+ * back of the kitchen. A double bed (lie down to recharge fastest), a
+ * nightstand with a lamp, a wardrobe, a window and a rug. Open at the front
+ * like a dollhouse, so you can see in.
+ */
+function buildGuestRoom(
+  group: THREE.Group,
+  M: Record<string, THREE.MeshStandardMaterial>,
+  paintSide: THREE.Material,
+  lights: ReturnType<typeof stringLights>,
+  skyTex: THREE.Texture,
+) {
+  const { add, box } = builder(group);
+  const x0 = 12.05, x1 = HOUSE.bedX1, top = HOUSE.edge, depth = top - BACK, cz = (BACK + top) / 2, TOP = 5.8;
+  const white = std('#f6f1e8', { roughness: 0.55 });
+  const wallM = new THREE.MeshStandardMaterial({ map: stripes(), roughness: 0.95 });
+  (wallM.map as THREE.Texture).repeat.set(4, 1.3);
+
+  // the floor (over the kitchen), its ceiling underneath and a trimmed front edge
+  box(x1 - x0, SLAB, depth, M.oak, (x0 + x1) / 2, UP - SLAB / 2, cz);
+  const ceil = add(new THREE.PlaneGeometry(x1 - x0, depth), white, (x0 + x1) / 2, UP - SLAB - 0.002, cz); ceil.rotation.x = Math.PI / 2;
+  box(x1 - x0, SLAB + 0.04, 0.06, white, (x0 + x1) / 2, UP - SLAB / 2, top + 0.03);
+  // walls: the back and the far side (the front is open, dollhouse-style)
+  add(new THREE.PlaneGeometry(x1 - x0, TOP - H), wallM, (x0 + x1) / 2, (H + TOP) / 2, BACK + 0.01);
+  box(0.14, TOP - UP, depth, paintSide, x1 + 0.07, (UP + TOP) / 2, cz);
+  // open at the front like the rooms downstairs: just a thin ledge along the edge
+  box(x1 - x0, 0.16, 0.08, white, (x0 + x1) / 2, UP + 0.08, top - 0.04);
+  box(x1 - x0, 0.12, 0.12, white, (x0 + x1) / 2, TOP - 0.06, BACK + 0.07);  // crown moulding
+  // the door from the landing: frame, and the door itself swung open into the room
+  {
+    const d = HOUSE.door, DH = 2.15;
+    for (const z of [d.z0, d.z1]) box(0.2, DH, 0.08, white, 12, UP + DH / 2, z);
+    box(0.2, 0.08, d.z1 - d.z0 + 0.16, white, 12, UP + DH, (d.z0 + d.z1) / 2);
+    const leaf = box(0.04, DH - 0.06, d.z1 - d.z0 - 0.1, std('#b98a5e', { roughness: 0.55 }), 12.5, UP + DH / 2, d.z0 + 0.05 + (d.z1 - d.z0 - 0.1) / 2);
+    leaf.geometry.translate(0, 0, (d.z1 - d.z0 - 0.1) / 2); leaf.position.z = d.z0 + 0.05; leaf.position.x = 12.07; leaf.rotation.y = -1.25;
+    const plate = textPlate([{ text: '손님방 🛏️', font: '600 34px "IBM Plex Sans KR", sans-serif', color: '#2a2024', y: 46 }], 256, 64, '#f6e7c8');
+    add(new THREE.PlaneGeometry(0.46, 0.115), new THREE.MeshBasicMaterial({ map: plate }), 11.92, UP + 1.75, d.z1 + 0.4, -Math.PI / 2);
+  }
+
+  const upG = new THREE.Group(); upG.position.y = UP; group.add(upG);
+  const u = builder(upG);
+  // the bed, head against the far wall
+  {
+    const b = HOME.bed, cx = (b.x0 + b.x1) / 2, bz = (b.z0 + b.z1) / 2, w = b.x1 - b.x0, d = b.z1 - b.z0;
+    u.box(w, 0.32, d, M.walnut, cx, 0.16, bz);                                       // frame
+    u.box(w - 0.06, 0.2, d - 0.06, std('#f4efe6', { roughness: 0.9 }), cx, 0.42, bz);  // mattress
+    u.box(w * 0.66, 0.06, d + 0.04, std('#7d9cc0', { roughness: 1 }), b.x0 + w * 0.33, 0.53, bz); // duvet over the foot end
+    u.box(0.1, 1.15, d + 0.06, std('#c98f8f', { roughness: 0.95 }), b.x1 - 0.05, 0.6, bz);        // headboard
+    for (const z of [-4.55, -3.75]) { const p = u.box(0.42, 0.13, 0.62, white, b.x1 - 0.32, 0.6, z); p.rotation.z = 0.25; }
+    // a little plush bear sitting on the pillows
+    const bear = new THREE.Group(); bear.position.set(b.x1 - 0.32, 0.72, bz); upG.add(bear);
+    const fur = std('#c98b5a', { roughness: 1 });
+    for (const [r, y] of [[0.11, 0], [0.09, 0.15]] as const) { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), fur); m.position.y = y; bear.add(m); }
+    for (const s of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 5), fur); e.position.set(0, 0.23, s * 0.06); bear.add(e); }
+  }
+  // nightstand with a glowing lamp and a clock
+  {
+    const n = HOME.nightstand, cx = (n.x0 + n.x1) / 2, nz = (n.z0 + n.z1) / 2;
+    u.box(n.x1 - n.x0, 0.55, n.z1 - n.z0, M.walnut, cx, 0.275, nz);
+    u.cyl(0.08, 0.1, 0.05, M.cream, cx, 0.58, nz, 12);
+    u.add(new THREE.CylinderGeometry(0.1, 0.15, 0.18, 14, 1, true), std('#f4e6c8', { side: THREE.DoubleSide, emissive: 0xffd9a0, emissiveIntensity: 0.6 }), cx, 0.8, nz);
+    lampGlow(upG, cx, 0.78, nz, 1.1);
+  }
+  // wardrobe
+  {
+    const wd = HOME.wardrobe, cx = (wd.x0 + wd.x1) / 2, w = wd.x1 - wd.x0, d = wd.z1 - wd.z0;
+    u.box(w, 2.2, d, std('#e9e2d6', { roughness: 0.6 }), cx, 1.1, BACK + d / 2);
+    u.box(0.015, 2.0, 0.01, std('#cfc6b6'), cx, 1.1, wd.z1 + 0.005);
+    for (const s of [-1, 1]) u.cyl(0.02, 0.02, 0.05, std('#c9a25e', { metalness: 0.7, roughness: 0.3 }), cx + s * 0.08, 1.15, wd.z1 + 0.02, 8).rotation.x = Math.PI / 2;
+  }
+  // a window with the visitor's own sky, and curtains
+  {
+    const wx = 15.8, wy = 1.55;
+    u.add(new THREE.PlaneGeometry(1.4, 1.0), new THREE.MeshBasicMaterial({ map: skyTex }), wx, wy, BACK + 0.03);
+    for (const [w, h, x, y] of [[1.56, 0.08, wx, wy - 0.54], [1.56, 0.08, wx, wy + 0.54], [0.08, 1.0, wx - 0.74, wy], [0.08, 1.0, wx + 0.74, wy]] as const)
+      u.box(w, h, 0.07, white, x, y, BACK + 0.06);
+    for (const sx of [-1, 1]) u.box(0.36, 1.6, 0.06, std('#9fb4e0', { roughness: 1 }), wx + sx * 0.95, 1.4, BACK + 0.12);
+  }
+  // a round rug, and fairy lights over the bed
+  const rug = u.add(new THREE.CircleGeometry(0.95, 28), std('#e0b878', { roughness: 1 }), 15.6, 0.006, -3.6); rug.rotation.x = -Math.PI / 2;
+  lights.strand(new THREE.Vector3(HOME.bed.x1 - 0.1, UP + 1.6, BACK + 0.15), new THREE.Vector3(HOME.bed.x1 - 0.1, UP + 1.6, HOME.bed.z1), 0.25, 0.8, 0.18);
+
+  const light = new THREE.PointLight(0xffd2a0, 0.5, 7, 1.6);
+  light.position.set(16.5, UP + 1.9, -3.5); group.add(light);
+  return { light };
+}
+
+/** Soft vertical stripes for the guest room. */
+function stripes() {
+  return canvasTexture(64, 64, (x, w, h) => {
+    x.fillStyle = '#e9d6c9'; x.fillRect(0, 0, w, h);
+    x.fillStyle = 'rgba(255,255,255,.35)';
+    for (let i = 0; i < 4; i++) x.fillRect(i * 16 + 2, 0, 6, h);
+  }, [1, 1]);
 }

@@ -96,4 +96,18 @@ describe('the route can actually be walked', () => {
     const sofa = MAPS.home.seats.find(s => s.x === 5 && s.z === -4)!;
     expect(findPath(map, map.spawn, sofa.stand)).not.toBeNull();
   });
+
+  it('always finishes quickly, between any two open spots in every place (no endless searching)', () => {
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (const theme of ['gallery', 'home', 'pool'] as const) {
+      const map = MAPS[theme], b = map.bounds;
+      const open = () => { for (;;) { const p = { x: b.x0 + rnd() * (b.x1 - b.x0), z: b.z0 + rnd() * (b.z1 - b.z0) }; if (isWalkable(p, map)) return p; } };
+      for (let k = 0; k < 40; k++) {
+        const t0 = performance.now();
+        findPath(map, open(), open());
+        expect(performance.now() - t0, theme).toBeLessThan(400);
+      }
+    }
+  });
 });

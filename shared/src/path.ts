@@ -41,7 +41,10 @@ export function findPath(map: WorldMap, from: Vec2, to: Vec2, radius = AVATAR_RA
   const [sc, sr] = cell(start), [gc, gr] = cell(goal);
   // the start and goal cells are always usable (they may be snug, like a seat's stand-up spot)
   open[sr * cols + sc] = 1; open[gr * cols + gc] = 1;
-  const g = new Float32Array(cols * rows).fill(Infinity);
+  // full precision: with 32-bit costs a rounded-up value made the same route look
+  // "better" again and again, and the search never ended
+  const g = new Float64Array(cols * rows).fill(Infinity);
+  const done = new Uint8Array(cols * rows); // cells already settled: later, staler queue entries are skipped
   const came = new Int32Array(cols * rows).fill(-1);
   const heap: [number, number][] = []; // [f, index]
   const push = (f: number, i: number) => {
@@ -72,6 +75,8 @@ export function findPath(map: WorldMap, from: Vec2, to: Vec2, radius = AVATAR_RA
   let found = false;
   while (heap.length) {
     const [, i] = pop();
+    if (done[i]) continue;
+    done[i] = 1;
     if (i === gi) { found = true; break; }
     const c = i % cols, r = (i / cols) | 0;
     for (const [dc, dr] of dirs) {
@@ -79,7 +84,7 @@ export function findPath(map: WorldMap, from: Vec2, to: Vec2, radius = AVATAR_RA
       if (!walk(nc, nr)) continue;
       if (dc && dr && (!walk(c + dc, r) || !walk(c, r + dr))) continue; // no squeezing past corners
       const ni = nr * cols + nc, cost = g[i] + (dc && dr ? Math.SQRT2 : 1);
-      if (cost < g[ni]) { g[ni] = cost; came[ni] = i; push(cost + h(nc, nr), ni); }
+      if (!done[ni] && cost < g[ni] - 1e-9) { g[ni] = cost; came[ni] = i; push(cost + h(nc, nr), ni); }
     }
   }
   if (!found) return null;

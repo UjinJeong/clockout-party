@@ -85,4 +85,23 @@ describe('🏠 the two-storey house', () => {
   it('only the house has lifts', () => {
     for (const t of THEMES) if (t !== 'home') expect(MAPS[t].lifts ?? []).toHaveLength(0);
   });
+
+  it('🛏️ a guest room upstairs: through the door off the landing, with a bed to lie on', () => {
+    const bed = seatsFor(map).filter(s => s.pose === 'lie');
+    expect(bed).toHaveLength(2);
+    for (const s of bed) {
+      expect(toWorld(map, s).y).toBeGreaterThan(3);
+      expect(roomAt(s.x, map, s.z).name).toBe('손님방');
+      const route = findPath(map, map.spawn, s.stand);
+      expect(route, 'can walk to the bed from the front door').not.toBeNull();
+    }
+  });
+
+  it('the guest room wall is solid except for its door', () => {
+    const up = (wz: number) => wz - 4.4; // drawn z → walking z upstairs
+    expect(isWalkable(at(12, up(-4.8)), map)).toBe(false);
+    expect(isWalkable(at(12, up(-2.7)), map)).toBe(false);
+    expect(isWalkable(at(12, up(-3.75)), map)).toBe(true);
+    expect(isWalkable(at(22, up(-3.75)), map)).toBe(false); // nothing beyond the guest room
+  });
 });

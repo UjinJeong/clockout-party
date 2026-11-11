@@ -129,6 +129,9 @@ export const HOUSE = {
   /** where the landing lives on the walking map: behind the house */
   upZ0: -9.4, upZ1: -6.8,
   upX1: 11.95,
+  /** the guest room upstairs, over the back of the kitchen (12 … bedX1), through a door at x = 12 */
+  bedX1: 20,
+  door: { z0: -4.4, z1: -3.1 },   // as drawn
 };
 /** Landing (as walked) → drawn: z shifted forward by this, raised to upY. */
 const UP_SHIFT = HOUSE.edge - HOUSE.upZ1;
@@ -156,8 +159,13 @@ export const HOME = {
   loveseat: { x0: 4.9, x1: 7.1, z0: -5, z1: -4.15 } as Rect,
   tvConsole: { x0: 9.3, x1: 11.5, z0: -5, z1: -4.6 } as Rect,
   bookshelf: { x0: 1.9, x1: 3.3, z0: -5, z1: -4.65 } as Rect,
-  upBeanbag: { x: 10.3, z: -3.5, r: 0.45 } as Furniture,
-  upPlant: { x: 11.45, z: -2.95, r: 0.28 } as Furniture,
+  // right up against the TV stand, so the walkway along the railing stays open to the guest room
+  upBeanbag: { x: 10.3, z: -4.1, r: 0.45 } as Furniture,
+  upPlant: { x: 0.7, z: -4.7, r: 0.28 } as Furniture, // in the corner of the stair landing
+  // the guest room: a double bed with its head against the right-hand wall
+  bed: { x0: 18.0, x1: 19.95, z0: -5, z1: -3.3 } as Rect,
+  nightstand: { x0: 19.4, x1: 19.95, z0: -3.25, z1: -2.85 } as Rect,
+  wardrobe: { x0: 12.4, x1: 13.7, z0: -5, z1: -4.4 } as Rect,
 };
 export const HOME_MAP: WorldMap = {
   theme: 'home',
@@ -175,7 +183,11 @@ export const HOME_MAP: WorldMap = {
     { x0: HOUSE.stairX, x1: HOUSE.stairX + 0.15, z0: HOUSE.back, z1: HOUSE.stairFoot },
     // behind the house on the walking map: solid, except the stairs and the landing
     { x0: HOUSE.stairX, x1: 36, z0: HOUSE.upZ1, z1: HOUSE.back },
-    { x0: HOUSE.upX1, x1: 36, z0: HOUSE.upZ0, z1: HOUSE.upZ1 },
+    { x0: HOUSE.bedX1, x1: 36, z0: HOUSE.upZ0, z1: HOUSE.upZ1 },
+    // the wall between the landing and the guest room, with its door
+    { x0: HOUSE.upX1, x1: 12.05, z0: HOUSE.upZ0, z1: HOUSE.door.z0 - UP_SHIFT },
+    { x0: HOUSE.upX1, x1: 12.05, z0: HOUSE.door.z1 - UP_SHIFT, z1: HOUSE.upZ1 },
+    up(HOME.bed), up(HOME.nightstand), up(HOME.wardrobe),
     // upstairs furniture
     up(HOME.loveseat), up(HOME.tvConsole), up(HOME.bookshelf),
     square({ ...upAt(HOME.upBeanbag.x, HOME.upBeanbag.z), r: HOME.upBeanbag.r }),
@@ -183,12 +195,13 @@ export const HOME_MAP: WorldMap = {
   ],
   lifts: [
     // the landing: walked behind the house, drawn over the back of the living room
-    { rect: { x0: 0, x1: HOUSE.upX1, z0: HOUSE.upZ0, z1: HOUSE.upZ1 }, wz0: HOUSE.back, wz1: HOUSE.edge, y0: HOUSE.upY, y1: HOUSE.upY },
+    { rect: { x0: 0, x1: HOUSE.bedX1, z0: HOUSE.upZ0, z1: HOUSE.upZ1 }, wz0: HOUSE.back, wz1: HOUSE.edge, y0: HOUSE.upY, y1: HOUSE.upY },
     // the stairs: from the landing's front edge down to the bottom step
     { rect: { x0: 0, x1: HOUSE.stairX, z0: HOUSE.upZ1, z1: HOUSE.stairFoot }, wz0: HOUSE.edge, wz1: HOUSE.stairFoot, y0: HOUSE.upY, y1: 0 },
   ],
   zones: [
-    { id: 'upstairs', name: '2층', x0: 0, x1: HOUSE.upX1, z0: HOUSE.upZ0, z1: HOUSE.upZ1 },
+    { id: 'bedroom', name: '손님방', x0: 12, x1: HOUSE.bedX1, z0: HOUSE.upZ0, z1: HOUSE.upZ1 },
+    { id: 'upstairs', name: '2층', x0: 0, x1: 12, z0: HOUSE.upZ0, z1: HOUSE.upZ1 },
     { id: 'stairs', name: '계단', x0: 0, x1: HOUSE.stairX, z0: HOUSE.upZ1, z1: HOUSE.stairFoot },
   ],
   water: [],
@@ -197,7 +210,7 @@ export const HOME_MAP: WorldMap = {
     { x: 5, z: -1.0 }, { x: 9.8, z: -3.4 }, { x: 2.8, z: -2.6 }, { x: 8, z: 2.4 },
     { x: 18, z: -2.9 }, { x: 14, z: -2.8 }, { x: 18, z: 0.6 }, { x: 22, z: 1.5 },
     { x: 28.4, z: -1.5 }, { x: 32.5, z: -2.6 }, { x: 31.2, z: 3.2 }, { x: 26.5, z: 2.5 },
-    upAt(3.8, -3.0), upAt(8.2, -3.1), upAt(6, -3.4),
+    upAt(3.8, -3.0), upAt(8.2, -3.1), upAt(6, -3.4), upAt(15.2, -3.6),
   ],
   seats: [
     // the sofa, three cushions facing the room
@@ -211,7 +224,9 @@ export const HOME_MAP: WorldMap = {
     seat(29.3, -3.5, 0.36, -0.2, 'sit', { x: 29.3, z: -2.5 }),
     // upstairs: a loveseat looking out over the party below, and a bean bag in front of the TV
     ...[5.5, 6.5].map(x => seat(x, upAt(x, -4.55).z, 0.5, 0, 'sit', upAt(x, -3.75))),
-    seat(HOME.upBeanbag.x, upAt(0, HOME.upBeanbag.z).z, 0.36, Math.PI, 'sit', upAt(9.2, -3.0)),
+    seat(HOME.upBeanbag.x, upAt(0, HOME.upBeanbag.z).z, 0.36, Math.PI, 'sit', upAt(9.4, -3.2)),
+    // the guest room bed: lie down from the foot of it, head on the pillows by the wall
+    ...[-4.55, -3.75].map(z => seat(18.35, upAt(0, z).z, 0.5, -Math.PI / 2, 'lie', upAt(17.5, z))),
   ],
 };
 
