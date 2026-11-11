@@ -21,6 +21,17 @@ export const THEME_ICON: Record<Theme, string> = { gallery: '🖼️', home: '�
 export const isTheme = (v: unknown): v is Theme => (THEMES as readonly unknown[]).includes(v);
 
 export interface MapRoom { id: string; name: string; x0: number; x1: number }
+/** A named place inside the strip that only covers part of it (upstairs, the stairs). */
+export interface MapZone extends MapRoom { z0: number; z1: number }
+
+/**
+ * A part of the map that is walked in one place and drawn in another: a floor
+ * upstairs, or the stairs up to it. Inside `rect`, x stays as it is while the
+ * drawn z runs from `wz0` (at rect.z0) to `wz1` (at rect.z1) and the height
+ * from `y0` to `y1`. This keeps walking flat and simple — the server and the
+ * pathfinding never see a second floor — while the house is drawn in 3D.
+ */
+export interface Lift { rect: Rect; wz0: number; wz1: number; y0: number; y1: number }
 export interface WorldMap {
   theme: Theme;
   bounds: Rect;
@@ -38,6 +49,10 @@ export interface WorldMap {
   seats: Seat[];
   /** A DJ booth, where fireworks can be launched (pool party). */
   stage?: Rect;
+  /** Parts drawn somewhere other than where they're walked (a second floor). */
+  lifts?: Lift[];
+  /** Named places within the rooms (upstairs, the stairs). */
+  zones?: MapZone[];
 }
 
 let seatNo = 0;
@@ -98,16 +113,37 @@ export const GALLERY_MAP: WorldMap = {
   })),
 };
 
-// ───────────────────────── 🏠 home party: a city apartment ─────────────────────────
-/** Living room (0–12), kitchen (12–24), terrace (24–36). */
+// ───────────────────────── 🏠 home party: a two-storey house ─────────────────────────
+/**
+ * Living room (0–12, two storeys high), kitchen (12–24), terrace (24–36).
+ * A staircase runs up the left wall of the living room to a landing over its
+ * back half: on the walking map the landing sits behind the house (z < −5) and
+ * the stairs run straight back to it; `lifts` lift them into place when drawn.
+ */
+export const HOUSE = {
+  back: -5,          // the back wall of the house, as drawn
+  upY: 3.2,          // landing floor height
+  edge: -2.4,        // the front edge of the landing (its railing), as drawn
+  stairX: 1.45,      // the stairs run along the left wall, x 0 … stairX
+  stairFoot: 2.6,    // where the bottom step is
+  /** where the landing lives on the walking map: behind the house */
+  upZ0: -9.4, upZ1: -6.8,
+  upX1: 11.95,
+};
+/** Landing (as walked) → drawn: z shifted forward by this, raised to upY. */
+const UP_SHIFT = HOUSE.edge - HOUSE.upZ1;
+/** A rect on the landing, given as drawn (world) coordinates. */
+const up = (r: Rect): Rect => ({ x0: r.x0, x1: r.x1, z0: r.z0 - UP_SHIFT, z1: r.z1 - UP_SHIFT });
+const upAt = (x: number, z: number): Vec2 => ({ x, z: z - UP_SHIFT });
+
 export const HOME = {
   partitions: [12, 24],
   doorHalf: [1.8, 2.4] as const, // the terrace has a wide glass sliding door
   sofa: { x0: 2.6, x1: 7.4, z0: -4.6, z1: -3.6 } as Rect,
   coffeeTable: { x0: 4.1, x1: 5.9, z0: -2.5, z1: -1.8 } as Rect,
   fireplace: { x0: 8.7, x1: 10.9, z0: -5, z1: -4.45 } as Rect,
-  armchair: { x: 1.5, z: -1.7, r: 0.5 } as Furniture,
-  lamp: { x: 1.1, z: -4.3, r: 0.25 } as Furniture,
+  armchair: { x: 2.5, z: -1.3, r: 0.5 } as Furniture,
+  lamp: { x: 2.1, z: -4.45, r: 0.25 } as Furniture,
   record: { x0: 10.6, x1: 11.8, z0: -2.6, z1: -1.6 } as Rect, // record player on a low cabinet
   counter: { x0: 12.3, x1: 23.7, z0: -5, z1: -4.35 } as Rect,  // back counter, sink and fridge
   island: { x0: 15.4, x1: 20.6, z0: -1.9, z1: -0.9 } as Rect,
@@ -116,10 +152,16 @@ export const HOME = {
   beanbags: [{ x: 27.4, z: -2.6, r: 0.5 }, { x: 29.3, z: -3.5, r: 0.5 }] as Furniture[],
   patioTable: { x: 31.2, z: 1.6, r: 0.6 } as Furniture,
   plants: [{ x: 24.8, z: -4.4, r: 0.35 }, { x: 35.4, z: -1.2, r: 0.35 }, { x: 11.3, z: 4.1, r: 0.3 }] as Furniture[],
+  // upstairs, as drawn (over the back of the living room)
+  loveseat: { x0: 4.9, x1: 7.1, z0: -5, z1: -4.15 } as Rect,
+  tvConsole: { x0: 9.3, x1: 11.5, z0: -5, z1: -4.6 } as Rect,
+  bookshelf: { x0: 1.9, x1: 3.3, z0: -5, z1: -4.65 } as Rect,
+  upBeanbag: { x: 10.3, z: -3.5, r: 0.45 } as Furniture,
+  upPlant: { x: 11.45, z: -2.95, r: 0.28 } as Furniture,
 };
 export const HOME_MAP: WorldMap = {
   theme: 'home',
-  bounds: { x0: 0, x1: 36, z0: -5, z1: 5 },
+  bounds: { x0: 0, x1: 36, z0: HOUSE.upZ0, z1: 5 },
   rooms: [
     { id: 'living', name: '거실', x0: 0, x1: 12 },
     { id: 'kitchen', name: '부엌', x0: 12, x1: 24 },
@@ -129,6 +171,25 @@ export const HOME_MAP: WorldMap = {
   obstacles: [
     HOME.sofa, HOME.coffeeTable, HOME.fireplace, HOME.record, HOME.counter, HOME.island,
     ...[HOME.armchair, HOME.lamp, ...HOME.stools, HOME.grill, ...HOME.beanbags, HOME.patioTable, ...HOME.plants].map(square),
+    // the banister between the stairs and the living room (you get on at the bottom)
+    { x0: HOUSE.stairX, x1: HOUSE.stairX + 0.15, z0: HOUSE.back, z1: HOUSE.stairFoot },
+    // behind the house on the walking map: solid, except the stairs and the landing
+    { x0: HOUSE.stairX, x1: 36, z0: HOUSE.upZ1, z1: HOUSE.back },
+    { x0: HOUSE.upX1, x1: 36, z0: HOUSE.upZ0, z1: HOUSE.upZ1 },
+    // upstairs furniture
+    up(HOME.loveseat), up(HOME.tvConsole), up(HOME.bookshelf),
+    square({ ...upAt(HOME.upBeanbag.x, HOME.upBeanbag.z), r: HOME.upBeanbag.r }),
+    square({ ...upAt(HOME.upPlant.x, HOME.upPlant.z), r: HOME.upPlant.r }),
+  ],
+  lifts: [
+    // the landing: walked behind the house, drawn over the back of the living room
+    { rect: { x0: 0, x1: HOUSE.upX1, z0: HOUSE.upZ0, z1: HOUSE.upZ1 }, wz0: HOUSE.back, wz1: HOUSE.edge, y0: HOUSE.upY, y1: HOUSE.upY },
+    // the stairs: from the landing's front edge down to the bottom step
+    { rect: { x0: 0, x1: HOUSE.stairX, z0: HOUSE.upZ1, z1: HOUSE.stairFoot }, wz0: HOUSE.edge, wz1: HOUSE.stairFoot, y0: HOUSE.upY, y1: 0 },
+  ],
+  zones: [
+    { id: 'upstairs', name: '2층', x0: 0, x1: HOUSE.upX1, z0: HOUSE.upZ0, z1: HOUSE.upZ1 },
+    { id: 'stairs', name: '계단', x0: 0, x1: HOUSE.stairX, z0: HOUSE.upZ1, z1: HOUSE.stairFoot },
   ],
   water: [],
   spawn: { x: 6, z: 1.5 },
@@ -136,17 +197,21 @@ export const HOME_MAP: WorldMap = {
     { x: 5, z: -1.0 }, { x: 9.8, z: -3.4 }, { x: 2.8, z: -2.6 }, { x: 8, z: 2.4 },
     { x: 18, z: -2.9 }, { x: 14, z: -2.8 }, { x: 18, z: 0.6 }, { x: 22, z: 1.5 },
     { x: 28.4, z: -1.5 }, { x: 32.5, z: -2.6 }, { x: 31.2, z: 3.2 }, { x: 26.5, z: 2.5 },
+    upAt(3.8, -3.0), upAt(8.2, -3.1), upAt(6, -3.4),
   ],
   seats: [
     // the sofa, three cushions facing the room
     ...[3.6, 5.0, 6.4].map(x => seat(x, -4.0, 0.58, 0, 'sit', { x, z: -3.05 })),
     // the armchair, angled toward the coffee table
-    seat(1.5, -1.7, 0.5, 0.85, 'sit', { x: 1.5 + Math.sin(0.85) * 1.2, z: -1.7 + Math.cos(0.85) * 1.2 }),
+    seat(2.5, -1.3, 0.5, 0.85, 'sit', { x: 2.5 + Math.sin(0.85) * 1.2, z: -1.3 + Math.cos(0.85) * 1.2 }),
     // stools at the kitchen island, facing it
     ...[16.3, 18, 19.7].map(x => seat(x, -0.3, 0.78, Math.PI, 'sit', { x, z: 0.45 })),
     // bean bags on the terrace: sink right in
     seat(27.4, -2.6, 0.36, 0.3, 'sit', { x: 27.4, z: -1.6 }),
     seat(29.3, -3.5, 0.36, -0.2, 'sit', { x: 29.3, z: -2.5 }),
+    // upstairs: a loveseat looking out over the party below, and a bean bag in front of the TV
+    ...[5.5, 6.5].map(x => seat(x, upAt(x, -4.55).z, 0.5, 0, 'sit', upAt(x, -3.75))),
+    seat(HOME.upBeanbag.x, upAt(0, HOME.upBeanbag.z).z, 0.36, Math.PI, 'sit', upAt(9.2, -3.0)),
   ],
 };
 
@@ -198,9 +263,38 @@ export const mapFor = (theme: unknown): WorldMap => MAPS[isTheme(theme) ? theme 
 
 // ───────────────────────── walking, for every map ─────────────────────────
 
-/** Which room (by its place along the strip) a point is in. */
-export function roomAt(x: number, map: WorldMap = GALLERY_MAP): MapRoom {
+/** Which room a point is in: by its place along the strip, or (given z) a zone like upstairs. */
+export function roomAt(x: number, map: WorldMap = GALLERY_MAP, z?: number): MapRoom {
+  if (z !== undefined) {
+    const zone = map.zones?.find(r => x >= r.x0 && x < r.x1 && z >= r.z0 && z < r.z1);
+    if (zone) return zone;
+  }
   return map.rooms.find(r => x >= r.x0 && x < r.x1) ?? (x < map.rooms[0].x0 ? map.rooms[0] : map.rooms[map.rooms.length - 1]);
+}
+
+/** Where a point of the walking map is drawn (y = how high its floor is). */
+export function toWorld(map: WorldMap, p: Vec2): { x: number; y: number; z: number } {
+  for (const l of map.lifts ?? []) {
+    const r = l.rect;
+    if (p.x >= r.x0 && p.x <= r.x1 && p.z >= r.z0 && p.z <= r.z1) {
+      const u = (p.z - r.z0) / (r.z1 - r.z0);
+      return { x: p.x, y: l.y0 + (l.y1 - l.y0) * u, z: l.wz0 + (l.wz1 - l.wz0) * u };
+    }
+  }
+  return { x: p.x, y: 0, z: p.z };
+}
+
+/** The walking-map point for a spot on a drawn floor (a tap), the inverse of `toWorld`. */
+export function fromWorld(map: WorldMap, w: { x: number; y: number; z: number }): Vec2 {
+  for (const l of map.lifts ?? []) {
+    const r = l.rect;
+    if (w.x < r.x0 || w.x > r.x1) continue;
+    const u = (w.z - l.wz0) / (l.wz1 - l.wz0);
+    if (u < -1e-6 || u > 1 + 1e-6) continue;
+    if (Math.abs(w.y - (l.y0 + (l.y1 - l.y0) * u)) > 0.5) continue; // a different floor at this spot
+    return { x: w.x, z: r.z0 + (r.z1 - r.z0) * u };
+  }
+  return { x: w.x, z: w.z };
 }
 
 function inRect(p: Vec2, r: Rect, pad: number) {

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { HOME, HOME_MAP } from '@party/shared';
+import { HOME, HOME_MAP, HOUSE } from '@party/shared';
 import { SkyPainter, skyAt } from './sky';
 import { canvasTexture, textPlate } from './textures';
 import { glow } from './decor';
@@ -14,9 +14,13 @@ import { doorways, wallPieces } from './walls';
  *   테라스 terrace (24–36): deck, bean bags, a grill, string lights, the sky and the skyline
  * Everything that blocks you is drawn over the shared HOME map, so the server agrees.
  */
-const H = 3.3;   // wall height
+const H = 3.3;   // wall height (one storey)
+const H2 = 6.6;  // the living room is two storeys high
 const LOW = 1.0; // cut-away wall height toward the camera
 const B = HOME_MAP.bounds;
+const BACK = HOUSE.back; // the back wall (the walking map reaches further back: that's upstairs)
+const UP = HOUSE.upY;    // landing floor height
+const SLAB = 0.25;       // landing floor thickness
 
 export function buildHome(scene: THREE.Scene, renderer: THREE.WebGLRenderer): WorldParts {
   const maxAniso = renderer.capabilities.getMaxAnisotropy();
@@ -60,12 +64,22 @@ export function buildHome(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
 
   // ---- floors, and one invisible plane for taps ----
   const floorPlane = (x0: number, x1: number, mat: THREE.Material) => {
-    const f = add(new THREE.PlaneGeometry(x1 - x0, B.z1 - B.z0), mat, (x0 + x1) / 2, 0, 0);
+    const f = add(new THREE.PlaneGeometry(x1 - x0, B.z1 - BACK), mat, (x0 + x1) / 2, 0, (BACK + B.z1) / 2);
     f.rotation.x = -Math.PI / 2;
   };
   floorPlane(0, 12, M.oak); floorPlane(12, 24, M.tile); floorPlane(24, 36, M.deck);
-  const floor = add(new THREE.PlaneGeometry(B.x1 - B.x0, B.z1 - B.z0), new THREE.MeshBasicMaterial(), (B.x0 + B.x1) / 2, 0, 0);
-  floor.rotation.x = -Math.PI / 2; floor.visible = false; floor.name = 'floor';
+  // what taps hit: the ground floor, the landing upstairs, and the slope of the stairs
+  const floor = new THREE.Group(); floor.name = 'floor'; group.add(floor);
+  const tapPlane = (w: number, d: number, x: number, y: number, z: number, tilt = 0) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshBasicMaterial());
+    m.position.set(x, y, z); m.rotation.x = -Math.PI / 2 + tilt; m.visible = false; floor.add(m);
+  };
+  tapPlane(B.x1 - B.x0, B.z1 - BACK, (B.x0 + B.x1) / 2, 0, (BACK + B.z1) / 2);
+  tapPlane(HOUSE.upX1, HOUSE.edge - BACK, HOUSE.upX1 / 2, UP, (BACK + HOUSE.edge) / 2);
+  {
+    const run = HOUSE.stairFoot - HOUSE.edge, slope = Math.atan2(UP, run);
+    tapPlane(HOUSE.stairX, Math.hypot(run, UP), HOUSE.stairX / 2, UP / 2, (HOUSE.edge + HOUSE.stairFoot) / 2, -slope);
+  }
   // a dark stage in front, and a plinth along the open edge
   const stage = add(new THREE.PlaneGeometry(400, 200), new THREE.MeshBasicMaterial({ color: 0x15100f }), 18, -0.3, B.z1 + 100);
   stage.rotation.x = -Math.PI / 2;
@@ -74,21 +88,36 @@ export function buildHome(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
 
   // ---- walls ----
   // back walls of the two indoor rooms
-  const back = (x0: number, x1: number, mat: THREE.Material) => add(new THREE.PlaneGeometry(x1 - x0, H), mat, (x0 + x1) / 2, H / 2, B.z0);
-  back(0, 12, M.paper);
+  const back = (x0: number, x1: number, mat: THREE.Material, h = H) => add(new THREE.PlaneGeometry(x1 - x0, h), mat, (x0 + x1) / 2, h / 2, BACK);
+  const tallPaper = M.paper.clone(); tallPaper.map = (M.paper.map as THREE.Texture).clone(); tallPaper.map.repeat.set(6, 3.2); tallPaper.map.needsUpdate = true;
+  back(0, 12, tallPaper, H2);
   back(12, 24, M.kitchenWall);
-  box(12, 0.12, 0.04, M.trim, 6, 0.06, B.z0 + 0.02);         // skirting
-  box(11.4, 0.9, 0.03, M.subway, 18, 1.35, B.z0 + 0.02);     // splashback tiles
-  box(24, 0.14, 0.14, M.trim, 12, H - 0.07, B.z0 + 0.07);     // crown moulding
+  box(12, 0.12, 0.04, M.trim, 6, 0.06, BACK + 0.02);         // skirting
+  box(11.4, 0.9, 0.03, M.subway, 18, 1.35, BACK + 0.02);     // splashback tiles
+  box(12, 0.14, 0.14, M.trim, 18, H - 0.07, BACK + 0.07);     // crown moulding (kitchen)
+  box(12, 0.14, 0.14, M.trim, 6, H2 - 0.07, BACK + 0.07);     // and up at the top of the living room
   // the closed outer wall on the left: tall at the back, low toward the camera
   const outerWall = (x: number, mat: THREE.Material) => {
     const tallTo = -1.5;
-    box(0.14, H, tallTo - B.z0, mat, x, H / 2, (B.z0 + tallTo) / 2);
+    box(0.14, H, tallTo - BACK, mat, x, H / 2, (BACK + tallTo) / 2);
     box(0.14, LOW, B.z1 - tallTo, mat, x, LOW / 2, (tallTo + B.z1) / 2);
     box(0.2, 0.05, B.z1 - tallTo, M.trim, x, LOW, (tallTo + B.z1) / 2);
   };
   const paintSide = std('#cbbfa7', { roughness: 0.9 });
-  outerWall(0, paintSide);
+  void outerWall;
+  // The left wall climbs with the stairs: two storeys at the back, stepping down
+  // over the stairs, low toward the camera.
+  {
+    const sh = new THREE.Shape();
+    // drawn in (−z, y): the shape's x runs from the front (−z small) to the back
+    const pts: [number, number][] = [[-B.z1, 0], [-B.z1, LOW], [-1.0, LOW], [-1.0, 3.4], [-HOUSE.edge, 5.6], [-HOUSE.edge, H2], [-BACK, H2], [-BACK, 0]];
+    sh.moveTo(...pts[0]); for (const p of pts.slice(1)) sh.lineTo(...p);
+    const wall = add(new THREE.ExtrudeGeometry(sh, { depth: 0.14, bevelEnabled: false }), paintSide, -0.07, 0, 0, Math.PI / 2);
+    void wall;
+    box(0.2, 0.05, B.z1 - 1.0, M.trim, 0, LOW, (1.0 + B.z1) / 2);
+  }
+  // the right-hand wall of the tall living room, above the kitchen's ceiling height
+  box(0.14, H2 - H, -1.5 - BACK, paintSide, 12, H + (H2 - H) / 2, (BACK - 1.5) / 2);
   // Inner walls come straight from the shared map, so every doorway you can
   // walk through is one you can see. The kitchen→terrace wall is glass.
   const pieces = wallPieces(HOME_MAP, H, LOW);
@@ -134,17 +163,17 @@ export function buildHome(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
   const sky = new SkyPainter();
   const city = skylineTexture();
   {
-    const wx = 5, wy = 2.25, ww = 4, wh = 1.5;
-    add(new THREE.PlaneGeometry(ww, wh), new THREE.MeshBasicMaterial({ map: sky.texture }), wx, wy, B.z0 + 0.03);
+    const wx = 5, wy = 1.8, ww = 4, wh = 1.3;
+    add(new THREE.PlaneGeometry(ww, wh), new THREE.MeshBasicMaterial({ map: sky.texture }), wx, wy, BACK + 0.03);
     const cityTex = city.texture.clone(); cityTex.repeat.set(0.35, 0.8); cityTex.offset.set(0.1, 0); cityTex.needsUpdate = true;
-    const cityWin = add(new THREE.PlaneGeometry(ww, wh * 0.8), new THREE.MeshBasicMaterial({ map: cityTex, transparent: true }), wx, wy - wh * 0.1, B.z0 + 0.04);
+    const cityWin = add(new THREE.PlaneGeometry(ww, wh * 0.8), new THREE.MeshBasicMaterial({ map: cityTex, transparent: true }), wx, wy - wh * 0.1, BACK + 0.04);
     cityWin.userData.city = true;
     for (const [w, h, x, y] of [[ww + 0.16, 0.1, wx, wy - wh / 2], [ww + 0.16, 0.1, wx, wy + wh / 2], [0.1, wh, wx - ww / 2, wy], [0.1, wh, wx + ww / 2, wy], [0.05, wh, wx, wy]] as const)
-      box(w, h, 0.08, M.trim, x, y, B.z0 + 0.06);
-    box(ww + 0.5, 0.06, 0.22, M.trim, wx, wy - wh / 2 - 0.07, B.z0 + 0.11); // sill
+      box(w, h, 0.08, M.trim, x, y, BACK + 0.06);
+    box(ww + 0.5, 0.06, 0.22, M.trim, wx, wy - wh / 2 - 0.07, BACK + 0.11); // sill
     // curtains
-    for (const s of [-1, 1]) { const c = box(0.5, H - 0.6, 0.12, M.rose, wx + s * (ww / 2 + 0.35), (H - 0.6) / 2 + 0.3, B.z0 + 0.14); c.scale.x = 1; }
-    box(ww + 1.8, 0.05, 0.05, M.steel, wx, H - 0.25, B.z0 + 0.14);
+    for (const s of [-1, 1]) { const c = box(0.5, 2.45, 0.12, M.rose, wx + s * (ww / 2 + 0.35), 2.45 / 2 + 0.25, BACK + 0.14); c.scale.x = 1; }
+    box(ww + 1.8, 0.05, 0.05, M.steel, wx, 2.72, BACK + 0.14);
   }
   // sofa
   {
@@ -194,29 +223,29 @@ export function buildHome(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
   const fireLight = new THREE.PointLight(0xff9a4a, 1.2, 7, 1.6);
   {
     const f = HOME.fireplace, cx = (f.x0 + f.x1) / 2, w = f.x1 - f.x0;
-    box(w, 1.25, 0.55, M.brick, cx, 0.625, B.z0 + 0.275);
-    box(1.6, H - 1.3, 0.32, M.brick, cx, 1.3 + (H - 1.3) / 2, B.z0 + 0.16);
+    box(w, 1.25, 0.55, M.brick, cx, 0.625, BACK + 0.275);
+    box(1.6, UP - SLAB - 1.3, 0.32, M.brick, cx, 1.3 + (UP - SLAB - 1.3) / 2, BACK + 0.16);
     // the opening: a black face just proud of the surround, with the fire burning in front of it
-    add(new THREE.PlaneGeometry(1.2, 0.78), M.black, cx, 0.45, B.z0 + 0.556);
-    box(w + 0.3, 0.08, 0.66, M.walnut, cx, 1.29, B.z0 + 0.33);
-    for (const dx of [-0.25, 0.05, 0.3]) { const log = cyl(0.06, 0.06, 0.5, std('#4a2e1c'), cx + dx * 0.6, 0.12, B.z0 + 0.66, 6); log.rotation.z = Math.PI / 2; log.rotation.y = dx; }
-    box(1.3, 0.06, 0.3, M.black, cx, 0.03, B.z0 + 0.7); // hearth
-    for (const dx of [-0.22, 0, 0.22]) fx.add(cx + dx, 0.15, B.z0 + 0.68, 4.2, 0xff8a3a);
-    fireLight.position.set(cx, 0.6, B.z0 + 1.2); group.add(fireLight);
+    add(new THREE.PlaneGeometry(1.2, 0.78), M.black, cx, 0.45, BACK + 0.556);
+    box(w + 0.3, 0.08, 0.66, M.walnut, cx, 1.29, BACK + 0.33);
+    for (const dx of [-0.25, 0.05, 0.3]) { const log = cyl(0.06, 0.06, 0.5, std('#4a2e1c'), cx + dx * 0.6, 0.12, BACK + 0.66, 6); log.rotation.z = Math.PI / 2; log.rotation.y = dx; }
+    box(1.3, 0.06, 0.3, M.black, cx, 0.03, BACK + 0.7); // hearth
+    for (const dx of [-0.22, 0, 0.22]) fx.add(cx + dx, 0.15, BACK + 0.68, 4.2, 0xff8a3a);
+    fireLight.position.set(cx, 0.6, BACK + 1.2); group.add(fireLight);
     // a warm glow on the floor in front of it
-    const pool = add(new THREE.CircleGeometry(1.5, 24), new THREE.MeshBasicMaterial({ map: glow(), color: 0xff9a4a, transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending }), cx, 0.012, B.z0 + 1.4);
+    const pool = add(new THREE.CircleGeometry(1.5, 24), new THREE.MeshBasicMaterial({ map: glow(), color: 0xff9a4a, transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending }), cx, 0.012, BACK + 1.4);
     pool.rotation.x = -Math.PI / 2; pool.scale.set(1.3, 0.8, 1);
     // photos and a little clock on the mantel
     const photoCols = ['#9fb4e0', '#f0c75e', '#8fb8a0'];
     photoCols.forEach((c, i) => {
       const x = cx - 0.75 + i * 0.5;
-      box(0.3, 0.36, 0.04, M.walnut, x, 1.52, B.z0 + 0.22).rotation.x = -0.12;
-      box(0.22, 0.27, 0.01, std(c, { roughness: 0.6 }), x, 1.52, B.z0 + 0.245).rotation.x = -0.12;
+      box(0.3, 0.36, 0.04, M.walnut, x, 1.52, BACK + 0.22).rotation.x = -0.12;
+      box(0.22, 0.27, 0.01, std(c, { roughness: 0.6 }), x, 1.52, BACK + 0.245).rotation.x = -0.12;
     });
-    cyl(0.1, 0.1, 0.05, M.cream, cx + 0.75, 1.45, B.z0 + 0.25, 16).rotation.x = Math.PI / 2;
+    cyl(0.1, 0.1, 0.05, M.cream, cx + 0.75, 1.45, BACK + 0.25, 16).rotation.x = Math.PI / 2;
     // a round mirror above
-    const mirror = add(new THREE.CircleGeometry(0.42, 24), std('#d6dde0', { metalness: 0.6, roughness: 0.15 }), cx, 2.35, B.z0 + 0.33);
-    const rim = add(new THREE.TorusGeometry(0.43, 0.035, 6, 28), std('#c9a25e', { metalness: 0.7, roughness: 0.3 }), cx, 2.35, B.z0 + 0.34);
+    const mirror = add(new THREE.CircleGeometry(0.42, 24), std('#d6dde0', { metalness: 0.6, roughness: 0.15 }), cx, 2.35, BACK + 0.33);
+    const rim = add(new THREE.TorusGeometry(0.43, 0.035, 6, 28), std('#c9a25e', { metalness: 0.7, roughness: 0.3 }), cx, 2.35, BACK + 0.34);
     void mirror; void rim;
   }
   // record player on a low cabinet, playing, little notes floating up
@@ -248,8 +277,8 @@ export function buildHome(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
       x.fillStyle = '#2f5d62'; x.fillRect(0, h * 0.62, w, h * 0.38);
       x.fillStyle = '#2a2024'; x.font = '600 16px "Gowun Batang", serif'; x.textAlign = 'center'; x.fillText('오늘도 수고했어', w / 2, h * 0.88);
     });
-    box(0.94, 1.22, 0.04, M.walnut, 1.9, 2.15, B.z0 + 0.03);
-    add(new THREE.PlaneGeometry(0.84, 1.12), new THREE.MeshBasicMaterial({ map: poster }), 1.9, 2.15, B.z0 + 0.06);
+    box(0.94, 1.22, 0.04, M.walnut, 1.9, 2.15, BACK + 0.03);
+    add(new THREE.PlaneGeometry(0.84, 1.12), new THREE.MeshBasicMaterial({ map: poster }), 1.9, 2.15, BACK + 0.06);
   }
 
   // ---- 부엌: kitchen ----
@@ -273,12 +302,12 @@ export function buildHome(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
     // magnets and a drawing on the fridge
     for (const [x, y, col] of [[23.0, 1.7, '#e85d75'], [23.35, 1.55, '#f0c75e'], [23.15, 1.25, '#6fb3c8']] as const) box(0.08, 0.08, 0.02, std(col), x, y, c.z1 + 0.012);
     // upper cabinets and a hood on the right
-    box(3.3, 0.72, 0.36, M.sage, 20.9, 2.36, B.z0 + 0.18);
-    box(0.9, 0.3, 0.5, M.steel, 20.5, 1.85, B.z0 + 0.25);
+    box(3.3, 0.72, 0.36, M.sage, 20.9, 2.36, BACK + 0.18);
+    box(0.9, 0.3, 0.5, M.steel, 20.5, 1.85, BACK + 0.25);
     // a banner and flags on the left
     const banner = textPlate([{ text: '🎉 퇴근 축하해요 🎉', font: '700 46px "Gowun Batang", serif', color: '#2a2024', y: 72 }], 512, 112, '#f6e7c8');
-    add(new THREE.PlaneGeometry(3.4, 0.74), new THREE.MeshBasicMaterial({ map: banner }), 15.8, 2.35, B.z0 + 0.05);
-    bunting(group, new THREE.Vector3(12.4, 3.05, B.z0 + 0.1), new THREE.Vector3(19.0, 3.05, B.z0 + 0.1));
+    add(new THREE.PlaneGeometry(3.4, 0.74), new THREE.MeshBasicMaterial({ map: banner }), 15.8, 2.35, BACK + 0.05);
+    bunting(group, new THREE.Vector3(12.4, 3.05, BACK + 0.1), new THREE.Vector3(19.0, 3.05, BACK + 0.1));
   }
   // island full of party food
   {
@@ -339,8 +368,8 @@ export function buildHome(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
       const n = Math.round(len / 1.5);
       for (let k = 0; k <= n; k++) { const p = from.clone().lerp(to, k / n); box(0.06, 1.05, 0.06, M.frame, p.x, 0.525, p.z); }
     };
-    rail(new THREE.Vector3(24.1, 0, B.z0 + 0.05), new THREE.Vector3(B.x1 - 0.05, 0, B.z0 + 0.05));
-    rail(new THREE.Vector3(B.x1 - 0.05, 0, B.z0 + 0.05), new THREE.Vector3(B.x1 - 0.05, 0, B.z1 - 0.1));
+    rail(new THREE.Vector3(24.1, 0, BACK + 0.05), new THREE.Vector3(B.x1 - 0.05, 0, BACK + 0.05));
+    rail(new THREE.Vector3(B.x1 - 0.05, 0, BACK + 0.05), new THREE.Vector3(B.x1 - 0.05, 0, B.z1 - 0.1));
   }
   // The view from the terrace is a painted stage backdrop standing just past the
   // railing — sky and skyline, exactly as wide as the terrace, its top and edges
@@ -392,7 +421,8 @@ export function buildHome(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
   lights.strand(new THREE.Vector3(24.15, 3.0, -4.6), new THREE.Vector3(B.x1 - 0.25, 2.85, -2.5), 0.32, 12, 0.5);
   lights.strand(new THREE.Vector3(24.15, 3.0, -0.6), new THREE.Vector3(B.x1 - 0.25, 2.85, 1.0), 0.32, 12, 0.5);
   // indoor strands along the crown moulding
-  for (const [x0, x1] of [[0.2, 11.8], [12.2, 23.8]]) lights.strand(new THREE.Vector3(x0, H - 0.18, B.z0 + 0.16), new THREE.Vector3(x1, H - 0.18, B.z0 + 0.16), 0.3, 1.5, 0.14);
+  lights.strand(new THREE.Vector3(12.2, H - 0.18, BACK + 0.16), new THREE.Vector3(23.8, H - 0.18, BACK + 0.16), 0.3, 1.5, 0.14);
+  const upstairs = buildUpstairs(group, M, paintSide, lights, sky.texture);
   lights.done();
 
   // ---- lights ----
@@ -413,6 +443,7 @@ export function buildHome(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
     warm.intensity = 0.35 + 0.5 * s.night;
     fireLight.intensity = 0.8 + 1.4 * s.night;
     kitchenLight.intensity = 0.4 + 0.8 * s.night;
+    upstairs.light.intensity = 0.35 + 0.9 * s.night;
     return s;
   };
 
@@ -440,6 +471,7 @@ export function buildHome(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
         (n.s.material as THREE.SpriteMaterial).opacity = Math.sin(u * Math.PI) * 0.9;
       }
       fireLight.intensity *= 0.97 + 0.06 * Math.random();
+      upstairs.tick(dt);
     },
   };
 }
@@ -505,4 +537,218 @@ function terraceBackdrop(skyCanvas: HTMLCanvasElement, cityCanvas: HTMLCanvasEle
     texture.needsUpdate = true;
   };
   return { texture, paint };
+}
+
+/**
+ * The second storey: a staircase up the left wall with a white banister and a
+ * runner, family photos climbing with it, and a landing over the back of the
+ * living room — a loveseat looking down on the party, two doors, a bookshelf,
+ * a game corner with a TV and a bean bag. A gable tops the tall back wall so
+ * the whole thing reads as a house.
+ */
+function buildUpstairs(
+  group: THREE.Group,
+  M: Record<string, THREE.MeshStandardMaterial>,
+  paintSide: THREE.Material,
+  lights: ReturnType<typeof stringLights>,
+  skyTex: THREE.Texture,
+) {
+  const { add, box, cyl } = builder(group);
+  const white = std('#f6f1e8', { roughness: 0.55 });
+  const runner = std('#8c2f39', { roughness: 1 });
+  const foot = HOUSE.stairFoot, top = HOUSE.edge, SX = HOUSE.stairX;
+  const stairY = (z: number) => UP * Math.min(1, Math.max(0, (foot - z) / (foot - top)));
+
+  // ---- the stairs: solid steps, white risers, a red runner ----
+  const N = 16, run = (foot - top) / N, rise = UP / N, sw = SX - 0.07, sx = 0.07 + sw / 2;
+  for (let i = 0; i < N; i++) {
+    const y = (i + 1) * rise, zc = foot - (i + 0.5) * run;
+    box(sw, y, run, M.oak, sx, y / 2, zc);
+    box(sw + 0.03, 0.035, run + 0.03, M.walnut, sx, y, zc + 0.015);           // tread nosing
+    box(sw - 0.02, rise - 0.035, 0.015, white, sx, y - rise / 2 - 0.02, zc + run / 2 + 0.008); // riser
+    box(0.78, 0.012, run, runner, sx, y + 0.024, zc);
+  }
+  // the side of the staircase facing the room: a white panelled wall under the slope
+  {
+    const sh = new THREE.Shape();
+    sh.moveTo(-foot, 0); sh.lineTo(-foot, rise); sh.lineTo(-top, UP - SLAB); sh.lineTo(-top, 0); sh.closePath();
+    add(new THREE.ExtrudeGeometry(sh, { depth: 0.03, bevelEnabled: false }), std('#ece5d8', { roughness: 0.7 }), SX - 0.02, 0, 0, Math.PI / 2);
+    // panel moulding: a few slim frames along it
+    for (let k = 0; k < 4; k++) {
+      const z0 = foot - 0.5 - k * 1.15, z1 = z0 - 0.9, yTop = stairY(z0) - 0.25;
+      if (yTop < 0.6) continue;
+      const fr = std('#ddd3c2', { roughness: 0.7 });
+      for (const [h, y] of [[0.03, 0.25], [0.03, yTop]] as const) box(0.02, h, z0 - z1, fr, SX + 0.015, y, (z0 + z1) / 2);
+      for (const z of [z0, z1]) box(0.02, yTop - 0.25, 0.03, fr, SX + 0.015, (yTop + 0.25) / 2, z);
+    }
+  }
+  // a white skirt board along the open side, following the slope
+  const slope = Math.atan2(UP, foot - top), len = Math.hypot(UP, foot - top);
+  const skirt = box(0.05, 0.3, len, white, SX + 0.02, UP / 2 - 0.05, (foot + top) / 2); skirt.rotation.x = slope;
+  // banister: newel posts, a sloped handrail, balusters on every other step
+  for (const [z, y] of [[foot - 0.05, 0], [top + 0.05, UP]] as const) {
+    box(0.12, 1.15, 0.12, white, SX + 0.04, y + 0.575, z);
+    cyl(0.07, 0.07, 0.08, white, SX + 0.04, y + 1.19, z, 12);
+  }
+  const rail = box(0.07, 0.07, len + 0.1, M.walnut, SX + 0.04, UP / 2 + 0.92, (foot + top) / 2); rail.rotation.x = slope;
+  for (let i = 1; i < N; i += 2) {
+    const z = foot - (i + 0.5) * run, y = (i + 1) * rise;
+    cyl(0.018, 0.018, 0.9, white, SX + 0.04, y + 0.45, z, 6);
+  }
+
+  // ---- family photos climbing the stair wall ----
+  const photo = (k: number) => canvasTexture(96, 120, (x, w, h) => {
+    const bg = ['#f2d7a0', '#bcd8e6', '#f1c1c8', '#cfe3c1', '#e6d3f0', '#f6e2b8'][k % 6];
+    x.fillStyle = bg; x.fillRect(0, 0, w, h);
+    if (k % 3 === 0) {           // a sunny day out: hills and a sun
+      x.fillStyle = '#f0b14a'; x.beginPath(); x.arc(w * 0.72, h * 0.3, 14, 0, 7); x.fill();
+      x.fillStyle = '#6f9d63'; x.beginPath(); x.ellipse(w * 0.3, h, w * 0.6, h * 0.42, 0, 0, 7); x.fill();
+      x.fillStyle = '#4e7d50'; x.beginPath(); x.ellipse(w * 0.9, h, w * 0.5, h * 0.3, 0, 0, 7); x.fill();
+    } else {                     // a portrait of someone in the family: a round animal face
+      const fur = ['#c98b5a', '#5b5f6b', '#e9a8b8', '#8fb8a0'][k % 4];
+      x.fillStyle = fur;
+      for (const s of [-1, 1]) { x.beginPath(); x.arc(w / 2 + s * 24, h * 0.32, 11, 0, 7); x.fill(); }
+      x.beginPath(); x.arc(w / 2, h * 0.5, 30, 0, 7); x.fill();
+      x.fillRect(w / 2 - 34, h * 0.74, 68, h * 0.3);
+      x.fillStyle = '#1d1a1c';
+      for (const s of [-1, 1]) { x.beginPath(); x.ellipse(w / 2 + s * 11, h * 0.48, 3, 2, 0, 0, 7); x.fill(); }
+      x.strokeStyle = '#1d1a1c'; x.lineWidth = 2; x.beginPath(); x.arc(w / 2, h * 0.56, 7, 0.2, Math.PI - 0.2); x.stroke();
+    }
+  });
+  const frames: [number, number, number, number][] = [ // z, width, height, extra y
+    [0.55, 0.5, 0.62, 0], [-0.35, 0.42, 0.42, 0.25], [-1.05, 0.56, 0.7, -0.1], [-1.85, 0.4, 0.5, 0.2], [-3.2, 0.62, 0.48, 0.1], [-4.2, 0.46, 0.58, -0.05],
+  ];
+  frames.forEach(([z, fw, fh, dy], k) => {
+    const y = (z < top ? UP : stairY(z)) + 1.55 + dy;
+    box(0.04, fh + 0.08, fw + 0.08, k % 2 ? M.walnut : std('#c9a25e', { metalness: 0.5, roughness: 0.35 }), 0.09, y, z);
+    add(new THREE.PlaneGeometry(fw, fh), new THREE.MeshBasicMaterial({ map: photo(k) }), 0.115, y, z, Math.PI / 2);
+  });
+
+  // ---- the landing ----
+  const depth = top - BACK, cz = (BACK + top) / 2;
+  box(HOUSE.upX1, SLAB, depth, M.oak, HOUSE.upX1 / 2, UP - SLAB / 2, cz);
+  const ceil = add(new THREE.PlaneGeometry(HOUSE.upX1 - SX, depth), white, (SX + HOUSE.upX1) / 2, UP - SLAB - 0.002, cz);
+  ceil.rotation.x = Math.PI / 2;
+  box(HOUSE.upX1 - SX, SLAB + 0.04, 0.06, white, (SX + HOUSE.upX1) / 2, UP - SLAB / 2, top + 0.03); // the slab's front edge
+  // railing along the edge, looking down on the living room
+  const rx0 = SX + 0.04, rx1 = HOUSE.upX1 - 0.05, rz = top - 0.03;
+  box(rx1 - rx0, 0.07, 0.08, M.walnut, (rx0 + rx1) / 2, UP + 0.95, rz);
+  box(rx1 - rx0, 0.05, 0.05, white, (rx0 + rx1) / 2, UP + 0.1, rz);
+  for (let x = rx0 + 0.22; x < rx1; x += 0.24) cyl(0.017, 0.017, 0.86, white, x, UP + 0.52, rz, 6);
+  box(0.12, 1.1, 0.12, white, rx1, UP + 0.55, rz);
+  // fairy lights twisted along the handrail
+  lights.strand(new THREE.Vector3(rx0 + 0.1, UP + 1.0, rz + 0.02), new THREE.Vector3(rx1 - 0.1, UP + 1.0, rz + 0.02), 0.28, 1.4, 0.12);
+  // two little pendants under the landing, over the sofa
+  for (const x of [3.7, 7.3]) {
+    group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x, UP - SLAB, top - 0.6), new THREE.Vector3(x, UP - SLAB - 0.35, top - 0.6)]), new THREE.LineBasicMaterial({ color: 0x2a2a2a })));
+    add(new THREE.SphereGeometry(0.12, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), std('#f4e6c8', { side: THREE.DoubleSide, emissive: 0xffd9a0, emissiveIntensity: 0.5 }), x, UP - SLAB - 0.35, top - 0.6).rotation.x = Math.PI;
+    lampGlow(group, x, UP - SLAB - 0.45, top - 0.6, 0.9);
+  }
+
+  // ---- upstairs: everything stands on the landing ----
+  const upG = new THREE.Group(); upG.position.y = UP; group.add(upG);
+  const u = builder(upG);
+  // a long runner rug along the landing
+  const rug = u.add(new THREE.PlaneGeometry(9, 1.0), std('#3d5a6c', { roughness: 1 }), 6.6, 0.005, -3.2); rug.rotation.x = -Math.PI / 2;
+  const rugBorder = u.add(new THREE.PlaneGeometry(8.6, 0.7), std('#d9c79f', { roughness: 1 }), 6.6, 0.007, -3.2); rugBorder.rotation.x = -Math.PI / 2;
+  // two doors along the back wall, with their plaques
+  for (const [x, label] of [[4.1, '손님방 🛏️'], [8.05, '작업실 🎨']] as const) {
+    u.box(1.04, 2.2, 0.06, white, x, 1.1, BACK + 0.03);                       // frame
+    u.box(0.86, 2.05, 0.05, std('#b98a5e', { roughness: 0.55 }), x, 1.03, BACK + 0.06);
+    for (const [py, ph] of [[1.55, 0.7], [0.55, 0.7]] as const) u.box(0.62, ph, 0.02, std('#a77a4f', { roughness: 0.6 }), x, py, BACK + 0.09);
+    u.cyl(0.035, 0.035, 0.05, std('#c9a25e', { metalness: 0.7, roughness: 0.3 }), x + 0.32, 1.0, BACK + 0.11, 10).rotation.x = Math.PI / 2;
+    const plate = textPlate([{ text: label, font: '600 34px "IBM Plex Sans KR", sans-serif', color: '#2a2024', y: 46 }], 256, 64, '#f6e7c8');
+    u.add(new THREE.PlaneGeometry(0.46, 0.115), new THREE.MeshBasicMaterial({ map: plate }), x, 1.72, BACK + 0.105);
+  }
+  // a window above the loveseat with the visitor's own sky
+  {
+    const wx = 6, wy = 1.95;
+    u.add(new THREE.PlaneGeometry(1.7, 1.05), new THREE.MeshBasicMaterial({ map: skyTex }), wx, wy, BACK + 0.03);
+    for (const [w, h, x, y] of [[1.86, 0.08, wx, wy - 0.56], [1.86, 0.08, wx, wy + 0.56], [0.08, 1.05, wx - 0.89, wy], [0.08, 1.05, wx + 0.89, wy], [0.05, 1.05, wx, wy]] as const)
+      u.box(w, h, 0.07, white, x, y, BACK + 0.06);
+  }
+  // loveseat looking out over the railing
+  {
+    const s = HOME.loveseat, cx = (s.x0 + s.x1) / 2, w = s.x1 - s.x0, coral = std('#d9735e', { roughness: 0.95 });
+    u.box(w, 0.38, 0.8, coral, cx, 0.19, -4.6);
+    u.box(w, 0.6, 0.2, coral, cx, 0.68, -4.92);
+    for (const sx of [-1, 1]) u.box(0.2, 0.56, 0.8, coral, cx + sx * (w / 2 - 0.1), 0.38, -4.6);
+    for (const dx of [-0.5, 0.5]) u.box(0.9, 0.14, 0.62, coral, cx + dx, 0.45, -4.52);
+    const p = u.box(0.42, 0.38, 0.12, M.mustard, cx - 0.62, 0.75, -4.72); p.rotation.z = 0.15;
+  }
+  // an open bookshelf full of colourful books
+  {
+    const b = HOME.bookshelf, cx = (b.x0 + b.x1) / 2, w = b.x1 - b.x0, d = b.z1 - b.z0, H3 = 1.9;
+    u.box(w, H3, 0.03, M.walnut, cx, H3 / 2, BACK + 0.015);                                   // back
+    for (const sx of [-1, 1]) u.box(0.05, H3, d, M.walnut, cx + sx * (w / 2 - 0.025), H3 / 2, BACK + d / 2); // sides
+    for (let k = 0; k <= 4; k++) u.box(w, 0.04, d, M.walnut, cx, 0.02 + k * 0.465, BACK + d / 2);  // shelves
+    const cols = ['#c8553d', '#2f5d62', '#d9a441', '#6f9d63', '#8a6fb0', '#e9e2d0', '#3b5b8c'];
+    for (let shelf = 0; shelf < 4; shelf++) {
+      let x = b.x0 + 0.08;
+      while (x < b.x1 - 0.14) {
+        const bw = 0.05 + Math.random() * 0.05, bh = 0.25 + Math.random() * 0.13;
+        const book = u.box(bw, bh, 0.24, std(cols[(Math.random() * cols.length) | 0], { roughness: 0.8 }), x + bw / 2, 0.04 + shelf * 0.465 + bh / 2, BACK + 0.15);
+        if (Math.random() < 0.12) book.rotation.z = 0.18; // one leaning over
+        x += bw + 0.008;
+      }
+    }
+  }
+  // the game corner: a TV playing a little platformer, a console, a bean bag
+  const tvCanvas = document.createElement('canvas'); tvCanvas.width = 80; tvCanvas.height = 48;
+  const tvTex = new THREE.CanvasTexture(tvCanvas); tvTex.colorSpace = THREE.SRGBColorSpace; tvTex.magFilter = THREE.NearestFilter;
+  {
+    const c = HOME.tvConsole, cx = (c.x0 + c.x1) / 2;
+    u.block({ ...c, z0: BACK }, 0.5, M.walnut);
+    u.box(1.5, 0.88, 0.06, M.black, cx, 1.35, BACK + 0.05);
+    u.add(new THREE.PlaneGeometry(1.4, 0.8), new THREE.MeshBasicMaterial({ map: tvTex, toneMapped: false }), cx, 1.35, BACK + 0.085);
+    u.box(0.3, 0.05, 0.2, std('#e9e2d0'), cx - 0.6, 0.53, -4.75);             // the console
+    u.box(0.16, 0.04, 0.1, std('#2a2a2e'), cx + 0.3, 0.52, -4.72);            // a controller
+    lampGlow(upG, cx, 1.35, BACK + 0.4, 1.6, 0x7ad7ff);
+  }
+  {
+    const b = HOME.upBeanbag;
+    const bag = u.add(new THREE.SphereGeometry(b.r, 14, 10), std('#8a6fb0', { roughness: 1 }), b.x, 0.24, b.z);
+    bag.scale.set(1, 0.58, 1);
+    const dent = u.add(new THREE.SphereGeometry(b.r * 0.6, 12, 8), std('#755c9b', { roughness: 1 }), b.x, 0.39, b.z - 0.05); dent.scale.set(1, 0.35, 1);
+  }
+  pottedPlant(upG, HOME.upPlant, 0x8a5a3c, 1.1);
+  const light = new THREE.PointLight(0xffd9a8, 0.6, 8, 1.6);
+  light.position.set(6, UP + 2.1, -3.4); group.add(light);
+
+  // ---- a gable over the tall back wall, with a round attic window ----
+  {
+    const sh = new THREE.Shape();
+    sh.moveTo(-0.15, 0); sh.lineTo(6, 1.9); sh.lineTo(12.15, 0); sh.closePath();
+    const gable = add(new THREE.ExtrudeGeometry(sh, { depth: 0.14, bevelEnabled: false }), paintSide, 0, H2, BACK - 0.14);
+    void gable;
+    const edge = std('#5b3a2a', { roughness: 0.8 }), slopeLen = Math.hypot(6.15, 1.9), ang = Math.atan2(1.9, 6.15);
+    for (const s of [-1, 1]) { const e = box(slopeLen + 0.3, 0.16, 0.3, edge, 6 + s * 3.07, H2 + 0.98, BACK - 0.02); e.rotation.z = -s * ang; }
+    add(new THREE.CircleGeometry(0.42, 24), new THREE.MeshBasicMaterial({ map: skyTex }), 6, H2 + 0.75, BACK + 0.01);
+    const ring = add(new THREE.TorusGeometry(0.44, 0.05, 8, 28), white, 6, H2 + 0.75, BACK + 0.03); void ring;
+    for (const r of [0, Math.PI / 2]) { const bar = box(0.04, 0.84, 0.03, white, 6, H2 + 0.75, BACK + 0.03); bar.rotation.z = r; }
+  }
+
+  let t = 0, last = -1;
+  return {
+    light,
+    tick(dt: number) {
+      t += dt;
+      const frame = Math.floor(t * 10);
+      if (frame === last) return;
+      last = frame;
+      // a tiny side-scroller: hills scroll by, the hero hops over blocks
+      const g = tvCanvas.getContext('2d');
+      if (!g) return;
+      const W = tvCanvas.width, Hh = tvCanvas.height, off = (t * 18) % 40;
+      g.fillStyle = '#7ad7ff'; g.fillRect(0, 0, W, Hh);
+      g.fillStyle = '#ffffff'; for (let k = 0; k < 3; k++) g.fillRect(((k * 31 - t * 6) % 100 + 100) % 100 - 10, 6 + k * 4, 12, 3);
+      g.fillStyle = '#6f9d63'; for (let k = -1; k < 4; k++) { g.beginPath(); g.ellipse(k * 40 - off * 0.5, Hh - 8, 22, 12, 0, 0, 7); g.fill(); }
+      g.fillStyle = '#c8553d'; g.fillRect(0, Hh - 6, W, 6);
+      for (let k = 0; k < 3; k++) { g.fillStyle = '#d9a441'; g.fillRect(((k * 40 - off) % 120 + 120) % 120 - 20, Hh - 12, 6, 6); }
+      const hop = Math.abs(Math.sin(t * 3.2)) * 12;
+      g.fillStyle = '#f2e6d0'; g.fillRect(18, Hh - 16 - hop, 7, 8);
+      g.fillStyle = '#1d1a1c'; g.fillRect(22, Hh - 14 - hop, 1, 1);
+      tvTex.needsUpdate = true;
+    },
+  };
 }

@@ -1,7 +1,7 @@
 import {
   customColor,
   DOZE_AFTER, EMOTES, FIREWORK_COOLDOWN, nearStage, ENERGY, KINDS, MOOD_ENERGY, MOVE_HZ, HANDS, HATS, OUTFITS, WALK_SPEED, batteryOf, chargeRate, isNear, mapFor,
-  moveWithCollision, nearestWalkable, stepEnergy,
+  findPath, moveWithCollision, nearestWalkable, stepEnergy,
   type Emote, type Look, type Mood, type Seat, type Theme, type WorldMap,
 } from '@party/shared';
 import { Emitter, type NetPlayer, type PartyConnection, type PartyEvents } from './types';
@@ -53,6 +53,8 @@ const REPLIES = ['ㅋㅋㅋ 맞아요', '오 그래요?', '저도요!', '와 공
 interface Sim { energy: number; idle: number; moodSet?: boolean }
 interface Bot extends NetPlayer, Sim {
   target: { x: number; z: number } | null;
+  /** the rest of the way there, around furniture and up the stairs */
+  route: { x: number; z: number }[];
   /** The seat a bot is heading to, to sit down on when it gets there. */
   wantSeat: Seat | null;
   wait: number; lines: string[]; nextLine: number;
@@ -95,7 +97,7 @@ export class DemoConnection implements PartyConnection {
       this.bots.push({
         id: `bot${i}`, name: b.name + (opts.botSuffix ?? ''), look: lk, x: pos.x, z: pos.z, dir: Math.random() * 6, moving: false,
         energy: b.energy, battery: batteryOf(b.energy), seat: -1, dozing: false, idle: Math.random() * 20, mood: b.mood,
-        target: null, wantSeat: null, wait: 2 + Math.random() * 6, lines: LINES[this.theme][i], nextLine: 3 + Math.random() * 6,
+        target: null, route: [], wantSeat: null, wait: 2 + Math.random() * 6, lines: LINES[this.theme][i], nextLine: 3 + Math.random() * 6,
       });
     });
     // the most drained guest has already flopped onto a seat
@@ -185,11 +187,19 @@ export class DemoConnection implements PartyConnection {
     this.ev.emit('closed', 'left');
   }
 
+  /** Plan a walk (around furniture, through doorways, up the stairs) and set off. */
+  private headFor(b: Bot, to: { x: number; z: number }) {
+    const route = findPath(this.map, b, to);
+    if (!route) { b.target = null; b.route = []; b.wait = 2; return; }
+    b.route = route.slice(2);
+    b.target = { ...route[1] };
+  }
+
   private free(seat: Seat) {
     return this.me.seat !== seat.id && !this.bots.some(b => b.seat === seat.id || b.wantSeat?.id === seat.id);
   }
   private seatBot(b: Bot, seat: Seat) {
-    Object.assign(b, { seat: seat.id, x: seat.x, z: seat.z, dir: seat.dir, moving: false, wantSeat: null, target: null });
+    Object.assign(b, { seat: seat.id, x: seat.x, z: seat.z, dir: seat.dir, moving: false, wantSeat: null, target: null, route: [] });
     b.wait = 12 + Math.random() * 20;
   }
   private standUp(p: NetPlayer) {
@@ -219,13 +229,15 @@ export class DemoConnection implements PartyConnection {
         if ((b.wait -= dt) <= 0 && (b.energy >= ENERGY.max - 1 || Math.random() < 0.02)) { this.standUp(b); b.wait = 1 + Math.random() * 3; b.idle = 0; }
       } else if (b.target) {
         const dx = b.target.x - b.x, dz = b.target.z - b.z, d = Math.hypot(dx, dz);
-        if (d < 0.15) {
+        if (d < 0.15 && b.route.length) {
+          b.target = b.route.shift()!; // on to the next corner of the route
+        } else if (d < 0.15) {
           b.target = null; b.moving = false; b.wait = 3 + Math.random() * 9;
           if (b.wantSeat) { const s = b.wantSeat; b.wantSeat = null; if (this.free(s)) this.seatBot(b, s); }
         } else {
           const s = Math.min(d, WALK_SPEED * 0.75 * dt);
           const p = moveWithCollision(b, { x: b.x + (dx / d) * s, z: b.z + (dz / d) * s }, this.map);
-          if (Math.hypot(p.x - b.x, p.z - b.z) < s * 0.2) { b.target = null; b.wantSeat = null; b.moving = false; b.wait = 1; }
+          if (Math.hypot(p.x - b.x, p.z - b.z) < s * 0.2) { b.target = null; b.route = []; b.wantSeat = null; b.moving = false; b.wait = 1; }
           else { b.dir = Math.atan2(dx, dz); b.x = p.x; b.z = p.z; b.moving = true; b.idle = 0; }
         }
       } else if ((b.wait -= dt) <= 0) {
@@ -233,13 +245,13 @@ export class DemoConnection implements PartyConnection {
         const seats = this.map.seats.filter(s => this.free(s));
         if (b.energy < 60 && seats.length && Math.random() < 0.7) {
           const s = seats[(Math.random() * seats.length) | 0];
-          b.wantSeat = s; b.target = { ...s.stand };
+          b.wantSeat = s; this.headFor(b, s.stand);
         } else if (b.energy < ENERGY.low && Math.random() < 0.5) {
           b.wait = 6 + Math.random() * 8; // too tired to move just yet
         } else {
           const spots = this.map.spots;
           const s = spots[(Math.random() * spots.length) | 0];
-          b.target = nearestWalkable({ x: s.x + (Math.random() - 0.5), z: s.z + (Math.random() - 0.5) * 0.6 }, this.map);
+          this.headFor(b, nearestWalkable({ x: s.x + (Math.random() - 0.5), z: s.z + (Math.random() - 0.5) * 0.6 }, this.map));
         }
       }
       // chatting with you when you are close (unless they've nodded off)

@@ -89,4 +89,11 @@ describe('the route can actually be walked', () => {
       }
     }
   });
+
+  it('finds narrow gaps whatever the map edges are (the grid sits on round coordinates)', () => {
+    // a map whose back edge isn't on the grid: the sofa↔coffee-table gap must still be found
+    const map = { ...MAPS.home, bounds: { ...MAPS.home.bounds, z0: -9.4 } };
+    const sofa = MAPS.home.seats.find(s => s.x === 5 && s.z === -4)!;
+    expect(findPath(map, map.spawn, sofa.stand)).not.toBeNull();
+  });
 });

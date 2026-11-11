@@ -24,9 +24,12 @@ export function findPath(map: WorldMap, from: Vec2, to: Vec2, radius = AVATAR_RA
   const roomy = radius + CLEARANCE;
 
   const b = map.bounds;
-  const cols = Math.ceil((b.x1 - b.x0) / STEP) + 1, rows = Math.ceil((b.z1 - b.z0) / STEP) + 1;
-  const cell = (p: Vec2) => [Math.round((p.x - b.x0) / STEP), Math.round((p.z - b.z0) / STEP)] as const;
-  const at = (c: number, r: number): Vec2 => ({ x: b.x0 + c * STEP, z: b.z0 + r * STEP });
+  // the grid sits on round coordinates (multiples of STEP), whatever the map's edges,
+  // so narrow gaps between furniture always have a row or column running through them
+  const gx = Math.floor(b.x0 / STEP) * STEP, gz = Math.floor(b.z0 / STEP) * STEP;
+  const cols = Math.ceil((b.x1 - gx) / STEP) + 1, rows = Math.ceil((b.z1 - gz) / STEP) + 1;
+  const cell = (p: Vec2) => [Math.round((p.x - gx) / STEP), Math.round((p.z - gz) / STEP)] as const;
+  const at = (c: number, r: number): Vec2 => ({ x: gx + c * STEP, z: gz + r * STEP });
   const open = new Uint8Array(cols * rows); // 0 unknown, 1 walkable, 2 blocked
   const walk = (c: number, r: number) => {
     if (c < 0 || r < 0 || c >= cols || r >= rows) return false;

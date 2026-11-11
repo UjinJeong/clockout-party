@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {
-  ENERGY, MOOD_ICON, MOOD_LABEL, MOVE_HZ, NEAR_RADIUS, WALK_SPEED, findPath, inWater, isNear, nearStage, moveWithCollision, nearSeat, roomAt,
+  ENERGY, MOOD_ICON, MOOD_LABEL, MOVE_HZ, NEAR_RADIUS, WALK_SPEED, findPath, fromWorld, inWater, isNear, nearStage, toWorld, moveWithCollision, nearSeat, roomAt,
   type Battery, type Emote, type MapRoom, type Mood, type Seat, type Vec2,
 } from '@party/shared';
 import { buildAnimal, type AnimalRig } from '../avatar/animal';
@@ -131,7 +131,8 @@ export class Party {
     const hitMat = new THREE.MeshBasicMaterial({ visible: false });
     for (const seat of world.map.seats) {
       const hit = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.9), hitMat);
-      hit.position.set(seat.x, seat.y, seat.z - (seat.pose === 'lie' ? 0.6 : 0));
+      const w = toWorld(world.map, seat);
+      hit.position.set(w.x, w.y + seat.y, w.z - (seat.pose === 'lie' ? 0.6 : 0));
       hit.userData.seat = seat;
       scene.add(hit); this.seatHits.push(hit);
     }
@@ -186,8 +187,8 @@ export class Party {
     if (!route) { this.controls.target = null; this.path = []; return false; }
     this.path = route.slice(2);
     this.controls.target = { ...route[1] };
-    const end = route[route.length - 1];
-    this.targetMark.position.set(end.x, 0.02, end.z);
+    const end = toWorld(this.world.map, route[route.length - 1]);
+    this.targetMark.position.set(end.x, end.y + 0.02, end.z);
     this.targetMark.visible = true;
     return true;
   }
@@ -195,7 +196,8 @@ export class Party {
   private addGuest(p: NetPlayer) {
     if (this.guests.has(p.id)) { this.updateGuest(p); return; }
     const rig = buildAnimal(p.look);
-    rig.root.position.set(p.x, 0, p.z);
+    const w0 = toWorld(this.world.map, p);
+    rig.root.position.set(w0.x, w0.y, w0.z);
     rig.root.rotation.y = p.dir;
     this.scene.add(rig.root);
     const isSelf = p.id === this.conn.selfId;
@@ -214,7 +216,7 @@ export class Party {
     if (g0.arrive) { g0.dir = 0; g0.rig.root.visible = false; }
     if (isSelf && g0.arrive) { sound.setListener(p.x, p.z); sound.play('lift'); } // hum, ding, doors — in time with ARRIVAL
     g0.tag.setMood(p.mood ? MOOD_ICON[p.mood] : '', p.mood ? MOOD_LABEL[p.mood] : '');
-    if (isSelf) { this.camTarget.set(p.x, 0, p.z); this.snapCamera(); }
+    if (isSelf) { this.camTarget.set(w0.x, w0.y, w0.z); this.snapCamera(); }
     this.listDirty = true;
   }
 
@@ -269,7 +271,8 @@ export class Party {
     sound.play(kind, { at: { x: g.pos.x, z: g.pos.y }, pitch: from === this.conn.selfId ? 1 : 0.92 + (hash(from) % 6) * 0.03 });
     // a little burst of light in the room, from the raised glass or above the head
     if (kind === 'cheers' || kind === 'heart' || kind === 'clap') {
-      const at = new THREE.Vector3(g.pos.x, 1.75, g.pos.y);
+      const gw = toWorld(this.world.map, { x: g.pos.x, z: g.pos.y });
+      const at = new THREE.Vector3(gw.x, gw.y + 1.75, gw.z);
       const delay = kind === 'cheers' ? 520 : 200; // when the arm is at its highest
       setTimeout(() => {
         if (this.disposed) return;
@@ -299,11 +302,11 @@ export class Party {
       const p = this.world.paintings.find(q => q.mesh === paintingHit.object);
       if (p) { this.goTo(p); return; }
     }
-    const hit = this.ray.intersectObject(this.world.floor, false)[0];
+    const hit = this.ray.intersectObject(this.world.floor, true)[0];
     if (hit) {
       this.walkTo = null;
       this.sitAfterWalk = null;
-      this.walkAlong({ x: hit.point.x, z: hit.point.z });
+      this.walkAlong(fromWorld(this.world.map, hit.point)); // upstairs floors map back onto the walking map
     }
   };
 
@@ -360,10 +363,12 @@ export class Party {
         g.pos.y += (tz - g.pos.y) * k;
         g.dir = turn(g.dir, seat ? seat.dir : g.net.dir, dt * 10);
       }
-      g.rig.root.position.x = g.pos.x;
-      g.rig.root.position.z = g.pos.y;
+      // drawn where the walking map says — upstairs and on the stairs, that's higher up
+      const w = toWorld(this.world.map, { x: g.pos.x, z: g.pos.y });
+      g.rig.root.position.x = w.x;
+      g.rig.root.position.z = w.z;
       g.rig.root.rotation.y = g.dir;
-      const baseY = seat ? (seat.pose === 'lie' ? seat.y - 0.04 : seat.y - 0.24) : this.wade(g, dt);
+      const baseY = w.y + (seat ? (seat.pose === 'lie' ? seat.y - 0.04 : seat.y - 0.24) : this.wade(g, dt));
       let moving = !seat && (id === this.conn.selfId ? g.net.moving : g.net.moving || Math.hypot(g.net.x - g.pos.x, g.net.z - g.pos.y) > 0.05);
       if (g.arrive) moving = this.arriving(g, dt, id === this.conn.selfId) || moving;
       if (id === this.conn.selfId) this.footsteps(g, moving && !g.arrive, dt);
@@ -377,18 +382,20 @@ export class Party {
       // close view follows you fully; the overview keeps the old gentle framing
       const edge = 3.5 + this.zoom * 1;
       const b = this.world.map.bounds;
-      const tx = Math.min(b.x1 - edge, Math.max(b.x0 + edge, me.pos.x));
-      const tz = me.pos.y * (1 - this.zoom) + Math.max(-1.5, Math.min(1.5, me.pos.y * 0.5)) * this.zoom;
+      const wme = toWorld(this.world.map, { x: me.pos.x, z: me.pos.y });
+      const tx = Math.min(b.x1 - edge, Math.max(b.x0 + edge, wme.x));
+      const tz = wme.z * (1 - this.zoom) + Math.max(-1.5, Math.min(1.5, wme.z * 0.5)) * this.zoom;
       const k = 1 - Math.exp(-dt * 5);
       this.camTarget.x += (tx - this.camTarget.x) * k;
       this.camTarget.z += (tz - this.camTarget.z) * k;
+      this.camTarget.y += (wme.y * (1 - this.zoom * 0.6) - this.camTarget.y) * k; // up the stairs, the camera follows
       this.zoom += (this.zoomGoal - this.zoom) * (1 - Math.exp(-dt * 6));
       // fireworks: look up a little (less while walking about)
       const lift = (this.world.lookUp?.() ?? 0) * (me.net.moving ? 0.35 : 1);
       this.lift += (lift - this.lift) * (1 - Math.exp(-dt * 1.5));
       this.snapCamera();
       this.world.fadeOccluders(this.camera.position);
-      this.ring.position.set(me.pos.x, 0.015, me.pos.y);
+      this.ring.position.set(wme.x, wme.y + 0.015, wme.z);
     }
 
     this.sparkles.tick(dt);
@@ -453,7 +460,7 @@ export class Party {
       this.lastSent = { x: me.pos.x, z: me.pos.y, dir: me.dir, moving };
     }
 
-    const room = roomAt(me.pos.x, this.world.map);
+    const room = roomAt(me.pos.x, this.world.map, me.pos.y);
     if (room.id !== this.room?.id) { this.room = room; this.hooks.room(room); }
 
     // the painting you are standing in front of
@@ -597,7 +604,7 @@ export class Party {
     const talking: { tag: Tag; x: number; y: number; bw: number; bh: number }[] = [];
     const plates: { l: number; r: number; t: number; b: number }[] = [];
     for (const [id, g] of this.guests) {
-      v.set(g.pos.x, 1.85 + g.rig.root.position.y, g.pos.y).project(this.camera);
+      v.set(g.rig.root.position.x, 1.85 + g.rig.root.position.y, g.rig.root.position.z).project(this.camera);
       const vis = v.z < 1 && v.x > -1.2 && v.x < 1.2 && v.y > -1.2 && v.y < 1.3;
       const sx = (v.x * 0.5 + 0.5) * w, sy = (-v.y * 0.5 + 0.5) * h;
       g.tag.place(sx, sy, vis, v.z);

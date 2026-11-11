@@ -5,7 +5,7 @@
  *   /debug.html?theme=home&x=12&z=0&zoom=0&hour=21
  */
 import * as THREE from 'three';
-import { isTheme } from '@party/shared';
+import { isTheme, toWorld } from '@party/shared';
 import { buildWorld } from './world/world';
 import { cameraPose } from './game/camera';
 import { buildAnimal } from './avatar/animal';
@@ -27,10 +27,12 @@ const world = buildWorld(theme, scene, renderer);
 const d = new Date(); d.setHours(hour, 10, 0, 0);
 world.setTime(d);
 const me = buildAnimal({ kind: 'bear', color: 0, hat: 'none', hand: 'wine', outfit: 'none' });
-me.root.position.set(x, 0, z);
+// x, z are walking-map coordinates: upstairs in the house is drawn higher up
+const w = toWorld(world.map, { x, z });
+me.root.position.set(w.x, w.y, w.z);
 me.root.rotation.y = Math.PI;
 scene.add(me.root);
-const pose = cameraPose(new THREE.Vector3(x, 0, z), zoom, innerWidth / innerHeight);
+const pose = cameraPose(new THREE.Vector3(w.x, w.y, w.z), zoom, innerWidth / innerHeight);
 camera.fov = pose.fov; camera.updateProjectionMatrix();
 camera.position.copy(pose.position); camera.lookAt(pose.lookAt);
 world.fadeOccluders(camera.position);
