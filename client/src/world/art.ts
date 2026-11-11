@@ -7,6 +7,36 @@ export interface Artwork {
 }
 export const ART = ARTWORKS as Artwork[];
 
+/**
+ * How big each painting really is: the longer side, in cm.
+ * ⚠️ 임시값 — 실제 작품 크기를 받으면 이 숫자만 바꾸면 돼요.
+ * (대 162cm ≈ 100호, 중 117cm ≈ 50호, 소 73cm ≈ 20호)
+ */
+export const LONG_CM: Record<number, number> = {
+  17: 162, 1: 162, 9: 162, 6: 162,                                       // 대: 민들레와 발, 해바라기 밭, 둥근 연못, 먹 고릴라
+  2: 117, 5: 117, 0: 117, 4: 117, 7: 117, 8: 117, 18: 117, 12: 117, 14: 117, // 중
+  15: 73, 3: 73, 16: 73, 10: 73, 13: 73, 11: 73,                          // 소: 크레파스, 스노우볼, 곰 인형, 잉어 I·III, 꿈꾸는 잉어
+};
+/** Metres of wall per cm of canvas — a little larger than life, since the guests are cartoon-sized. */
+export const WALL_PER_CM = 0.0142;
+/** Centre of a painting on the wall: eye level, raised only as much as a big one needs. */
+export const EYE = 1.72;
+
+/** A painting's size on the wall (true proportions), never bigger than the spot it hangs in. */
+export function wallSize(a: Artwork, slot?: Pick<Slot, 'maxW' | 'maxH'>): { w: number; h: number } {
+  const long = (LONG_CM[a.i] ?? 117) * WALL_PER_CM;
+  let w = a.w >= a.h ? long : long * a.w / a.h;
+  let h = a.w >= a.h ? long * a.h / a.w : long;
+  if (slot) {
+    const k = Math.min(1, slot.maxW / w, slot.maxH / h);
+    w *= k; h *= k;
+  }
+  return { w, h };
+}
+
+/** How high to hang it: centred at eye level, with at least 60 cm of wall underneath. */
+export const hangY = (h: number) => Math.max(EYE, h / 2 + 0.6);
+
 const pad = (n: number) => String(n).padStart(2, '0');
 export const wallSrc = (a: Artwork) => `art/wall/${pad(a.i)}.jpg`;
 

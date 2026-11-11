@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { WorldParts } from './world';
 import { BAR, BENCHES, DOOR_HALF, PARTITIONS, ROOM_D, ROOM_IDS, ROOM_W, WORLD, type RoomId } from '@party/shared';
 import { livingCanvas, tickLivingWall } from './livingWall';
-import { ART, ROOM_INFO, slotsFor, wallSrc, type Artwork, type Slot } from './art';
+import { ART, ROOM_INFO, hangY, slotsFor, wallSize, wallSrc, type Artwork, type Slot } from './art';
 import { fabric, parquet, runner, textPlate } from './textures';
 import { SkyPainter, skyAt, type SkyState } from './sky';
 import { buildDecor } from './decor';
@@ -161,11 +161,11 @@ export function buildGallery(scene: THREE.Scene, renderer: THREE.WebGLRenderer):
     const slots = slotsFor(id);
     const works = ART.filter(a => a.room === id);
     works.forEach((art, k) => {
-      const slot = slots[k];
-      if (!slot) return;
-      const ar = art.w / art.h;
-      let w = slot.maxW, h = w / ar;
-      if (h > slot.maxH) { h = slot.maxH; w = h * ar; }
+      const spot = slots[k];
+      if (!spot) return;
+      // true to the real canvas: big works big, small works small, all at eye level
+      const { w, h } = wallSize(art, spot);
+      const slot: Slot = { ...spot, y: hangY(h) };
       const ry = Math.atan2(slot.face.x, slot.face.z);
       const frame = new THREE.Group();
       frame.position.set(slot.x, slot.y, slot.z);
