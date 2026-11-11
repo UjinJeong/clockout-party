@@ -21,7 +21,7 @@ export interface BodyState {
 }
 
 /** A glance over the shoulder: how far the face has to be turned away before it's worth it, and how far the neck and shoulders go. */
-export const GLANCE = { away: 1.25, head: 1.45, body: 0.95, short: 0.35 } as const;
+export const GLANCE = { away: 1.25, head: 1.45, body: 0.95, short: 0.35, zone: 0.8 } as const;
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
 /** Emotes anyone can send, plus a few moves the party plays by itself. */
@@ -43,6 +43,7 @@ export class Animator {
   static readonly EMOTE_TIME = 1.5;
   private glanceT = 0;         // seconds of "show them my face" left
   private glance = 0;          // 0..1 blend into the over-the-shoulder look
+  private glanceAmt = 1;       // how much of the full turn this glance uses
   private glanceSide = 1;      // which shoulder (kept for the whole glance, so it never flips)
   private lastMood: Mood | '' | undefined;
 
@@ -52,14 +53,16 @@ export class Animator {
 
   play(kind: Gesture) {
     this.emote = kind; this.emoteT = 0;
-    if (kind !== 'zone' && kind !== 'sigh') this.glanceT = gestureTime(kind) + 0.3; // those two look away on purpose
+    if (kind === 'sigh') return;                       // the tie-loosening sigh is a private moment
+    this.glanceT = gestureTime(kind) + 0.3;
+    this.glanceAmt = kind === 'zone' ? GLANCE.zone : 1; // zoning out: only a profile, still staring at nothing
   }
 
   /** Carry on from another animator mid-motion (the animal was rebuilt, e.g. recoloured), so nothing jumps. */
   adopt(o: Animator) {
     this.t = o.t; this.walk = o.walk; this.sit = o.sit; this.lie = o.lie; this.doze = o.doze; this.groove = o.groove;
     this.style = o.style; this.emote = o.emote; this.emoteT = o.emoteT;
-    this.glanceT = o.glanceT; this.glance = o.glance; this.glanceSide = o.glanceSide; this.lastMood = o.lastMood;
+    this.glanceT = o.glanceT; this.glance = o.glance; this.glanceSide = o.glanceSide; this.glanceAmt = o.glanceAmt; this.lastMood = o.lastMood;
     this.rig.face.adopt(o.rig.face);
   }
 
@@ -125,7 +128,7 @@ export class Animator {
   private lookRound(dt: number, b: BodyState) {
     const r = this.rig;
     const mood = b.mood ?? '';
-    if (this.lastMood !== undefined && mood !== this.lastMood && mood) this.glanceT = 2.2;
+    if (this.lastMood !== undefined && mood !== this.lastMood && mood) { this.glanceT = 2.2; this.glanceAmt = 1; }
     this.lastMood = mood;
     this.glanceT = Math.max(0, this.glanceT - dt);
     const rel = b.camYaw === undefined ? 0 : wrap(b.camYaw - r.root.rotation.y); // 0 = facing the camera
@@ -133,7 +136,7 @@ export class Animator {
     if (want && this.glance < 0.02) this.glanceSide = rel < 0 ? -1 : 1;
     this.glance += ((want ? 1 : 0) - this.glance) * Math.min(1, dt * (want ? 9 : 5));
     if (this.glance < 0.002) return;
-    const k = this.glance * this.glance * (3 - 2 * this.glance);
+    const k = this.glance * this.glance * (3 - 2 * this.glance) * this.glanceAmt;
     const need = Math.max(0, Math.abs(rel) - GLANCE.short);            // stop a little short of the camera
     const body = Math.min(GLANCE.body, need * 0.4), head = Math.min(GLANCE.head, need - body);
     r.bodyPivot.rotation.y += this.glanceSide * body * k;

@@ -32,13 +32,18 @@ describe('a glance over the shoulder', () => {
       expect(Math.sign(rig.head.rotation.y)).toBe(side);
     }
   });
-  it('already facing the camera, lying down, or zoning out → no glance', () => {
+  it('already facing the camera or lying down → no glance', () => {
     const a = make(); a.anim.play('laugh'); run(a.anim, 0.5, body(0.4));
     expect(a.rig.head.rotation.y).toBe(0);
     const b = make(); b.anim.play('laugh'); run(b.anim, 0.5, body(Math.PI, { pose: 'lie' }));
     expect(b.rig.head.rotation.y).toBe(0);
-    const c = make(); c.anim.play('zone'); run(c.anim, 0.5, body(Math.PI));
-    expect(c.rig.head.rotation.y).toBe(0);
+  });
+  it('zoning out shows only a profile: a smaller turn than a laugh', () => {
+    const z = make(); z.anim.play('zone'); run(z.anim, 0.6, body(Math.PI));
+    const l = make(); l.anim.play('laugh'); run(l.anim, 0.6, body(Math.PI));
+    const total = (m: typeof z) => Math.abs(m.rig.head.rotation.y) + Math.abs(m.rig.bodyPivot.rotation.y);
+    expect(total(z)).toBeGreaterThan(1.2);
+    expect(total(z)).toBeLessThan(total(l) * 0.85);
   });
   it('a new mood is worth a glance too (but not the first one seen)', () => {
     const { rig, anim } = make();
