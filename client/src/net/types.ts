@@ -64,6 +64,8 @@ export interface PartyConnection {
   hours(h: string): void;
   /** Launch fireworks from the DJ booth (the party checks you're there and not too often). */
   firework(): void;
+  /** Change your look while at the party (a new drink from the bar). */
+  setLook(l: Look): void;
   /** Ask for the guest book and hearts left so far (answered with a `board` event). */
   askBoard(): void;
   /** Leave a line in the guest book. */

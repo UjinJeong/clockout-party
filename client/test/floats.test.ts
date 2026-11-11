@@ -48,4 +48,17 @@ describe('pool toys float for real', () => {
     expect(b.some((t, i) => Math.hypot(t.x - start[i].x, t.z - start[i].z) > 0.3)).toBe(true);
     for (const t of b) expect(Math.hypot(t.vx, t.vz)).toBeLessThan(0.5);
   });
+
+  it('a bump turns a toy lazily: no spinning top, however long you push', () => {
+    const b = [toy(20, 0)];
+    let fastest = 0;
+    for (let i = 0; i < 240; i++) {
+      stepFloats(b, [{ x: b[0].x - 0.6, z: b[0].z + 0.3 }], pool, 1 / 60, i / 60); // keep wading into it for 4 s
+      fastest = Math.max(fastest, Math.abs(b[0].turn));
+    }
+    expect(fastest).toBeLessThanOrEqual(0.7);
+    expect(Math.abs(b[0].spin)).toBeLessThan(Math.PI); // not even half a turn in all that time
+    run(b, 4);
+    expect(Math.abs(b[0].turn)).toBeLessThan(0.02);    // and it settles
+  });
 });

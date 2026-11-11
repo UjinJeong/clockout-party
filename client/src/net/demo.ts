@@ -180,6 +180,7 @@ export class DemoConnection implements PartyConnection {
   writeNote(text: string) { const n = this.board.note('me', this.me.name, text, Date.now()); if (n) this.ev.emit('note', n); }
   like(art: string) { const n = this.board.like('me', art); if (n !== null) this.ev.emit('likes', art, n); }
   /** Call once the party is listening: what was left before you came. */
+  setLook(l: Look) { this.me.look = l; this.ev.emit('change', strip(this.me)); }
   askBoard() { this.ev.emit('board', this.board.snapshot()); }
   private peerAt = new Map<string, { x: number; z: number }>();
   private say(id: string, kind: Emote) {

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {
-  ENERGY, hasCompany, MOOD_ICON, MOOD_LABEL, MOVE_HZ, NEAR_RADIUS, WALK_SPEED, clockedOut, findPath, parseHours, fromWorld, inWater, isNear, nearStage, onDanceFloor, toWorld, moveWithCollision, nearSeat, roomAt,
-  type Battery, type Emote, type MapRoom, type Mood, type Seat, type Vec2,
+  ENERGY, hasCompany, nextDrink, MOOD_ICON, MOOD_LABEL, MOVE_HZ, NEAR_RADIUS, WALK_SPEED, clockedOut, findPath, parseHours, fromWorld, inWater, isNear, nearStage, onDanceFloor, toWorld, moveWithCollision, nearSeat, roomAt,
+  type Battery, type Hand, type Emote, type MapRoom, type Mood, type Seat, type Vec2,
 } from '@party/shared';
 import { addAntenna, addCrown, buildAnimal, type AnimalRig } from '../avatar/animal';
 import { struck, timeMood } from './timeEvents';
@@ -582,6 +582,18 @@ export class Party {
     me.net.seat = -1; me.net.x = seat.stand.x; me.net.z = seat.stand.z;
     this.conn.stand();
     sound.play('stand');
+  }
+
+  /** 🍹 At a bar or in the kitchen: swap your drink for the next one. Returns what you're holding now. */
+  changeDrink(): Hand | null {
+    const me = this.self();
+    if (!me) return null;
+    const look = { ...me.net.look, hand: nextDrink(me.net.look.hand) };
+    me.net = { ...me.net, look };
+    this.conn.setLook(look);
+    this.updateGuest(me.net);
+    me.anim.play('cheers');
+    return look.hand;
   }
 
   /** Reactions sent and received this visit (for the goodbye card). */

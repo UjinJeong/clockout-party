@@ -122,6 +122,7 @@ export class LiveRoomConnection implements PartyConnection {
   stand() { this.bots.stand(); }
   mood(m: Mood) { this.bots.mood(m); }
   hours(h: string) { this.myHours = h; this.bots.hours(h); void this.room.presence({ hr: h || null }).catch(() => {}); }
+  setLook(l: Look) { this.look = l; this.bots.setLook(l); void this.room.presence(this.presence({})).catch(() => {}); }
   askBoard() { this.bots.askBoard(); }
   writeNote(text: string) { this.bots.writeNote(text); }
   like(art: string) { this.bots.like(art); }

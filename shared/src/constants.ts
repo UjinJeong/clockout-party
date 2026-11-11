@@ -73,18 +73,24 @@ export const HAT_LABEL: Record<Hat, string> = {
 };
 
 /** What the right paw holds. */
-export const HANDS = ['none', 'wine', 'coffee', 'balloon'] as const;
+export const HANDS = ['none', 'wine', 'coffee', 'beer', 'cocktail', 'balloon'] as const;
 export type Hand = (typeof HANDS)[number];
 export const HAND_LABEL: Record<Hand, string> = {
-  none: '빈손', wine: '와인', coffee: '아아', balloon: '풍선',
+  none: '빈손', wine: '와인', coffee: '아아', beer: '맥주', cocktail: '칵테일', balloon: '풍선',
 };
 
 /** What hangs around the neck. */
-export const OUTFITS = ['none', 'tie', 'scarf', 'badge'] as const;
+export const OUTFITS = ['none', 'tie', 'scarf', 'badge', 'pajama'] as const;
 export type Outfit = (typeof OUTFITS)[number];
 export const OUTFIT_LABEL: Record<Outfit, string> = {
-  none: '없음', tie: '넥타이', scarf: '목도리', badge: '사원증',
+  none: '없음', tie: '넥타이', scarf: '목도리', badge: '사원증', pajama: '잠옷',
 };
+
+/** The drinks you can swap between at a bar or in the kitchen, in order. */
+export const DRINKS: readonly Hand[] = ['wine', 'coffee', 'beer', 'cocktail'];
+export const nextDrink = (h: Hand): Hand => DRINKS[(DRINKS.indexOf(h) + 1) % DRINKS.length];
+/** Rooms with a bar or a kitchen counter: you can swap your drink there. */
+export const DRINK_ROOMS: readonly string[] = ['lobby', 'kitchen', 'cabana'];
 
 export interface Look { kind: Kind; color: number; hat: Hat; hand: Hand; outfit: Outfit }
 export const DEFAULT_LOOK: Look = { kind: 'bear', color: 0, hat: 'none', hand: 'none', outfit: 'none' };

@@ -1,3 +1,4 @@
+import { timeMood } from '../game/timeEvents';
 import type { Theme } from '@party/shared';
 import { filter, fm, gain, hz, impulse, noise, noiseBuffer, tone, type Ctx } from './synth';
 
@@ -73,6 +74,9 @@ export const STYLES: Record<Theme, Style> = {
     bed: 'waves', reverb: { seconds: 0.7, wet: 0.08 }, level: 0.85,
   },
 };
+
+/** 불금: on a Friday evening the band picks the tempo up. */
+export const FRIDAY_TEMPO = 1.12;
 
 /** After midnight and before dawn the band plays softer and slower, without drums. */
 export const isNight = (hour: number) => hour >= 0 && hour < 5;
@@ -222,7 +226,7 @@ export class Music {
   private schedule() {
     const now = this.ctx.currentTime;
     const night = isNight(this.hour());
-    const bpm = this.style.bpm * (night ? 0.85 : 1);
+    const bpm = this.style.bpm * (night ? 0.85 : 1) * (timeMood(new Date()).friday && !night ? FRIDAY_TEMPO : 1);
     const barLen = (60 / bpm) * 4;
     if (bpm !== this.bpmNow) { this.origin = this.ctx.currentTime - this.beats() * 60 / bpm; this.bpmNow = bpm; }
     // fell asleep in a background tab? pick up from now instead of catching up

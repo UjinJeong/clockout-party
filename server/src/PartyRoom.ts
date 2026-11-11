@@ -75,6 +75,14 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
       this.standUp(client.sessionId);
       this.broadcast('bye', { from: client.sessionId });
     },
+    /** 🍹 change what you're wearing or holding while at the party (a new drink from the bar) */
+    look: (client: Client, m: unknown) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p) return;
+      const look = parseLook((m as { look?: unknown } | null)?.look);
+      p.kind = look.kind; p.color = look.color; p.hat = look.hat; p.hand = look.hand; p.outfit = look.outfit;
+      this.active(client.sessionId);
+    },
     /** what earlier guests left (asked for once the client is ready to show it) */
     board: (client: Client) => { client.send('board', this.board.snapshot()); },
     /** 📝 a line in the guest book, for everyone here and whoever comes next */

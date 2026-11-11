@@ -387,3 +387,5 @@ html.touch .joystick { display: block; }
 .like-chip { bottom: calc(132px + var(--safe-b)); min-width: 0; padding-left: 14px; padding-right: 14px; }
 .like-chip[aria-pressed="true"] { border-color: #ff7a93; }
 @media (max-width: 720px) { .like-chip { bottom: calc(166px + var(--safe-b)); } }
+.drink-chip { left: 14px; transform: none; bottom: calc(150px + var(--safe-b)); font-size: 13.5px; padding: 8px 12px; animation: none; }
+@media (max-width: 720px) { .drink-chip { bottom: calc(200px + var(--safe-b)); } }

@@ -266,6 +266,28 @@ function addHand(look: Look, armR: THREE.Group, paw: THREE.Material): THREE.Grou
       g.add(shell, coffee, ice, lid, straw, grip);
       break;
     }
+    case 'beer': {
+      // 맥주: a glass mug with a handle and a head of foam
+      const glass = mat('#eef3f4', { transparent: true, opacity: 0.4, roughness: 0.1, flatShading: false, depthWrite: false });
+      const mug = new THREE.Mesh(new THREE.CylinderGeometry(0.066, 0.066, 0.19, 12, 1, true), glass); mug.position.set(0, 0.055, z);
+      const beer = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.15, 12), mat('#e8a92e', { roughness: 0.3, flatShading: false })); beer.position.set(0, 0.04, z);
+      const foam = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.062, 0.05, 12), mat('#fff8e7', { roughness: 0.95 })); foam.position.set(0, 0.14, z);
+      const handle = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.012, 5, 10, Math.PI), glass); handle.position.set(0.066, 0.055, z); handle.rotation.z = -Math.PI / 2;
+      g.add(mug, beer, foam, handle, grip);
+      break;
+    }
+    case 'cocktail': {
+      // 칵테일: a tall sunset drink with a slice of orange and a paper umbrella
+      const glass = mat('#eef3f4', { transparent: true, opacity: 0.4, roughness: 0.1, flatShading: false, depthWrite: false });
+      const shell = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.045, 0.21, 12, 1, true), glass); shell.position.set(0, 0.065, z);
+      const low = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.042, 0.08, 12), mat('#e8455a', { roughness: 0.3, flatShading: false })); low.position.set(0, 0.005, z);
+      const high = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.05, 0.09, 12), mat('#ffa73d', { roughness: 0.3, flatShading: false })); high.position.set(0, 0.09, z);
+      const slice = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.012, 10), mat('#ffb84d')); slice.position.set(-0.055, 0.17, z); slice.rotation.z = Math.PI / 2;
+      const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.2, 4), mat('#e9e2d6')); stick.position.set(0.02, 0.2, z); stick.rotation.z = -0.25;
+      const brolly = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.04, 8), mat('#ff6b9d')); brolly.position.set(0.045, 0.3, z); brolly.rotation.z = -0.25;
+      g.add(shell, low, high, slice, stick, brolly, grip);
+      break;
+    }
     case 'balloon': {
       // A balloon on a string, floating up and a little out to the side.
       const top = new THREE.Vector3(0.14, 0.62, z - 0.06);
@@ -365,6 +387,22 @@ function addOutfit(look: Look, body: THREE.Group, isPenguin: boolean) {
       const tail = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.24, 0.05), m);
       tail.position.set(0.12, 0.86, 0.27 + front); tail.rotation.set(-0.3, 0, 0.12);
       body.add(ring, tail);
+      break;
+    }
+    case 'pajama': {
+      // 잠옷: a soft blue pyjama top — a button placket, a round collar and a breast pocket
+      const cloth = mat('#a9c9ec', { roughness: 0.95 }), trim = mat('#f6f1e6', { roughness: 0.9 });
+      const top = new THREE.Mesh(new THREE.SphereGeometry(0.415, 10, 8, 0, Math.PI * 2, Math.PI * 0.2, Math.PI * 0.62), cloth);
+      top.position.set(0, 0.62, 0); top.scale.set(1.01, isPenguin ? 1.2 : 1.05, 1.03 + front);
+      const collar = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.04, 5, 14), trim); collar.rotation.x = Math.PI / 2; collar.position.set(0, 0.96, 0.03);
+      body.add(top, collar);
+      for (let i = 0; i < 3; i++) {
+        const b = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 5), trim);
+        const y = 0.84 - i * 0.13; b.position.set(0, y, 0.425 + front - Math.abs(i - 1) * 0.04);
+        body.add(b);
+      }
+      const pocket = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.08, 0.015), trim); pocket.position.set(0.18, 0.74, 0.385 + front); pocket.rotation.y = 0.45;
+      body.add(pocket);
       break;
     }
     case 'badge': {

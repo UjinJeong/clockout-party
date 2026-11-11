@@ -510,3 +510,17 @@ describe('📝 guest book and ❤️ on paintings', () => {
     expect(board.likes).toEqual({ '3': 1 });
   });
 });
+
+describe('🍹 a new drink from the bar', () => {
+  it('changes what everyone sees you holding (and nothing odd gets through)', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', {});
+    const a = await colyseus.connectTo(room, { name: '목마름', look: { kind: 'cat', color: 1, hat: 'none', hand: 'wine', outfit: 'pajama' } });
+    a.send('look', { look: { kind: 'cat', color: 1, hat: 'none', hand: 'beer', outfit: 'pajama' } });
+    await new Promise(r => setTimeout(r, 60));
+    const p = room.state.players.get(a.sessionId)!;
+    expect([p.hand, p.outfit]).toEqual(['beer', 'pajama']);
+    a.send('look', { look: { kind: 'cat', hand: 'flamethrower' } });
+    await new Promise(r => setTimeout(r, 60));
+    expect(room.state.players.get(a.sessionId)!.hand).toBe('none');
+  });
+});

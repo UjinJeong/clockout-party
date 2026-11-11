@@ -2,7 +2,7 @@ import { FIREWORK_COOLDOWN,
   BATTERY_LABEL, EMOTES, EMOTE_ICON, ENERGY, MOODS, MOOD_ENERGY, MOOD_ICON, MOOD_LABEL, VOICE_MAX_MS,
   type Battery, type MapRoom, type Mood, type Seat,
 } from '@party/shared';
-import type { Note } from '@party/shared';
+import { DRINK_ROOMS, HAND_LABEL, type Look, type Note } from '@party/shared';
 import type { Party } from '../game/party';
 import type { PartyConnection } from '../net/types';
 import type { Artwork } from '../world/art';
@@ -233,6 +233,17 @@ export function createHud(conn: PartyConnection, controls: Controls) {
     drawLike();
   });
 
+  // ---- 🍹 at a bar or in the kitchen: swap your drink ----
+  const drinkChip = $('drink-chip');
+  on(drinkChip, 'click', () => {
+    const hand = party?.changeDrink();
+    if (!hand) return;
+    sound.play('cheers');
+    toast(`🍹 ${HAND_LABEL[hand]}(으)로 바꿨어요`, 2200);
+    const saved = load<{ look?: Look }>('party.me');
+    if (saved?.look) save('party.me', { ...saved, look: { ...saved.look, hand } });
+  });
+
   // ---- people panel ----
   const peopleBtn = $('people-btn'), people = $('people'), plist = $('people-list');
   on(peopleBtn, 'click', () => {
@@ -296,7 +307,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
   cleanups.push(() => { picker?.dispose(); hoursCard.hidden = true; });
 
   const hooks = {
-    room: (r: MapRoom) => { $('where').textContent = r.name; },
+    room: (r: MapRoom) => { $('where').textContent = r.name; drinkChip.hidden = !DRINK_ROOMS.includes(r.id); },
     painting: (p: Painting | null) => {
       current = p;
       chip.hidden = !p;
@@ -363,7 +374,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
       cleanups.forEach(f => f());
       living.close();
       $('bye-card').hidden = true; $('dock').hidden = false; $('night-veil').hidden = true; $('event-chip').hidden = true;
-      hud.hidden = true; people.hidden = true; chip.hidden = true; book.hidden = true; likeChip.hidden = true;
+      hud.hidden = true; people.hidden = true; chip.hidden = true; drinkChip.hidden = true; book.hidden = true; likeChip.hidden = true;
       $('help').hidden = true;
     },
   };

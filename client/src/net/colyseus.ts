@@ -106,6 +106,7 @@ class ColyseusConnection implements PartyConnection {
   mood(m: Mood) { this.room.send('mood', { mood: m }); }
   firework() { this.room.send('firework', {}); }
   bye() { this.room.send('bye', {}); }
+  setLook(l: Look) { this.room.send('look', { look: l }); }
   askBoard() { this.room.send('board', {}); }
   writeNote(text: string) { this.room.send('note', { text }); }
   like(art: string) { this.room.send('like', { art }); }

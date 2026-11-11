@@ -27,6 +27,8 @@ export const DEPARTURE = {
 } as const;
 
 const W = 1.36, H = 2.3, DEPTH = 0.9;
+/** Going home you stand a little further back, so no nose or raised paw pokes through the closing doors. */
+const DEEPER = 0.2;
 /** How far inside the lift a guest stands before stepping out. */
 const INSIDE = 0.62;
 
@@ -102,12 +104,12 @@ export class Elevator {
   doorGap() { return Math.abs(this.doors[1].position.x - this.doors[0].position.x) - W / 2; }
 
   /** Should the arriving guest be drawn yet? (Not while the doors are still shut on the way up.) */
-  guestVisible() { return this.leaving ? this.t < DEPARTURE.close - 0.05 : this.t >= ARRIVAL.rise + 0.15; }
+  guestVisible() { return this.leaving ? this.t < DEPARTURE.inside || this.openness() > 0.18 : this.t >= ARRIVAL.rise + 0.15; }
 
   /** How far back inside the lift the guest is right now (0 = out on the floor). */
   guestOffset() {
     const t = this.t;
-    if (this.leaving) return INSIDE * smooth((t - DEPARTURE.open) / (DEPARTURE.inside - 0.35 - DEPARTURE.open));
+    if (this.leaving) return (INSIDE + DEEPER) * smooth((t - DEPARTURE.open) / (DEPARTURE.inside - 0.35 - DEPARTURE.open));
     if (t < ARRIVAL.open - 0.3) return INSIDE;
     if (t >= ARRIVAL.out) return 0;
     return INSIDE * (1 - smooth((t - (ARRIVAL.open - 0.3)) / (ARRIVAL.out - (ARRIVAL.open - 0.3))));

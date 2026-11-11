@@ -12,7 +12,8 @@ export interface Pusher { x: number; z: number }
 const PUSH_R = 0.55;    // a wading guest (with their swim ring)
 const DRAG = 0.9;       // how quickly the water stops a toy
 const BOUNCE = 0.55;    // off the pool's edge
-const SHOVE = 2.4;      // how hard a guest shoves (m/s per metre of overlap, plus a base)
+const SHOVE = 2.4;
+const TURN_MAX = 0.7;   // a bumped toy turns lazily (rad/s) — it's a pool float, not a spinning top      // how hard a guest shoves (m/s per metre of overlap, plus a base)
 
 /** Advance the toys by dt. Returns how hard the hardest bump was this step (0 if none), for a sound. */
 export function stepFloats(bodies: FloatBody[], pushers: Pusher[], pool: Rect, dt: number, t = 0): number {
@@ -31,8 +32,13 @@ export function stepFloats(bodies: FloatBody[], pushers: Pusher[], pool: Rect, d
       const nx = d > 1e-4 ? ox / d : 1, nz = d > 1e-4 ? oz / d : 0, over = min - d;
       b.x += nx * over; b.z += nz * over;
       const along = b.vx * nx + b.vz * nz, want = 0.9 + SHOVE * over;
-      if (along < want) { b.vx += nx * (want - along); b.vz += nz * (want - along); hit = Math.max(hit, want - along); }
-      b.turn += (nx * 0.7 - nz) * 1.5;
+      if (along < want) {
+        const gain = want - along;
+        b.vx += nx * gain; b.vz += nz * gain; hit = Math.max(hit, gain);
+        // a glancing shove turns it a little, once per shove (not every frame you stand in it)
+        const side = b.vx * nz - b.vz * nx || (i % 2 ? -1 : 1);
+        b.turn += Math.sign(side) * Math.min(0.35, gain * 0.3);
+      }
     }
   });
   // toys bumping into each other
@@ -50,7 +56,8 @@ export function stepFloats(bodies: FloatBody[], pushers: Pusher[], pool: Rect, d
   }
   for (const b of bodies) {
     const k = Math.exp(-DRAG * dt);
-    b.vx *= k; b.vz *= k; b.turn *= Math.exp(-1.2 * dt);
+    b.vx *= k; b.vz *= k;
+    b.turn = Math.max(-TURN_MAX, Math.min(TURN_MAX, b.turn)) * Math.exp(-1.6 * dt);
     b.x += b.vx * dt; b.z += b.vz * dt; b.spin += b.turn * dt;
     // the pool's edge
     if (b.x < pool.x0 + b.r) { b.x = pool.x0 + b.r; if (b.vx < 0) { hit = Math.max(hit, -b.vx * 0.5); b.vx *= -BOUNCE; } }
