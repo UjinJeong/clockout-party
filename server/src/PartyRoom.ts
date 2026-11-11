@@ -1,6 +1,6 @@
 import { Room, type Client } from '@colyseus/core';
 import {
-  CLINK, Clinks, TOGETHER, hasCompany, isNear, DOZE_AFTER, ENERGY, FIREWORK_COOLDOWN, nearStage, sanitizeHours, MAX_PLAYERS, MAX_SPEED, MOOD_ENERGY, batteryOf, chargeRate, finite, isEmote, isMood, isTheme, mapFor,
+  Board, CLINK, Clinks, TOGETHER, hasCompany, isNear, DOZE_AFTER, ENERGY, FIREWORK_COOLDOWN, nearStage, sanitizeHours, MAX_PLAYERS, MAX_SPEED, MOOD_ENERGY, batteryOf, chargeRate, finite, isEmote, isMood, isTheme, mapFor,
   moveWithCollision, nearbyIds, nearestWalkable, stepEnergy, type WorldMap, parseLook, sanitizeChat, sanitizeName, sanitizeTitle, validateVoice,
 } from '@party/shared';
 import { PartyState, Player } from './schema';
@@ -35,6 +35,7 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
   private lastFirework = 0;
   private saidBye = new Set<string>();
   private clinks = new Clinks();
+  private board = new Board();
 
   messages = {
     move: (client: Client, m: unknown) => this.onMove(client, m),
@@ -73,6 +74,21 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
       this.saidBye.add(client.sessionId);
       this.standUp(client.sessionId);
       this.broadcast('bye', { from: client.sessionId });
+    },
+    /** what earlier guests left (asked for once the client is ready to show it) */
+    board: (client: Client) => { client.send('board', this.board.snapshot()); },
+    /** 📝 a line in the guest book, for everyone here and whoever comes next */
+    note: (client: Client, m: unknown) => {
+      const p = this.state.players.get(client.sessionId);
+      const n = p && this.board.note(client.sessionId, p.name, (m as { text?: unknown } | null)?.text, Date.now());
+      if (n) { this.active(client.sessionId); this.broadcast('note', n); }
+    },
+    /** ❤️ on a painting (again to take it back) */
+    like: (client: Client, m: unknown) => {
+      if (!this.state.players.has(client.sessionId)) return;
+      const art = (m as { art?: unknown } | null)?.art;
+      const n = this.board.like(client.sessionId, art);
+      if (n !== null) this.broadcast('likes', { art, n });
     },
     sit: (client: Client, m: unknown) => this.onSit(client, (m as { seat?: unknown } | null)?.seat),
     stand: (client: Client) => { this.standUp(client.sessionId); this.active(client.sessionId); },

@@ -490,3 +490,23 @@ describe('🥂 짠! and company', () => {
     expect(n).toBe(0);
   });
 });
+
+describe('📝 guest book and ❤️ on paintings', () => {
+  it('a note reaches everyone and is there for whoever arrives later', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', {});
+    const a = await colyseus.connectTo(room, { name: '먼저' });
+    const heard: any[] = [];
+    a.onMessage('note', (n: any) => heard.push(n));
+    a.onMessage('likes', () => {});
+    a.send('note', { text: '오늘도 살았다' });
+    a.send('like', { art: '3' });
+    await new Promise(r => setTimeout(r, 80));
+    expect(heard.map(n => [n.name, n.text])).toEqual([['먼저', '오늘도 살았다']]);
+    const b = await colyseus.connectTo(room, { name: '나중' });
+    const got = new Promise<any>(res => b.onMessage('board', res));
+    b.send('board', {});
+    const board = await got;
+    expect(board.notes.map((n: any) => n.text)).toEqual(['오늘도 살았다']);
+    expect(board.likes).toEqual({ '3': 1 });
+  });
+});

@@ -3,7 +3,8 @@ import {
   ENERGY, hasCompany, MOOD_ICON, MOOD_LABEL, MOVE_HZ, NEAR_RADIUS, WALK_SPEED, clockedOut, findPath, parseHours, fromWorld, inWater, isNear, nearStage, onDanceFloor, toWorld, moveWithCollision, nearSeat, roomAt,
   type Battery, type Emote, type MapRoom, type Mood, type Seat, type Vec2,
 } from '@party/shared';
-import { buildAnimal, type AnimalRig } from '../avatar/animal';
+import { addAntenna, addCrown, buildAnimal, type AnimalRig } from '../avatar/animal';
+import { struck, timeMood } from './timeEvents';
 import { Animator } from '../avatar/animator';
 import type { NetPlayer, PartyConnection } from '../net/types';
 import type { Painting } from '../world/gallery';
@@ -41,6 +42,8 @@ interface Guest {
   waved: boolean;
   /** The doors have shut on them; not drawn any more (they're about to be removed). */
   gone: boolean;
+  /** The rig that is wearing the fully-charged crown (a rebuilt rig needs a new one). */
+  crownOn: AnimalRig | null;
 }
 
 const zTex = () => canvasTexture(64, 64, (x, w, h) => {
@@ -60,7 +63,7 @@ const floatieGeo = new THREE.TorusGeometry(0.46, 0.14, 10, 22);
 export interface PartyHooks {
   room(room: MapRoom): void;
   painting(p: Painting | null): void;
-  guests(list: { id: string; name: string; battery: Battery; mood: Mood | ''; near: boolean; self: boolean; muted: boolean }[]): void;
+  guests(list: { id: string; name: string; battery: Battery; mood: Mood | ''; near: boolean; self: boolean; muted: boolean; bot?: boolean }[]): void;
   arrived(p: Painting): void;
   /** A free seat you could sit on right now (or the one you're on). */
   seat(s: { seat: Seat; seated: boolean } | null): void;
@@ -68,6 +71,8 @@ export interface PartyHooks {
   energy(e: number): void;
   /** You just reached full charge. */
   charged(): void;
+  /** The clock says something: the 6pm bell, 불금, or late night. */
+  timeEvent(kind: 'bell' | 'friday' | 'late' | 'none', first: boolean): void;
   /** You're sitting next to someone: charging together is faster. */
   company(): void;
   /** 짠! You clinked glasses with this guest (a little charge for both). */
@@ -216,7 +221,8 @@ export class Party {
     rig.root.rotation.y = p.dir;
     this.scene.add(rig.root);
     const isSelf = p.id === this.conn.selfId;
-    const tag = new Tag(this.tagLayer, p.name, isSelf);
+    if (p.bot) addAntenna(rig);
+    const tag = new Tag(this.tagLayer, p.name, isSelf, !!p.bot);
     tag.setBattery(p.battery);
     tag.setHours(p.hours);
     if (isSelf) tag.onEdit = () => this.hooks.editHours();
@@ -227,7 +233,7 @@ export class Party {
       arrive: isSelf || this.settled
         ? new Elevator(this.scene, new THREE.Vector3(p.x, 0, p.z), 0, isSelf ? undefined : () => sound.play('ding', { at: { x: p.x, z: p.z }, volume: 0.6 }))
         : null,
-      sighed: false, hooray: -1, leave: null, waved: false, gone: false,
+      sighed: false, hooray: -1, leave: null, waved: false, gone: false, crownOn: null,
     });
     const g0 = this.guests.get(p.id)!;
     if (g0.arrive) { g0.dir = 0; g0.rig.root.visible = false; }
@@ -265,6 +271,7 @@ export class Party {
     if (key !== g.lookKey) {
       const rig = buildAnimal(p.look);
       rig.root.position.copy(g.rig.root.position); rig.root.rotation.y = g.rig.root.rotation.y;
+      if (p.bot) addAntenna(rig);
       g.rig.dispose(); this.scene.add(rig.root);
       g.rig = rig; g.anim = new Animator(rig); g.lookKey = key; g.floatie = null;
     }
@@ -441,6 +448,8 @@ export class Party {
       this.hoursSeen = now;
     }
     for (const g of this.guests.values()) if (g.hooray >= 0) this.hoorayFx(g, dt);
+    this.clockFx(dt);
+    for (const g of this.guests.values()) this.crownFx(g);
     this.placeTags();
     this.listT -= dt;
     if (this.listDirty || this.listT <= 0) this.emitList();
@@ -714,6 +723,39 @@ export class Party {
     });
   }
 
+  private clockT = 0;
+  private clockSeen: Date | null = null;
+  private timeKind = '';
+  private confettiT = 4;
+  /** The party follows your clock: a bell at 6pm, confetti on a Friday night, low lights after midnight. */
+  private clockFx(dt: number) {
+    const friday = this.timeKind === 'friday';
+    if (friday && (this.confettiT -= dt) <= 0) {
+      this.confettiT = 5 + Math.random() * 5;
+      const me = this.self();
+      if (me) {
+        const at = me.rig.root.position.clone().add(new THREE.Vector3((Math.random() - 0.5) * 6, 3.4, (Math.random() - 0.5) * 4));
+        this.sparkles.burst(at, Party.CONFETTI, 34);
+      }
+    }
+    if ((this.clockT -= dt) > 0) return;
+    this.clockT = 1;
+    const now = new Date();
+    if (this.clockSeen && struck(this.clockSeen, now, 18)) {
+      sound.play('ding'); setTimeout(() => sound.play('ding', { pitch: 0.84 }), 700);
+      this.hooks.timeEvent('bell', true);
+    }
+    const m = timeMood(now), kind = m.friday ? 'friday' : m.late ? 'late' : 'none';
+    if (kind !== this.timeKind) { this.hooks.timeEvent(kind, this.timeKind !== ''); this.timeKind = kind; }
+    this.clockSeen = now;
+  }
+
+  /** Fully recharged: a small crown for the rest of the visit. */
+  private crownFx(g: Guest) {
+    const full = g.net.energy >= ENERGY.max;
+    if (full && g.crownOn !== g.rig) { addCrown(g.rig); g.crownOn = g.rig; }
+  }
+
   private hadCompany = false;
   /** Sat down next to someone? Say so once: company charges you faster. */
   private companyFx(me: Guest) {
@@ -779,7 +821,7 @@ export class Party {
     this.listDirty = false; this.listT = 1;
     const me = this.self();
     this.hooks.guests([...this.guests.values()].map(g => ({
-      id: g.net.id, name: g.net.name, battery: g.net.battery, mood: g.net.mood, self: g.net.id === this.conn.selfId,
+      id: g.net.id, name: g.net.name, battery: g.net.battery, mood: g.net.mood, bot: !!g.net.bot, self: g.net.id === this.conn.selfId,
       near: !!me && g.net.id !== me.net.id && isNear(me.net, g.net), muted: this.muted.has(g.net.id),
     })));
   }

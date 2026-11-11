@@ -1,5 +1,5 @@
 import { Client, Callbacks, type Room } from '@colyseus/sdk';
-import { sanitizeHours, ROOM_NAME, isMood, isTheme, parseLook, type Battery, type Emote, type Look, type Mood, type Theme } from '@party/shared';
+import { sanitizeHours, ROOM_NAME, isMood, isTheme, parseLook, type Battery, type BoardSnapshot, type Note, type Emote, type Look, type Mood, type Theme } from '@party/shared';
 import { Emitter, type NetPlayer, type PartyConnection, type PartyEvents } from './types';
 
 /**
@@ -71,6 +71,9 @@ class ColyseusConnection implements PartyConnection {
     room.onMessage('voice', (m: { from: string; mime: string; ms: number; data: Uint8Array }) => {
       this.ev.emit('voice', m.from, new Blob([new Uint8Array(m.data)], { type: m.mime }), m.ms);
     });
+    room.onMessage('board', (b: BoardSnapshot) => this.ev.emit('board', b));
+    room.onMessage('note', (n: Note) => this.ev.emit('note', n));
+    room.onMessage('likes', (m: { art: string; n: number }) => this.ev.emit('likes', m.art, m.n));
     room.onMessage('clink', (m: { a: string; b: string }) => this.ev.emit('clink', m.a, m.b));
     room.onMessage('bye', (m: { from: string }) => this.ev.emit('bye', m.from));
     room.onMessage('firework', (m: { from: string; seed: number }) => this.ev.emit('firework', m.from, m.seed));
@@ -103,6 +106,9 @@ class ColyseusConnection implements PartyConnection {
   mood(m: Mood) { this.room.send('mood', { mood: m }); }
   firework() { this.room.send('firework', {}); }
   bye() { this.room.send('bye', {}); }
+  askBoard() { this.room.send('board', {}); }
+  writeNote(text: string) { this.room.send('note', { text }); }
+  like(art: string) { this.room.send('like', { art }); }
   hours(h: string) { this.room.send('hours', { hours: h }); }
   leave() { void this.room.leave(true); }
 }

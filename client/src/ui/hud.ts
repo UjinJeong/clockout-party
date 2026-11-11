@@ -2,6 +2,7 @@ import { FIREWORK_COOLDOWN,
   BATTERY_LABEL, EMOTES, EMOTE_ICON, ENERGY, MOODS, MOOD_ENERGY, MOOD_ICON, MOOD_LABEL, VOICE_MAX_MS,
   type Battery, type MapRoom, type Mood, type Seat,
 } from '@party/shared';
+import type { Note } from '@party/shared';
 import type { Party } from '../game/party';
 import type { PartyConnection } from '../net/types';
 import type { Artwork } from '../world/art';
@@ -188,6 +189,50 @@ export function createHud(conn: PartyConnection, controls: Controls) {
   on($('rec-cancel'), 'click', () => { endRec(); rec.cancel(); });
   cleanups.push(() => { rec.cancel(); endRec(); });
 
+  // ---- 📝 guest book, ❤️ on paintings: what guests leave for whoever comes next ----
+  const bookBtn = $('book-btn'), book = $('book'), bookList = $('book-list'), bookInput = $('book-input') as HTMLInputElement;
+  const likeChip = $('like-chip');
+  let notes: Note[] = [];
+  const likes = new Map<string, number>(), mine = new Set<string>();
+  const drawBook = () => {
+    bookList.innerHTML = notes.length
+      ? notes.slice().reverse().map(n => `<li><b>${esc(n.name)}</b><span>${esc(n.text)}</span></li>`).join('')
+      : '<li class="empty">아직 아무도 안 썼어요. 첫 줄을 남겨 보세요.</li>';
+  };
+  const drawLike = () => {
+    const key = current ? String(current.art.i) : '';
+    likeChip.hidden = !current;
+    if (!current) return;
+    likeChip.textContent = `${mine.has(key) ? '❤️' : '🤍'} ${likes.get(key) ?? 0}`;
+    likeChip.setAttribute('aria-pressed', String(mine.has(key)));
+    likeChip.setAttribute('aria-label', '이 그림 좋아요');
+  };
+  conn.on({
+    board: b => { notes = b.notes.slice(); likes.clear(); for (const [k, n] of Object.entries(b.likes)) likes.set(k, n); drawBook(); drawLike(); },
+    note: n => { notes.push(n); drawBook(); if (book.hidden) toast(`📝 ${n.name}: ${n.text}`, 3200); },
+    likes: (art, n) => { likes.set(art, n); drawLike(); },
+  });
+  conn.askBoard();
+  on(bookBtn, 'click', () => {
+    book.hidden = !book.hidden;
+    bookBtn.setAttribute('aria-expanded', String(!book.hidden));
+    sound.play('tick');
+    if (!book.hidden) { $('people').hidden = true; drawBook(); }
+  });
+  cleanups.push(onSubmit($('book-form') as HTMLFormElement, () => {
+    const text = bookInput.value.trim();
+    if (!text) return;
+    conn.writeNote(text); bookInput.value = '';
+    sound.play('send');
+  }));
+  on(likeChip, 'click', () => {
+    if (!current) return;
+    const key = String(current.art.i);
+    if (!mine.delete(key)) { mine.add(key); sound.play('heart'); } else sound.play('tick');
+    conn.like(key);
+    drawLike();
+  });
+
   // ---- people panel ----
   const peopleBtn = $('people-btn'), people = $('people'), plist = $('people-list');
   on(peopleBtn, 'click', () => {
@@ -256,6 +301,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
       current = p;
       chip.hidden = !p;
       if (p) chip.textContent = `「${p.art.title}」 살아난 그림 보기`;
+      drawLike();
     },
     arrived: (p: Painting) => openArt(p.art),
     seat: (o: { seat: Seat; seated: boolean } | null) => {
@@ -266,17 +312,26 @@ export function createHud(conn: PartyConnection, controls: Controls) {
     energy: (e: number) => { if (firstEnergy < 0) firstEnergy = e; lastEnergy = e; showEnergy(e); },
     charged: () => toast('⚡ 충전 완료! 오늘도 수고했어요', 4200),
     landed: () => { moodCard.hidden = false; },
+    timeEvent: (kind: 'bell' | 'friday' | 'late' | 'none', first: boolean) => {
+      if (kind === 'bell') { toast('🔔 여섯 시예요. 퇴근 시간!', 4200); return; }
+      const chip = $('event-chip');
+      chip.hidden = kind === 'none';
+      chip.textContent = kind === 'friday' ? '🔥 불금이에요' : kind === 'late' ? '🌙 밤이 깊었어요' : '';
+      $('night-veil').hidden = kind !== 'late';
+      if (first && kind === 'friday') toast('🔥 불금 시작! 이번 주도 수고했어요', 4200);
+      if (first && kind === 'late') toast('🌙 자정이 넘었어요. 막차 조심하세요', 4200);
+    },
     clinked: (name: string) => toast(`🥂 ${name}님과 짠! 충전 +3`, 2600),
     company: () => toast('💞 나란히 앉으면 충전이 더 빨라요', 3200),
     editHours: () => openHours(),
     stage: (near: boolean) => { fwChip.hidden = !near; if (near) showFw(); },
-    guests: (list: { id: string; name: string; battery: Battery; mood: Mood | ''; near: boolean; self: boolean; muted: boolean }[]) => {
+    guests: (list: { id: string; name: string; battery: Battery; mood: Mood | ''; near: boolean; self: boolean; muted: boolean; bot?: boolean }[]) => {
       const near = list.filter(g => g.near).length;
       $('who').textContent = near ? `${list.length}명 있어요, 근처에 ${near}명` : `${list.length}명 있어요`;
       if (people.hidden) return;
       plist.innerHTML = list.sort((a, b) => Number(b.self) - Number(a.self) || Number(b.near) - Number(a.near))
         .map(g => `<li><span>${g.battery === 'low' ? '🪫' : '🔋'}</span>
-          <span>${esc(g.name)}${g.mood ? ` ${MOOD_ICON[g.mood]}` : ''}${g.self ? '<span class="me">나</span>' : g.near ? '<span class="near">근처</span>' : ''}</span>
+          <span>${esc(g.name)}${g.mood ? ` ${MOOD_ICON[g.mood]}` : ''}${g.bot ? '<span class="botmark">🤖 봇</span>' : ''}${g.self ? '<span class="me">나</span>' : g.near ? '<span class="near">근처</span>' : ''}</span>
           ${g.self ? '<span></span>' : `<button type="button" data-mute="${esc(g.id)}" aria-pressed="${g.muted}">${g.muted ? '다시 보기' : '안 보기'}</button>`}</li>`).join('');
     },
   };
@@ -307,8 +362,8 @@ export function createHud(conn: PartyConnection, controls: Controls) {
     dispose() {
       cleanups.forEach(f => f());
       living.close();
-      $('bye-card').hidden = true; $('dock').hidden = false;
-      hud.hidden = true; people.hidden = true; chip.hidden = true;
+      $('bye-card').hidden = true; $('dock').hidden = false; $('night-veil').hidden = true; $('event-chip').hidden = true;
+      hud.hidden = true; people.hidden = true; chip.hidden = true; book.hidden = true; likeChip.hidden = true;
       $('help').hidden = true;
     },
   };

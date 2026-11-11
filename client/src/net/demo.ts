@@ -1,6 +1,6 @@
 import {
   customColor, localOffset,
-  CLINK, Clinks, TOGETHER, hasCompany, DOZE_AFTER, EMOTES, FIREWORK_COOLDOWN, nearStage, ENERGY, KINDS, MOOD_ENERGY, MOVE_HZ, HANDS, HATS, OUTFITS, WALK_SPEED, batteryOf, chargeRate, isNear, mapFor,
+  Board, CLINK, Clinks, TOGETHER, hasCompany, DOZE_AFTER, EMOTES, FIREWORK_COOLDOWN, nearStage, ENERGY, KINDS, MOOD_ENERGY, MOVE_HZ, HANDS, HATS, OUTFITS, WALK_SPEED, batteryOf, chargeRate, isNear, mapFor,
   findPath, moveWithCollision, nearestWalkable, stepEnergy,
   type Emote, type Look, type Mood, type Seat, type Theme, type WorldMap,
 } from '@party/shared';
@@ -98,7 +98,7 @@ export class DemoConnection implements PartyConnection {
       const p = i < 2 ? { x: sp.x - 2 + i * 2.5, z: sp.z - 2 + i } : spots[(i * 5) % spots.length];
       const pos = nearestWalkable(p, this.map);
       this.bots.push({
-        id: `bot${i}`, name: b.name + (opts.botSuffix ?? ''), look: lk, x: pos.x, z: pos.z, dir: Math.random() * 6, moving: false,
+        id: `bot${i}`, bot: true, name: b.name + (opts.botSuffix ?? ''), look: lk, x: pos.x, z: pos.z, dir: Math.random() * 6, moving: false,
         energy: b.energy, battery: batteryOf(b.energy), seat: -1, dozing: false, idle: Math.random() * 20, mood: b.mood, hours: BOT_HOURS[i % BOT_HOURS.length],
         target: null, route: [], wantSeat: null, wait: 2 + Math.random() * 6, lines: LINES[this.theme][i], nextLine: 3 + Math.random() * 6,
       });
@@ -169,6 +169,18 @@ export class DemoConnection implements PartyConnection {
   }
 
   private clinks = new Clinks();
+  /** The demo's guest book starts with a few lines from the bots, and they like a painting or two. */
+  private board = (() => {
+    const b = new Board(), now = Date.now();
+    [['소금빵', '오늘 회의 4개… 살았다'], ['월요병', '벌써 수요일이라니 믿기지 않아'], ['칼퇴요정', '6시 정각에 일어났습니다 ✌️']]
+      .forEach(([name, text], i) => b.note('seed' + i, name, text, now - (3 - i) * 600000));
+    b.like('seed0', '0'); b.like('seed1', '0'); b.like('seed2', '2');
+    return b;
+  })();
+  writeNote(text: string) { const n = this.board.note('me', this.me.name, text, Date.now()); if (n) this.ev.emit('note', n); }
+  like(art: string) { const n = this.board.like('me', art); if (n !== null) this.ev.emit('likes', art, n); }
+  /** Call once the party is listening: what was left before you came. */
+  askBoard() { this.ev.emit('board', this.board.snapshot()); }
   private peerAt = new Map<string, { x: number; z: number }>();
   private say(id: string, kind: Emote) {
     this.ev.emit('emote', id, kind);
@@ -309,5 +321,5 @@ export class DemoConnection implements PartyConnection {
 
 const strip = (b: NetPlayer): NetPlayer => ({
   id: b.id, name: b.name, look: b.look, x: b.x, z: b.z, dir: b.dir, moving: b.moving,
-  battery: b.battery, energy: Math.floor(b.energy), seat: b.seat, dozing: b.dozing, mood: b.mood, hours: b.hours,
+  battery: b.battery, energy: Math.floor(b.energy), seat: b.seat, dozing: b.dozing, mood: b.mood, hours: b.hours, bot: b.bot,
 });

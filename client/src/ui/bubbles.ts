@@ -19,7 +19,7 @@ export class Tag {
   /** Your own tag: tap it to edit your hours. */
   onEdit: (() => void) | null = null;
 
-  constructor(layer: HTMLElement, name: string, isSelf: boolean) {
+  constructor(layer: HTMLElement, name: string, isSelf: boolean, bot = false) {
     this.el.className = 'tag' + (isSelf ? ' self' : '');
     this.stack.className = 'stack';
     this.plate.className = 'plate';
@@ -27,6 +27,7 @@ export class Tag {
     this.moodEl.className = 'mood';
     this.nameEl.textContent = name;
     this.plate.append(this.batEl, this.nameEl, this.moodEl);
+    if (bot) { const b = document.createElement('span'); b.className = 'bot'; b.textContent = '🤖 봇'; b.title = '컴퓨터가 움직이는 손님이에요'; this.plate.append(b); this.el.classList.add('is-bot'); }
     this.hoursEl.className = 'hours';
     this.hoursEl.hidden = true;
     this.el.append(this.stack, this.hoursEl, this.plate);

@@ -368,3 +368,22 @@ html.touch .joystick { display: block; }
 .bye-card { animation: none; top: 50%; bottom: auto; transform: translate(-50%, -50%); text-align: center; min-width: 250px; }
 .bye-list { list-style: none; margin: 10px 0 8px; padding: 0; display: grid; gap: 7px; font-size: 14.5px; color: var(--ink); }
 .bye-note { margin: 0 0 12px; font-size: 12.5px; color: var(--ink-2); }
+
+/* pretend guests say so on their name tag */
+.tag .plate .bot { margin-left: 5px; font-size: 10px; font-weight: 600; letter-spacing: .02em; padding: 2px 5px; border-radius: 999px; background: #3a4a5c; color: #dff1ff; }
+.people .botmark { font-size: 10.5px; color: var(--ink-2); margin-left: 4px; }
+
+/* time of day at the party: the lights go low after midnight; a 불금 line on the room plate */
+.night-veil { position: fixed; inset: 0; pointer-events: none; z-index: 1; background: radial-gradient(ellipse at 50% 55%, rgba(12, 14, 46, .12), rgba(6, 8, 30, .42)); transition: opacity 2s; }
+.lp-event { margin: 3px 0 0; font-size: 12px; font-weight: 600; color: #b3402e; }
+
+/* 📝 guest book panel, and the heart beside a painting's button */
+.book ul { max-height: 38vh; overflow: auto; }
+.book li { grid-template-columns: 1fr; gap: 1px; }
+.book li b { font-size: 12px; color: var(--ink-2); font-weight: 600; }
+.book li.empty { color: var(--ink-2); font-size: 13px; border: 0; }
+.book-form { display: flex; gap: 6px; margin-top: 10px; }
+.book-form input { flex: 1; min-width: 0; background: #fbf6ec; border: 1px solid #cdbd9e; padding: 7px 9px; border-radius: 2px; font-size: 13.5px; }
+.like-chip { bottom: calc(132px + var(--safe-b)); min-width: 0; padding-left: 14px; padding-right: 14px; }
+.like-chip[aria-pressed="true"] { border-color: #ff7a93; }
+@media (max-width: 720px) { .like-chip { bottom: calc(166px + var(--safe-b)); } }

@@ -391,3 +391,39 @@ function addOutfit(look: Look, body: THREE.Group, isPenguin: boolean) {
     }
   }
 }
+
+const ANTENNA = {
+  rod: new THREE.CylinderGeometry(0.012, 0.012, 0.2, 5),
+  bulb: new THREE.SphereGeometry(0.045, 8, 6),
+  metal: new THREE.MeshStandardMaterial({ color: 0x9aa3ad, metalness: 0.7, roughness: 0.35 }),
+  light: new THREE.MeshBasicMaterial({ color: 0x7fe3ff }),
+};
+/** A little antenna with a glowing tip, behind one ear: this guest is played by the computer. */
+export function addAntenna(rig: AnimalRig) {
+  const g = new THREE.Group();
+  g.position.set(-0.16, 0.3, -0.12); g.rotation.z = 0.22;
+  const rod = new THREE.Mesh(ANTENNA.rod, ANTENNA.metal); rod.position.y = 0.1;
+  const bulb = new THREE.Mesh(ANTENNA.bulb, ANTENNA.light); bulb.position.y = 0.22;
+  g.add(rod, bulb);
+  rig.head.add(g);
+}
+
+const CROWN = {
+  band: new THREE.CylinderGeometry(0.115, 0.125, 0.07, 8, 1, true),
+  spike: new THREE.ConeGeometry(0.03, 0.075, 4),
+  gem: new THREE.SphereGeometry(0.02, 6, 5),
+  gold: new THREE.MeshStandardMaterial({ color: 0xf2c14e, metalness: 0.85, roughness: 0.25, emissive: 0x6b4a08, emissiveIntensity: 0.5, side: THREE.DoubleSide, flatShading: true }),
+  red: new THREE.MeshBasicMaterial({ color: 0xff5d7a }),
+};
+/** ⚡ Fully recharged: a small gold crown, worn at a tilt over one ear so it clears any hat. */
+export function addCrown(rig: AnimalRig) {
+  const g = new THREE.Group();
+  g.position.set(0.17, 0.33, 0.02); g.rotation.z = -0.32;
+  g.add(new THREE.Mesh(CROWN.band, CROWN.gold));
+  for (let i = 0; i < 5; i++) {
+    const a = i / 5 * Math.PI * 2;
+    const s = new THREE.Mesh(CROWN.spike, CROWN.gold); s.position.set(Math.cos(a) * 0.105, 0.07, Math.sin(a) * 0.105); g.add(s);
+  }
+  const gem = new THREE.Mesh(CROWN.gem, CROWN.red); gem.position.set(0, 0.005, 0.125); g.add(gem);
+  rig.head.add(g);
+}

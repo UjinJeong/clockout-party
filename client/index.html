@@ -13,6 +13,7 @@
 </head>
 <body>
   <canvas id="view" aria-label="파티장"></canvas>
+  <div id="night-veil" class="night-veil" aria-hidden="true" hidden></div>
   <div id="tags" aria-hidden="true"></div>
 
   <!-- 1. Invitation: name + character -->
@@ -96,12 +97,14 @@
         <p class="lp-title"><span id="party-title">퇴근 파티</span><em id="party-private" hidden>친구만</em></p>
         <p class="lp-where">지금 있는 곳 <b id="where">로비</b></p>
         <p class="lp-who" id="who">1명</p>
+        <p class="lp-event" id="event-chip" hidden></p>
       </div>
       <div class="hud-actions">
         <span class="clock" id="clock" title="창밖 하늘은 내가 접속한 곳의 시각을 따라가요"></span>
         <button class="btn small sound-btn" id="sound-btn" type="button" aria-label="소리">🔊</button>
         <button class="btn small" id="view-btn" type="button" title="가까이 보기 ↔ 멀리 보기 (V)">멀리 보기</button>
         <button class="btn small" id="invite-btn" type="button">초대하기</button>
+        <button class="btn small" id="book-btn" type="button" aria-expanded="false">📝 방명록</button>
         <button class="btn small" id="people-btn" type="button" aria-expanded="false">사람들</button>
         <button class="btn small ghost" id="leave-btn" type="button">나가기</button>
       </div>
@@ -109,12 +112,21 @@
     <p id="demo-banner" class="demo-banner" hidden>혼자 체험 중이에요. 봇 손님들이 함께 놀아 줘요.</p>
     <p id="help" class="help" hidden></p>
 
+    <aside id="book" class="people book" hidden>
+      <h3>📝 방명록</h3>
+      <ul id="book-list"></ul>
+      <form id="book-form" class="book-form" autocomplete="off">
+        <input id="book-input" maxlength="60" placeholder="한 줄 남기기 (예: 오늘도 살았다)" aria-label="방명록에 한 줄 남기기" enterkeyhint="send" />
+        <button class="btn small primary" type="submit">남기기</button>
+      </form>
+    </aside>
     <aside id="people" class="people" hidden>
       <h3>파티에 온 사람들</h3>
       <ul id="people-list"></ul>
     </aside>
 
     <button id="art-chip" class="art-chip" type="button" hidden></button>
+    <button id="like-chip" class="art-chip like-chip" type="button" hidden>🤍 0</button>
     <button id="seat-chip" class="art-chip seat-chip" type="button" hidden></button>
     <button id="fw-chip" class="art-chip fw-chip" type="button" hidden>🎆 불꽃놀이 쏘기</button>
 

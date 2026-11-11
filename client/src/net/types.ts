@@ -1,4 +1,4 @@
-import type { Battery, Emote, Look, Mood, Theme } from '@party/shared';
+import type { Battery, BoardSnapshot, Emote, Look, Mood, Note, Theme } from '@party/shared';
 
 /** Everything the game needs from "the party", whether it is a real server or the demo. */
 export interface NetPlayer {
@@ -13,6 +13,8 @@ export interface NetPlayer {
   mood: Mood | '';
   /** Work hours over their head, '0900-1800+540' (see shared/hours), '' when not shared. */
   hours: string;
+  /** A pretend guest played by the computer (shown with a 🤖 badge and a little antenna). */
+  bot?: boolean;
 }
 
 export interface PartyEvents {
@@ -25,6 +27,10 @@ export interface PartyEvents {
   snap(x: number, z: number): void;
   /** 🎆 someone launched fireworks from the DJ booth (`seed` makes every screen show the same volley). */
   firework(from: string, seed: number): void;
+  /** 📝❤️ what earlier guests left: the guest book and the hearts on paintings (sent when you arrive). */
+  board(b: BoardSnapshot): void;
+  note(n: Note): void;
+  likes(art: string, n: number): void;
   /** 🥂 짠! two guests near each other raised a glass together. */
   clink(a: string, b: string): void;
   /** 🚪 someone is going home: their lift comes, they wave, the doors close. */
@@ -58,6 +64,12 @@ export interface PartyConnection {
   hours(h: string): void;
   /** Launch fireworks from the DJ booth (the party checks you're there and not too often). */
   firework(): void;
+  /** Ask for the guest book and hearts left so far (answered with a `board` event). */
+  askBoard(): void;
+  /** Leave a line in the guest book. */
+  writeNote(text: string): void;
+  /** ❤️ a painting (again to take it back). */
+  like(art: string): void;
   /** Say you're going home (everyone sees you take the lift). Call leave() once the doors have shut. */
   bye(): void;
   leave(): void;
