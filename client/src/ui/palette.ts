@@ -31,16 +31,20 @@ export class Palette {
   private chip: HTMLElement; private code: HTMLElement;
   private offs: (() => void)[] = [];
 
-  constructor(private host: HTMLElement, hex: string, private onPick: (hex: string) => void) {
+  constructor(private host: HTMLElement, hex: string, private onPick: (hex: string) => void, private onSave?: (hex: string) => void) {
     host.innerHTML = '<div class="pal-sv" role="slider" aria-label="연하게↔진하게, 밝게↔어둡게"><i class="pal-dot"></i></div>'
       + '<div class="pal-hue" role="slider" aria-label="색깔"><i class="pal-knob"></i></div>'
-      + '<p class="pal-hex"><span class="pal-chip"></span><code></code></p>';
+      + '<p class="pal-hex"><span class="pal-chip"></span><code></code><button type="button" class="pal-save">＋ 내 색에 저장</button></p>';
     const q = (sel: string) => host.querySelector(sel) as HTMLElement;
     this.sv = q('.pal-sv'); this.dot = q('.pal-dot');
     this.hue = q('.pal-hue'); this.knob = q('.pal-knob');
     this.chip = q('.pal-chip'); this.code = q('.pal-hex code');
     this.drag(this.sv, (x, y) => this.pickSV(x, y));
     this.drag(this.hue, x => this.pickHue(x));
+    const saveBtn = q('.pal-save'), doSave = () => this.onSave?.(this.hex);
+    saveBtn.hidden = !onSave;
+    saveBtn.addEventListener('click', doSave);
+    this.offs.push(() => saveBtn.removeEventListener('click', doSave));
     this.set(hex);
   }
 

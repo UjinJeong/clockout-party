@@ -7,6 +7,8 @@ import { buildAnimal, type AnimalRig } from '../avatar/animal';
 import { Animator } from '../avatar/animator';
 import { $, load, onSubmit, save } from './dom';
 import { Palette } from './palette';
+import { addColor, myColors, removeColor, saveMyColors } from './myColors';
+import { toast } from './dom';
 import { hoursPicker } from './hoursPicker';
 import { sound } from '../audio/sound';
 
@@ -58,7 +60,8 @@ export function showStart(opts: StartOptions = {}): Promise<{ name: string; look
   };
 
   // ---- pickers ----
-  const kindBox = $('pick-kind'), colorBox = $('pick-color'), palBox = $('pick-palette');
+  const kindBox = $('pick-kind'), colorBox = $('pick-color'), palBox = $('pick-palette'), mineBox = $('pick-mine');
+  let mine = myColors();
   const hatBox = $('pick-hat'), handBox = $('pick-hand'), outfitBox = $('pick-outfit'), dice = $('pick-random');
   const chips = <T extends string>(list: readonly T[], label: Record<T, string>, slot: 'hat' | 'hand' | 'outfit') =>
     list.map(v => `<button type="button" data-slot="${slot}" data-v="${v}" aria-pressed="${look[slot] === v}">${label[v]}</button>`).join('');
@@ -68,6 +71,12 @@ export function showStart(opts: StartOptions = {}): Promise<{ name: string; look
     colorBox.innerHTML = PALETTE.map((c, i) => `<button type="button" data-c="${i}" aria-pressed="${look.color === i}" aria-label="색 ${i + 1}" style="background:${c}"></button>`).join('')
       + `<button type="button" class="pal-open" data-pal="1" aria-pressed="${own}" aria-expanded="${!palBox.hidden}" aria-label="팔레트에서 고르기"`
       + (own ? ` style="--own:${colorHex(look.color)}"` : '') + '></button>';
+    // 내 색: colours saved from the palette, one tap to wear again
+    const cur = own ? colorHex(look.color) : '';
+    mineBox.hidden = !mine.length;
+    mineBox.innerHTML = '<span class="mine-label">내 색</span>'
+      + mine.map(c => `<button type="button" data-mine="${c}" aria-pressed="${c === cur}" aria-label="저장한 색 ${c}" style="background:${c}"></button>`).join('')
+      + (mine.includes(cur) ? `<button type="button" class="mine-del" data-del="${cur}">지우기</button>` : '');
     hatBox.innerHTML = chips(HATS, HAT_LABEL, 'hat');
     handBox.innerHTML = chips(HANDS, HAND_LABEL, 'hand');
     outfitBox.innerHTML = chips(OUTFITS, OUTFIT_LABEL, 'outfit');
@@ -79,6 +88,12 @@ export function showStart(opts: StartOptions = {}): Promise<{ name: string; look
     const now = performance.now();
     if (now - lastNote > 90) { lastNote = now; sound.play('note', { pitch: SCALE[Math.round(palette.hueDeg / 360 * (SCALE.length - 1))], volume: 0.45 }); }
     if (!redraw) redraw = requestAnimationFrame(() => { redraw = 0; render(); rebuild(false); });
+  }, hex => {
+    look = { ...look, color: customColor(hex) };
+    mine = addColor(mine, colorHex(look.color)); saveMyColors(mine);
+    sound.play('note', { pitch: 2, volume: 0.6 });
+    toast('내 색에 저장했어요');
+    render();
   });
   const showPalette = (open: boolean) => {
     if (open) palette.set(colorHex(look.color));
@@ -90,13 +105,15 @@ export function showStart(opts: StartOptions = {}): Promise<{ name: string; look
     if (!b) return;
     if (b.dataset.k) look = { ...look, kind: b.dataset.k as Look['kind'] };
     else if (b.dataset.pal) { sound.play('whoosh', { pitch: palBox.hidden ? 1.3 : 0.9, volume: 0.7 }); showPalette(palBox.hidden); render(); return; }
+    else if (b.dataset.del) { mine = removeColor(mine, b.dataset.del); saveMyColors(mine); render(); return; }
+    else if (b.dataset.mine) { look = { ...look, color: customColor(b.dataset.mine) }; if (!palBox.hidden) palette.set(b.dataset.mine); }
     else if (b.dataset.c) { look = { ...look, color: Number(b.dataset.c) }; showPalette(false); }
     else if (b.dataset.slot && b.dataset.v) look = parseLook({ ...look, [b.dataset.slot]: b.dataset.v });
     else return;
     pickSound(b);
     render(); rebuild();
   };
-  const boxes = [kindBox, colorBox, hatBox, handBox, outfitBox];
+  const boxes = [kindBox, colorBox, mineBox, hatBox, handBox, outfitBox];
   boxes.forEach(el => el.addEventListener('click', onPick));
   const onDice = () => {
     sound.play('dice');

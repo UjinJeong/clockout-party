@@ -3,7 +3,7 @@ import { load, save } from './dom';
 
 /**
  * ⏰ "출퇴근 시간" picker: two plain text boxes you type a time into ("9", "930",
- * "09:10" — a real caret, unlike the native time control), with a list of half hours to pick from and ↑↓ to nudge, and a show/hide switch. Used on the invitation card and again in the party, from your own
+ * "09:10" — a real caret, unlike the native time control), and ↑↓ to nudge, and a show/hide switch. Used on the invitation card and again in the party, from your own
  * name tag. The choice is remembered on this device.
  */
 const KEY = 'party.hours';
@@ -23,20 +23,16 @@ export function hoursValue(s: Saved = savedHours()): string {
 const label = clockLabel;
 /** A typed time → minutes. Forgiving: "9", "930", "9:30", "18시" (see shared parseClock). */
 export const parseTime = parseClock;
-const OPTIONS = Array.from({ length: 48 }, (_, i) => `<option value="${clockLabel(i * 30)}"></option>`).join('');
-let lists = 0;
 
 export interface HoursPicker { value(): string; saved(): Saved; dispose(): void }
 
 export function hoursPicker(host: HTMLElement, onChange?: (s: Saved) => void): HoursPicker {
   let s = savedHours();
-  const list = `hp-times-${++lists}`;
   const box = (cls: string, name: string, v: number) =>
-    `<input type="text" class="${cls}" aria-label="${name} 시간" value="${label(v)}" inputmode="numeric" maxlength="8" placeholder="${label(v)}" list="${list}" autocomplete="off" spellcheck="false" enterkeyhint="done" />`;
+    `<input type="text" class="${cls}" aria-label="${name} 시간" value="${label(v)}" inputmode="numeric" maxlength="8" placeholder="${label(v)}" autocomplete="off" spellcheck="false" enterkeyhint="done" />`;
   host.innerHTML = `${box('hp-start', '출근', s.start)}
     <span class="hp-dash" aria-hidden="true">~</span>
     ${box('hp-end', '퇴근', s.end)}
-    <datalist id="${list}">${OPTIONS}</datalist>
     <button type="button" class="hp-show" aria-pressed="${s.show}"></button>`;
   const start = host.querySelector<HTMLInputElement>('.hp-start')!, end = host.querySelector<HTMLInputElement>('.hp-end')!;
   const show = host.querySelector<HTMLButtonElement>('.hp-show')!;
