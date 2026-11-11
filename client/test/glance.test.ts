@@ -59,3 +59,29 @@ describe('recolouring keeps the motion going', () => {
     expect(b.rig.face.smile).toBeCloseTo(a.rig.face.smile, 6);
   });
 });
+
+describe('퇴근! the celebration', () => {
+  it('jumps three times with the arms up, then lands', () => {
+    const { rig, anim } = make();
+    anim.play('hooray');
+    let peaks = 0, up = false, top = 0, arm = 0;
+    for (let i = 0; i < 2.7 * 60; i++) {
+      anim.update(1 / 60, body());
+      const y = rig.root.position.y;
+      top = Math.max(top, y); arm = Math.max(arm, Math.abs(rig.armL.rotation.z));
+      if (y > 0.2 && !up) { up = true; peaks++; } else if (y < 0.08) up = false;
+    }
+    expect(peaks).toBe(3);
+    expect(top).toBeGreaterThan(0.35);
+    expect(arm).toBeGreaterThan(2);
+    run(anim, 0.3, body());
+    expect(rig.root.position.y).toBeCloseTo(0, 3);
+  });
+  it('stays in the seat when sitting (arms still go up)', () => {
+    const { rig, anim } = make();
+    run(anim, 1, body(undefined, { pose: 'sit', baseY: 0.2 }));
+    anim.play('hooray'); run(anim, 0.5, body(undefined, { pose: 'sit', baseY: 0.2 }));
+    expect(rig.root.position.y).toBeCloseTo(0.2, 1);
+    expect(Math.abs(rig.armL.rotation.z)).toBeGreaterThan(1.5);
+  });
+});

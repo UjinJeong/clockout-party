@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {
-  ENERGY, MOOD_ICON, MOOD_LABEL, MOVE_HZ, NEAR_RADIUS, WALK_SPEED, findPath, fromWorld, inWater, isNear, nearStage, onDanceFloor, toWorld, moveWithCollision, nearSeat, roomAt,
+  ENERGY, MOOD_ICON, MOOD_LABEL, MOVE_HZ, NEAR_RADIUS, WALK_SPEED, clockedOut, findPath, parseHours, fromWorld, inWater, isNear, nearStage, onDanceFloor, toWorld, moveWithCollision, nearSeat, roomAt,
   type Battery, type Emote, type MapRoom, type Mood, type Seat, type Vec2,
 } from '@party/shared';
 import { buildAnimal, type AnimalRig } from '../avatar/animal';
@@ -34,6 +34,8 @@ interface Guest {
   /** The lift they're stepping out of, while arriving. */
   arrive: Elevator | null;
   sighed: boolean;
+  /** 퇴근 celebration: seconds since it began (−1 when not celebrating). */
+  hooray: number;
 }
 
 const zTex = () => canvasTexture(64, 64, (x, w, h) => {
@@ -214,7 +216,7 @@ export class Party {
       arrive: isSelf || this.settled
         ? new Elevator(this.scene, new THREE.Vector3(p.x, 0, p.z), 0, isSelf ? undefined : () => sound.play('ding', { at: { x: p.x, z: p.z }, volume: 0.6 }))
         : null,
-      sighed: false,
+      sighed: false, hooray: -1,
     });
     const g0 = this.guests.get(p.id)!;
     if (g0.arrive) { g0.dir = 0; g0.rig.root.visible = false; }
@@ -411,7 +413,19 @@ export class Party {
 
     this.sparkles.tick(dt);
     // work-hours statuses move with the clock ("퇴근까지 40분" → "39분")
-    if ((this.hoursT -= dt) <= 0) { this.hoursT = 20; const now = Date.now(); for (const g of this.guests.values()) g.tag.setHours(g.net.hours, now); }
+    if ((this.hoursT -= dt) <= 0) {
+      this.hoursT = 1;
+      const now = Date.now(), fresh = now - this.hoursShown >= 20000;
+      for (const g of this.guests.values()) {
+        const h = parseHours(g.net.hours);
+        // the clock just passed their 퇴근 time, here at the party
+        if (h && this.hoursSeen && now - this.hoursSeen < 120000 && clockedOut(h, this.hoursSeen, now)) this.clockOut(g);
+        else if (fresh) g.tag.setHours(g.net.hours, now);
+      }
+      if (fresh) this.hoursShown = now;
+      this.hoursSeen = now;
+    }
+    for (const g of this.guests.values()) if (g.hooray >= 0) this.hoorayFx(g, dt);
     this.placeTags();
     this.listT -= dt;
     if (this.listDirty || this.listT <= 0) this.emitList();
@@ -572,7 +586,34 @@ export class Party {
   }
   private stepT = 0.2;
   private lift = 0;
-  private hoursT = 20;
+  private hoursT = 1;
+  private hoursSeen = 0;   // when we last checked everyone's clock
+  private hoursShown = 0;  // when the "퇴근까지 …" lines were last rewritten
+
+  /** 퇴근! Three jumps, party poppers overhead, and everyone nearby hears it. */
+  clockOut(g: Guest) {
+    g.hooray = 0;
+    g.anim.play('hooray');
+    g.tag.setHours(g.net.hours, Date.now());
+    g.tag.say('퇴근이다!! 🎉');
+    const isSelf = g.net.id === this.conn.selfId;
+    sound.play('charged', isSelf ? {} : { at: { x: g.pos.x, z: g.pos.y }, volume: 0.6 });
+  }
+  private static POPS = [0.15, 0.95, 1.75];
+  private static CONFETTI = ['#ff6b8b', '#ffd23f', '#4fd1c5', '#7aa2ff', '#c084fc', '#fff1c4', '#8fe36b'];
+  private hoorayFx(g: Guest, dt: number) {
+    const before = g.hooray; g.hooray += dt;
+    const where = { at: { x: g.pos.x, z: g.pos.y } };
+    Party.POPS.forEach((t, i) => {
+      if (before > t || g.hooray <= t) return;
+      // a popper to one side, then the other, then right overhead
+      const at = g.rig.head.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3([-0.7, 0.7, 0][i], 0.55 + i * 0.15, 0));
+      this.sparkles.burst(at, Party.CONFETTI, i === 2 ? 90 : 55);
+      sound.play('boom', { ...where, pitch: 2.4 + i * 0.3, volume: 0.35 });
+      sound.play('crackle', { ...where, volume: 0.6 });
+    });
+    if (g.hooray > 3) g.hooray = -1;
+  }
   private atStage = false;
 
   /** Nodding off: a few Z's drift up from the head. */

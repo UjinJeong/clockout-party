@@ -25,7 +25,9 @@ export const GLANCE = { away: 1.25, head: 1.45, body: 0.95, short: 0.35 } as con
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
 /** Emotes anyone can send, plus a few moves the party plays by itself. */
-export type Gesture = Emote | 'sigh';
+export type Gesture = Emote | 'sigh' | 'hooray';
+/** Most gestures take EMOTE_TIME; the 퇴근 celebration is three whole jumps. */
+export const gestureTime = (g: Gesture) => g === 'hooray' ? 2.7 : 1.5;
 
 /** Code-driven motion: walking, idle breathing, sitting, lying, dozing, and a short gesture per emote. */
 export class Animator {
@@ -50,7 +52,7 @@ export class Animator {
 
   play(kind: Gesture) {
     this.emote = kind; this.emoteT = 0;
-    if (kind !== 'zone' && kind !== 'sigh') this.glanceT = Animator.EMOTE_TIME + 0.3; // those two look away on purpose
+    if (kind !== 'zone' && kind !== 'sigh') this.glanceT = gestureTime(kind) + 0.3; // those two look away on purpose
   }
 
   /** Carry on from another animator mid-motion (the animal was rebuilt, e.g. recoloured), so nothing jumps. */
@@ -104,7 +106,7 @@ export class Animator {
     // Sleepy eyes: barely open when drained, a little more as you recharge; shut when dozing; a slow blink.
     const blink = (t % 4.3) > 4.1;
     const open = blink ? 0.06 : 0.14 + 0.48 * charge;
-    const face = expressionFor(b.mood ?? '', this.emote, this.emoteT / Animator.EMOTE_TIME, t, charge);
+    const face = expressionFor(b.mood ?? '', this.emote, this.emoteT / gestureTime(this.emote ?? 'wave'), t, charge);
     if (this.doze > 0.5 && !this.emote) { face.eyes = 'shut'; face.open = 0; face.smile = Math.min(face.smile, 0.1); }
     this.groove = ease(this.groove, b.dance !== undefined && !b.moving && b.pose === 'stand' ? 1 : 0, 5);
     if (this.groove > 0.5 && !this.emote) { face.eyes = 'happy'; face.smile = Math.max(face.smile, 0.85); face.blush = Math.max(face.blush, 0.7); face.brow = Math.max(face.brow, 0.3); }
@@ -186,7 +188,7 @@ export class Animator {
     const r = this.rig;
     if (!this.emote) return;
     this.emoteT += dt;
-    const p = this.emoteT / Animator.EMOTE_TIME;
+    const p = this.emoteT / gestureTime(this.emote);
     if (p >= 1) { this.emote = null; return; }
     const env = Math.sin(Math.PI * Math.min(1, p * 1.15)); // ease in/out
     switch (this.emote) {
@@ -222,6 +224,18 @@ export class Animator {
         // slow, agreeable nods: "mm, mm"
         r.head.rotation.x += Math.abs(Math.sin(this.emoteT * 6.5)) * 0.32 * env;
         break;
+      case 'hooray': {
+        // 퇴근이다! three jumps, arms thrown up (a drink goes up in a toast instead)
+        const hop = Math.abs(Math.sin(p * Math.PI * 3)), free = Math.max(0, 1 - this.sit - this.lie);
+        r.root.position.y += hop * 0.5 * free; // every jump as high as the last (the arms ease in and out, the jumps don't)
+        r.legL.rotation.x += -0.5 * hop * env * free; r.legR.rotation.x += -0.5 * hop * env * free;
+        const shake = Math.sin(this.emoteT * 18) * 0.18 * env;
+        r.armL.rotation.z = -2.5 * env + shake;
+        if (r.held) { r.armR.rotation.x = -2.3 * env; r.armR.rotation.z = 0.1; } else r.armR.rotation.z = 2.5 * env + shake;
+        r.head.rotation.x -= 0.3 * env;
+        r.bodyPivot.rotation.x -= 0.12 * env;
+        break;
+      }
       case 'sigh': {
         // stepping out of the lift after work: hand to the collar, tug the tie loose, shoulders drop
         const up = Math.min(1, p * 2.4), down = Math.max(0, (p - 0.55) / 0.45);

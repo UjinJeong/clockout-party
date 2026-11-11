@@ -54,7 +54,7 @@ describe('⏰ work hours', () => {
   });
 });
 
-import { parseClock, clockLabel } from '../src/hours';
+import { parseClock, clockLabel, clockedOut } from '../src/hours';
 describe('parseClock: a time as people type it', () => {
   it.each([
     ['9', 540], ['18', 1080], ['930', 570], ['0910', 550], ['9:10', 550], ['09:10', 550], ['9.10', 550],
@@ -62,4 +62,18 @@ describe('parseClock: a time as people type it', () => {
   ])('%s → %i', (text, want) => expect(parseClock(text)).toBe(want));
   it.each(['', 'abc', '24', '2460', '9:60', '12345', ':', '9:1:2'])('rejects "%s"', text => expect(parseClock(text)).toBeNull());
   it('labels round-trip', () => { for (const m of [0, 550, 1439]) expect(parseClock(clockLabel(m))).toBe(m); });
+});
+
+describe('clockedOut: the moment work ends', () => {
+  const h = { start: 540, end: 1080, tz: 540 };
+  it('true only across the end of the day', () => {
+    expect(clockedOut(h, at(17, 59), at(18, 0))).toBe(true);
+    expect(clockedOut(h, at(17, 58), at(17, 59))).toBe(false);
+    expect(clockedOut(h, at(18, 0), at(18, 1))).toBe(false);
+    expect(clockedOut(h, at(8, 59), at(9, 0))).toBe(false);
+  });
+  it('works for a night shift and for someone in another time zone', () => {
+    expect(clockedOut({ start: 1320, end: 360, tz: 540 }, at(5, 59), at(6, 0))).toBe(true);
+    expect(clockedOut({ start: 540, end: 1020, tz: 0 }, at(1, 59), at(2, 0))).toBe(true); // 17:00 in London is 02:00 in Seoul
+  });
 });

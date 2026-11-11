@@ -39,6 +39,7 @@ const FLASH: Record<Gesture, Expression> = {
   wave:   { eyes: 'sleepy', smile: 0.7, open: 0.1, brow: 0.5, blush: 0.5 },
   nod:    { eyes: 'happy', smile: 0.35, open: 0, brow: 0, blush: 0.4 },
   zone:   { eyes: 'dot', smile: 0, open: 0, brow: 0, blush: 0.1 },
+  hooray: { eyes: 'happy', smile: 1, open: 0.9, brow: 0.7, blush: 0.9 },
   sigh:   { eyes: 'shut', smile: -0.1, open: 0.35, brow: -0.4, blush: 0.2 },
 };
 

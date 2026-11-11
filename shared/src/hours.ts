@@ -53,6 +53,11 @@ export function hoursStatus(h: WorkHours, nowMs: number): { state: WorkState; te
   return { state: 'off', text: `퇴근 ${duration(mod(local - h.end))}째 🍻` };
 }
 
+const atWork = (h: WorkHours, ms: number) => hoursStatus(h, ms).state === 'working';
+/** Did the working day end between these two moments? (퇴근! — the cue for the party's little celebration.) */
+export const clockedOut = (h: WorkHours, prevMs: number, nowMs: number): boolean =>
+  nowMs > prevMs && atWork(h, prevMs) && !atWork(h, nowMs);
+
 /** This device's UTC offset in minutes (Seoul: +540). */
 export const localOffset = (d = new Date()) => -d.getTimezoneOffset();
 
