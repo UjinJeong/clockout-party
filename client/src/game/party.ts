@@ -13,7 +13,8 @@ import type { Controls } from './controls';
 import { Sparkles } from './effects';
 import { cameraPose } from './camera';
 import { canvasTexture } from '../world/textures';
-import { ARRIVAL, Elevator, ding } from './elevator';
+import { ARRIVAL, Elevator } from './elevator';
+import { sound } from '../audio/sound';
 
 interface Guest {
   net: NetPlayer;
@@ -44,6 +45,8 @@ let zTexture: THREE.Texture | null = null;
 
 /** How far a guest sinks when standing in the pool (the ring keeps them up). */
 const WADE_DEPTH = 0.5;
+/** Seconds per footstep: one per swing of the walk cycle (sin(t·9) → π/9). */
+const STEP_EVERY = Math.PI / 9;
 const FLOATIE_COLORS = ['#ff7aa2', '#ffd166', '#6fd3c7', '#ff9f68'];
 const floatieGeo = new THREE.TorusGeometry(0.46, 0.14, 10, 22);
 
@@ -136,9 +139,20 @@ export class Party {
       add: p => this.addGuest(p),
       change: p => this.updateGuest(p),
       remove: id => this.removeGuest(id),
-      chat: (from, text) => { if (!this.muted.has(from)) this.guests.get(from)?.tag.say(text); },
+      chat: (from, text) => {
+        const g = this.guests.get(from);
+        if (this.muted.has(from) || !g) return;
+        g.tag.say(text);
+        if (from === conn.selfId) sound.play('send');
+        else sound.play('pop', { at: { x: g.pos.x, z: g.pos.y }, pitch: 0.9 + (hash(from) % 5) * 0.06 });
+      },
       emote: (from, kind) => { if (!this.muted.has(from)) this.playEmote(from, kind); },
-      voice: (from, blob, ms) => { if (!this.muted.has(from)) this.guests.get(from)?.tag.voice(blob, ms, from === conn.selfId); },
+      voice: (from, blob, ms) => {
+        const g = this.guests.get(from);
+        if (this.muted.has(from) || !g) return;
+        g.tag.voice(blob, ms, from === conn.selfId);
+        if (from !== conn.selfId) sound.play('pop', { at: { x: g.pos.x, z: g.pos.y }, pitch: 0.8 });
+      },
       snap: (x, z) => { const me = this.self(); if (me) { me.pos.set(x, z); me.net.x = x; me.net.z = z; } },
     });
 
@@ -185,11 +199,14 @@ export class Party {
       net: { ...p }, rig, anim: new Animator(rig), tag, pos: new THREE.Vector2(p.x, p.z), dir: p.dir,
       lookKey: JSON.stringify(p.look), wet: 0, floatie: null, zzz: null, lastEnergy: p.energy,
       // you, and anyone who joins after you, arrive by the 퇴근 lift
-      arrive: isSelf || this.settled ? new Elevator(this.scene, new THREE.Vector3(p.x, 0, p.z), 0, isSelf ? () => ding() : undefined) : null,
+      arrive: isSelf || this.settled
+        ? new Elevator(this.scene, new THREE.Vector3(p.x, 0, p.z), 0, isSelf ? undefined : () => sound.play('ding', { at: { x: p.x, z: p.z }, volume: 0.6 }))
+        : null,
       sighed: false,
     });
     const g0 = this.guests.get(p.id)!;
     if (g0.arrive) { g0.dir = 0; g0.rig.root.visible = false; }
+    if (isSelf && g0.arrive) { sound.setListener(p.x, p.z); sound.play('lift'); } // hum, ding, doors — in time with ARRIVAL
     g0.tag.setMood(p.mood ? MOOD_ICON[p.mood] : '', p.mood ? MOOD_LABEL[p.mood] : '');
     if (isSelf) { this.camTarget.set(p.x, 0, p.z); this.snapCamera(); }
     this.listDirty = true;
@@ -205,8 +222,16 @@ export class Party {
       const wasSeated = g.net.seat >= 0;
       g.net = { ...p, x: g.net.x, z: g.net.z, dir: g.net.dir, moving: g.net.moving };
       const seat = this.seatOf(p.seat);
-      if (seat && !wasSeated) { g.pos.set(seat.x, seat.z); g.dir = seat.dir; g.net.x = seat.x; g.net.z = seat.z; g.net.dir = seat.dir; }
-    } else g.net = { ...p };
+      if (seat && !wasSeated) {
+        g.pos.set(seat.x, seat.z); g.dir = seat.dir; g.net.x = seat.x; g.net.z = seat.z; g.net.dir = seat.dir;
+        sound.play(seat.pose === 'lie' ? 'lie' : 'sit');
+      }
+      if (!seat && wasSeated) sound.play('stand');
+    } else {
+      const seat = this.seatOf(p.seat);
+      if (seat && g.net.seat < 0) sound.play(seat.pose === 'lie' ? 'lie' : 'sit', { at: { x: seat.x, z: seat.z }, volume: 0.6 });
+      g.net = { ...p };
+    }
     g.tag.setName(p.name);
     g.tag.setBattery(p.battery);
     g.tag.setMood(p.mood ? MOOD_ICON[p.mood] : '', p.mood ? MOOD_LABEL[p.mood] : '');
@@ -235,6 +260,7 @@ export class Party {
     if (!g) return;
     g.anim.play(kind);
     g.tag.emote(kind);
+    sound.play(kind, { at: { x: g.pos.x, z: g.pos.y }, pitch: from === this.conn.selfId ? 1 : 0.92 + (hash(from) % 6) * 0.03 });
     // a little burst of light in the room, from the raised glass or above the head
     if (kind === 'cheers' || kind === 'heart' || kind === 'clap') {
       const at = new THREE.Vector3(g.pos.x, 1.75, g.pos.y);
@@ -334,6 +360,7 @@ export class Party {
       const baseY = seat ? (seat.pose === 'lie' ? seat.y - 0.04 : seat.y - 0.24) : this.wade(g, dt);
       let moving = !seat && (id === this.conn.selfId ? g.net.moving : g.net.moving || Math.hypot(g.net.x - g.pos.x, g.net.z - g.pos.y) > 0.05);
       if (g.arrive) moving = this.arriving(g, dt, id === this.conn.selfId) || moving;
+      if (id === this.conn.selfId) this.footsteps(g, moving && !g.arrive, dt);
       g.anim.update(dt, { moving, energy: g.net.energy, pose: seat ? seat.pose : 'stand', dozing: g.net.dozing, baseY, mood: g.net.mood });
       this.dozeFx(g, dt);
       this.chargeFx(g, id === this.conn.selfId);
@@ -484,6 +511,7 @@ export class Party {
     me.pos.set(seat.stand.x, seat.stand.z);
     me.net.seat = -1; me.net.x = seat.stand.x; me.net.z = seat.stand.z;
     this.conn.stand();
+    sound.play('stand');
   }
 
   /** Stepping out of the lift: drawn a little back inside it until the doors are open, then out, then a sigh. */
@@ -492,13 +520,26 @@ export class Party {
     e.update(dt);
     g.rig.root.visible = e.guestVisible();
     g.rig.root.position.z -= e.guestOffset();
-    if (!g.sighed && e.t >= ARRIVAL.out) { g.sighed = true; g.anim.play('sigh'); }
+    if (!g.sighed && e.t >= ARRIVAL.out) { g.sighed = true; g.anim.play('sigh'); sound.play('sigh', { at: { x: g.pos.x, z: g.pos.y } }); }
     if (e.done) {
       g.arrive = null; g.rig.root.visible = true;
       if (isSelf) this.hooks.landed();
     }
     return e.stepping();
   }
+
+  /** Your own steps (one per stride of the walk cycle), on wood, deck or in the water; and a snore when you doze. */
+  private footsteps(g: Guest, moving: boolean, dt: number) {
+    sound.setListener(g.pos.x, g.pos.y);
+    sound.dozing(g.net.dozing);
+    if (!moving) { this.stepT = 0.2; return; }
+    this.stepT += dt;
+    if (this.stepT < STEP_EVERY) return;
+    this.stepT -= STEP_EVERY;
+    const wet = inWater({ x: g.pos.x, z: g.pos.y }, this.world.map);
+    sound.play(wet ? 'step-water' : this.conn.theme === 'pool' ? 'step-deck' : 'step-wood', { volume: 0.7 });
+  }
+  private stepT = 0.2;
 
   /** Nodding off: a few Z's drift up from the head. */
   private dozeFx(g: Guest, dt: number) {
@@ -529,6 +570,7 @@ export class Party {
       const at = g.rig.head.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 0.3, 0));
       this.sparkles.burst(at, ['#9dff9a', '#fff1c4', '#7ad7ff', '#ffd27a'], 46);
       g.anim.play('wave');
+      sound.play('charged', isSelf ? {} : { at: { x: g.pos.x, z: g.pos.y }, volume: 0.5 });
       if (isSelf) this.hooks.charged();
       else g.tag.say('충전 완료! ✨');
     }
@@ -595,8 +637,12 @@ export class Party {
     this.ring.removeFromParent(); this.targetMark.removeFromParent();
     for (const h of this.seatHits) { h.removeFromParent(); h.geometry.dispose(); }
     this.sparkles.dispose();
+    sound.dozing(false);
   }
 }
+
+/** A small stable number per guest id, so each voice keeps its own pitch. */
+function hash(id: string) { let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; }
 
 function turn(a: number, b: number, k: number) {
   let d = b - a;

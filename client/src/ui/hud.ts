@@ -12,6 +12,7 @@ import { VoiceRecorder } from '../audio/recorder';
 import type { Controls } from '../game/controls';
 import { isTyping } from '../game/controls';
 import { $, esc, load, onSubmit, save, toast } from './dom';
+import { sound, SOUND_LABEL } from '../audio/sound';
 
 const EMOTE_LABEL = { cheers: '건배', laugh: '웃음', clap: '박수', heart: '좋아요', wow: '놀람', wave: '손 흔들기', nod: '끄덕끄덕', zone: '같이 멍때리기' } as const;
 
@@ -59,6 +60,17 @@ export function createHud(conn: PartyConnection, controls: Controls) {
   tickClock();
   const clockT = setInterval(tickClock, 20_000);
   cleanups.push(() => clearInterval(clockT));
+
+  // ---- 🔊 all → effects only → off ----
+  const soundBtn = $('sound-btn');
+  const showSound = () => {
+    const l = SOUND_LABEL[sound.mode];
+    soundBtn.textContent = l.icon;
+    soundBtn.title = `${l.text} (누르면 바뀌어요)`;
+    soundBtn.setAttribute('aria-label', l.text);
+  };
+  showSound();
+  on(soundBtn, 'click', () => { sound.unlock(); sound.cycle(); showSound(); sound.play('tick'); toast(SOUND_LABEL[sound.mode].text, 1400); });
 
   // ---- camera view: close behind you, or the overview ----
   const viewBtn = $('view-btn');
@@ -121,10 +133,11 @@ export function createHud(conn: PartyConnection, controls: Controls) {
     const m = (e.target as HTMLElement).closest<HTMLButtonElement>('button')?.dataset.mood as Mood | undefined;
     if (!m) return;
     conn.mood(m);
+    sound.play(`mood-${m}`);
     moodCard.hidden = true;
     toast(`${MOOD_REPLY[m]} (지금 에너지 ${MOOD_ENERGY[m]}%)`, 3600);
   });
-  on($('mood-skip'), 'click', () => { moodCard.hidden = true; });
+  on($('mood-skip'), 'click', () => { sound.play('tick'); moodCard.hidden = true; });
   cleanups.push(() => { moodCard.hidden = true; });
 
   // ---- seats: sit down nearby, or get up ----
@@ -141,10 +154,11 @@ export function createHud(conn: PartyConnection, controls: Controls) {
   let recTimer = 0;
   mic.hidden = !conn.voiceOk || !VoiceRecorder.supported();
   const fmt = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
-  const endRec = () => { clearInterval(recTimer); recbar.hidden = true; dock.hidden = false; };
+  const endRec = () => { clearInterval(recTimer); recbar.hidden = true; dock.hidden = false; sound.unduck(); };
   on(mic, 'click', async () => {
     try {
       await rec.start();
+      sound.duck(40);
     } catch {
       toast('마이크를 쓸 수 없어요. 브라우저 주소창 옆에서 마이크 권한을 허용해 주세요.', 4000);
       if (conn.demo) mic.hidden = true;

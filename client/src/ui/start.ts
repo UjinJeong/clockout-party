@@ -7,6 +7,7 @@ import { buildAnimal, type AnimalRig } from '../avatar/animal';
 import { Animator } from '../avatar/animator';
 import { $, load, onSubmit, save } from './dom';
 import { Palette } from './palette';
+import { sound } from '../audio/sound';
 
 /** The invitation card: write a name, dress up your animal (colour, hat, paw, outfit), with a turning 3D preview. */
 export interface StartOptions {
@@ -83,15 +84,16 @@ export function showStart(opts: StartOptions = {}): Promise<{ name: string; look
     const b = (e.target as HTMLElement).closest('button');
     if (!b) return;
     if (b.dataset.k) look = { ...look, kind: b.dataset.k as Look['kind'] };
-    else if (b.dataset.pal) { showPalette(palBox.hidden); render(); return; }
+    else if (b.dataset.pal) { sound.play('tick', { pitch: 1.3 }); showPalette(palBox.hidden); render(); return; }
     else if (b.dataset.c) { look = { ...look, color: Number(b.dataset.c) }; showPalette(false); }
     else if (b.dataset.slot && b.dataset.v) look = parseLook({ ...look, [b.dataset.slot]: b.dataset.v });
     else return;
+    sound.play('tick', { pitch: b.dataset.k ? 0.85 : b.dataset.c ? 1.15 : 1 });
     render(); rebuild();
   };
   const boxes = [kindBox, colorBox, hatBox, handBox, outfitBox];
   boxes.forEach(el => el.addEventListener('click', onPick));
-  const onDice = () => { look = randomLook(); showPalette(false); render(); rebuild(); };
+  const onDice = () => { sound.play('dice'); look = randomLook(); showPalette(false); render(); rebuild(); };
   dice.addEventListener('click', onDice);
   rebuild(true);
 
@@ -108,6 +110,7 @@ export function showStart(opts: StartOptions = {}): Promise<{ name: string; look
   const onPlacePick = (e: Event) => {
     const t = (e.target as HTMLElement).closest<HTMLButtonElement>('button')?.dataset.place;
     if (!isTheme(t) || t === theme) return;
+    sound.play('tick', { pitch: 0.75 });
     theme = t; renderPlaces(); opts.onPlace?.(t);
   };
   if (opts.places) { renderPlaces(); placeBox.addEventListener('click', onPlacePick); opts.onPlace?.(theme); }

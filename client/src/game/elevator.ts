@@ -122,21 +122,3 @@ export class Elevator {
 }
 
 const smooth = (x: number) => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
-
-/** A soft two-tone "ding" (only after the visitor has clicked, so browsers allow sound). */
-let audio: AudioContext | null = null;
-export function ding(volume = 0.12) {
-  try {
-    audio ??= new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-    const now = audio.currentTime;
-    for (const [f, at] of [[1318.5, 0], [1046.5, 0.16]] as const) {
-      const o = audio.createOscillator(), g = audio.createGain();
-      o.type = 'sine'; o.frequency.value = f;
-      g.gain.setValueAtTime(0, now + at);
-      g.gain.linearRampToValueAtTime(volume, now + at + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, now + at + 0.9);
-      o.connect(g).connect(audio.destination);
-      o.start(now + at); o.stop(now + at + 1);
-    }
-  } catch { /* no sound here: fine */ }
-}

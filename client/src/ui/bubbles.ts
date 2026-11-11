@@ -1,4 +1,5 @@
 import { EMOTE_ICON, type Battery, type Emote } from '@party/shared';
+import { sound } from '../audio/sound';
 
 /**
  * The little gallery-label name tag that floats above each guest, plus the
@@ -88,9 +89,9 @@ export class Tag {
       if (!audio.paused) { audio.pause(); audio.currentTime = 0; return; }
       void audio.play().catch(() => b.classList.add('err'));
     });
-    audio.addEventListener('play', () => { b.classList.add('playing'); b.querySelector('.play')!.textContent = '■'; });
+    audio.addEventListener('play', () => { b.classList.add('playing'); b.querySelector('.play')!.textContent = '■'; sound.duck(ms / 1000 + 0.3); });
     const stop = () => { b.classList.remove('playing'); b.querySelector('.play')!.textContent = '▶'; };
-    audio.addEventListener('pause', stop);
+    audio.addEventListener('pause', () => { stop(); sound.unduck(); });
     audio.addEventListener('ended', stop);
     if (isSelf) b.classList.add('mine');
     this.push(b, 20000, () => { audio.pause(); URL.revokeObjectURL(url); });

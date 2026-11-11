@@ -12,6 +12,7 @@ import { showStart } from './ui/start';
 import { showLobby, parseCode } from './ui/lobby';
 import { createHud } from './ui/hud';
 import { $, toast } from './ui/dom';
+import { sound } from './audio/sound';
 
 /** Demo builds (e.g. the shareable preview) skip the server entirely. */
 const DEMO_ONLY = import.meta.env.MODE === 'demo';
@@ -137,6 +138,7 @@ async function run() {
       party = new Party(scene, camera, canvas, world, conn, controls, $('tags'), hud.hooks);
       step = '화면 연결';
       hud.attach(party);
+      sound.setMusic(conn.theme);
       step = '입장 완료';
       if (!conn.demo && conn.isPrivate) toast('친구만 들어오는 파티예요. 위의 "초대하기"로 링크를 보내 주세요.', 4000);
       setUrl(conn.demo ? location.pathname : `?room=${encodeURIComponent(conn.roomId)}`);
@@ -149,6 +151,7 @@ async function run() {
       try { conn.leave(); } catch { /* already gone */ }
       how = 'lost';
     }
+    sound.setMusic(null);
     try { party?.dispose(); } catch (err) { console.error(err); }
     party = null;
     try { hud?.dispose(); } catch (err) { console.error(err); }
@@ -170,6 +173,9 @@ function describe(err: unknown): string {
 function setUrl(url: string) {
   try { history.replaceState(null, '', url); } catch { /* not allowed here: fine */ }
 }
+
+// Browsers only allow sound after a click or a key: wake it on the first one (and every one after, cheaply).
+for (const ev of ['pointerdown', 'keydown'] as const) addEventListener(ev, () => sound.unlock(), { capture: true, passive: true });
 
 // Anything unexpected shows up as a toast instead of a silently frozen screen.
 addEventListener('error', e => { console.error(e.error ?? e.message); });
