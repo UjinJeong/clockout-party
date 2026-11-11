@@ -1,5 +1,5 @@
 import { Client, Callbacks, type Room } from '@colyseus/sdk';
-import { ROOM_NAME, isMood, isTheme, parseLook, type Battery, type Emote, type Look, type Mood, type Theme } from '@party/shared';
+import { sanitizeHours, ROOM_NAME, isMood, isTheme, parseLook, type Battery, type Emote, type Look, type Mood, type Theme } from '@party/shared';
 import { Emitter, type NetPlayer, type PartyConnection, type PartyEvents } from './types';
 
 /**
@@ -27,13 +27,13 @@ export type JoinRequest =
   | { mode: 'create'; title: string; private: boolean; theme: Theme }
   | { mode: 'join'; roomId: string };
 
-export async function connectParty(req: JoinRequest, name: string, look: Look): Promise<PartyConnection> {
+export async function connectParty(req: JoinRequest, name: string, look: Look, hours = ''): Promise<PartyConnection> {
   const client = new Client(serverUrl());
   // The time zone paints the visitor's sky and tells the manager page roughly where they are.
   const tz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return undefined; } })();
   const room = req.mode === 'create'
-    ? await client.create(ROOM_NAME, { title: req.title, private: req.private, theme: req.theme, name, look, tz })
-    : await client.joinById(req.roomId, { name, look, tz });
+    ? await client.create(ROOM_NAME, { title: req.title, private: req.private, theme: req.theme, name, look, tz, hours })
+    : await client.joinById(req.roomId, { name, look, tz, hours });
   const conn = new ColyseusConnection(room);
   // Wait for the first full state so the room title and the guest list are ready.
   await new Promise<void>(res => { room.onStateChange.once(() => res()); setTimeout(res, 3000); });
@@ -43,7 +43,7 @@ export async function connectParty(req: JoinRequest, name: string, look: Look): 
 interface ServerPlayer {
   name: string; kind: string; color: number; hat: string; hand: string; outfit: string;
   x: number; z: number; dir: number; moving: boolean; battery: string;
-  energy: number; seat: number; dozing: boolean; mood: string;
+  energy: number; seat: number; dozing: boolean; mood: string; hours?: string;
 }
 
 class ColyseusConnection implements PartyConnection {
@@ -57,7 +57,7 @@ class ColyseusConnection implements PartyConnection {
     const toNet = (id: string, p: ServerPlayer): NetPlayer => ({
       id, name: p.name, look: parseLook({ kind: p.kind, color: p.color, hat: p.hat, hand: p.hand, outfit: p.outfit }),
       x: p.x, z: p.z, dir: p.dir, moving: p.moving, battery: p.battery as Battery,
-      energy: p.energy ?? 0, seat: p.seat ?? -1, dozing: !!p.dozing, mood: isMood(p.mood) ? p.mood : '',
+      energy: p.energy ?? 0, seat: p.seat ?? -1, dozing: !!p.dozing, mood: isMood(p.mood) ? p.mood : '', hours: sanitizeHours(p.hours),
     });
     cb.onAdd('players', (p: ServerPlayer, id: string) => {
       const np = toNet(id, p);
@@ -100,6 +100,7 @@ class ColyseusConnection implements PartyConnection {
   stand() { this.room.send('stand', {}); }
   mood(m: Mood) { this.room.send('mood', { mood: m }); }
   firework() { this.room.send('firework', {}); }
+  hours(h: string) { this.room.send('hours', { hours: h }); }
   leave() { void this.room.leave(true); }
 }
 

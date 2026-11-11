@@ -65,6 +65,8 @@ export interface PartyHooks {
   landed(): void;
   /** Standing at the DJ booth (fireworks can be launched from here), or not. */
   stage(near: boolean): void;
+  /** You tapped your own name tag: change your work hours. */
+  editHours(): void;
 }
 
 
@@ -203,6 +205,8 @@ export class Party {
     const isSelf = p.id === this.conn.selfId;
     const tag = new Tag(this.tagLayer, p.name, isSelf);
     tag.setBattery(p.battery);
+    tag.setHours(p.hours);
+    if (isSelf) tag.onEdit = () => this.hooks.editHours();
     this.guests.set(p.id, {
       net: { ...p }, rig, anim: new Animator(rig), tag, pos: new THREE.Vector2(p.x, p.z), dir: p.dir,
       lookKey: JSON.stringify(p.look), wet: 0, floatie: null, zzz: null, lastEnergy: p.energy,
@@ -242,6 +246,7 @@ export class Party {
     }
     g.tag.setName(p.name);
     g.tag.setBattery(p.battery);
+    g.tag.setHours(p.hours);
     g.tag.setMood(p.mood ? MOOD_ICON[p.mood] : '', p.mood ? MOOD_LABEL[p.mood] : '');
     const key = JSON.stringify(p.look);
     if (key !== g.lookKey) {
@@ -399,6 +404,8 @@ export class Party {
     }
 
     this.sparkles.tick(dt);
+    // work-hours statuses move with the clock ("퇴근까지 40분" → "39분")
+    if ((this.hoursT -= dt) <= 0) { this.hoursT = 20; const now = Date.now(); for (const g of this.guests.values()) g.tag.setHours(g.net.hours, now); }
     this.placeTags();
     this.listT -= dt;
     if (this.listDirty || this.listT <= 0) this.emitList();
@@ -559,6 +566,7 @@ export class Party {
   }
   private stepT = 0.2;
   private lift = 0;
+  private hoursT = 20;
   private atStage = false;
 
   /** Nodding off: a few Z's drift up from the head. */

@@ -1,4 +1,4 @@
-import { EMOTE_ICON, type Battery, type Emote } from '@party/shared';
+import { EMOTE_ICON, hoursLabel, hoursStatus, parseHours, type Battery, type Emote } from '@party/shared';
 import { sound } from '../audio/sound';
 
 /**
@@ -12,6 +12,12 @@ export class Tag {
   private nameEl = document.createElement('b');
   private batEl = document.createElement('span');
   private moodEl = document.createElement('span');
+  private hoursEl = document.createElement('div');
+  private hoursRaw: string | null = null;
+  /** How far above the anchor the speech bubbles start (taller with an hours line). */
+  private base = 26;
+  /** Your own tag: tap it to edit your hours. */
+  onEdit: (() => void) | null = null;
 
   constructor(layer: HTMLElement, name: string, isSelf: boolean) {
     this.el.className = 'tag' + (isSelf ? ' self' : '');
@@ -21,8 +27,16 @@ export class Tag {
     this.moodEl.className = 'mood';
     this.nameEl.textContent = name;
     this.plate.append(this.batEl, this.nameEl, this.moodEl);
-    this.el.append(this.stack, this.plate);
+    this.hoursEl.className = 'hours';
+    this.hoursEl.hidden = true;
+    this.el.append(this.stack, this.hoursEl, this.plate);
     layer.append(this.el);
+    if (isSelf) {
+      const edit = (e: Event) => { e.stopPropagation(); this.onEdit?.(); };
+      this.plate.addEventListener('click', edit);
+      this.hoursEl.addEventListener('click', edit);
+      this.plate.title = '눌러서 출퇴근 시간 바꾸기';
+    }
   }
 
   setName(n: string) { if (this.nameEl.textContent !== n) this.nameEl.textContent = n; }
@@ -44,6 +58,26 @@ export class Tag {
     this.moodEl.hidden = !icon;
   }
 
+  /**
+   * ⏰ Work hours over the name: "9:00–18:00 · 퇴근 2시간째 🍻". Call again now and
+   * then (the status moves with the clock). Your own tag without hours invites you to add them.
+   */
+  setHours(raw: string, now = Date.now()) {
+    const h = parseHours(raw);
+    const self = this.el.classList.contains('self');
+    let text = '';
+    if (h) text = `⏰ ${hoursLabel(h)} · ${hoursStatus(h, now).text}`;
+    else if (self) text = '⏰ 출퇴근 시간 쓰기 +';
+    if (text === this.hoursRaw) return;
+    this.hoursRaw = text;
+    this.hoursEl.textContent = text;
+    this.hoursEl.hidden = !text;
+    this.hoursEl.classList.toggle('empty', !h);
+    if (h) this.hoursEl.dataset.state = hoursStatus(h, now).state; else delete this.hoursEl.dataset.state;
+    this.base = text ? 46 : 26;
+    this.stack.style.bottom = `${this.base + this.lifted}px`;
+  }
+
   setNear(near: boolean) { this.el.classList.toggle('near', near); }
 
   place(x: number, y: number, visible: boolean, depth: number) {
@@ -55,7 +89,7 @@ export class Tag {
 
   /** Size of the bubble stack on screen, or null when nobody is talking. */
   stackBox(): { w: number; h: number } | null {
-    if (!this.stack.childElementCount) { if (this.lifted) { this.lifted = 0; this.stack.style.bottom = ''; } return null; }
+    if (!this.stack.childElementCount) { if (this.lifted) { this.lifted = 0; this.stack.style.bottom = `${this.base}px`; } return null; }
     return { w: this.stack.offsetWidth, h: this.stack.offsetHeight };
   }
 
@@ -64,7 +98,7 @@ export class Tag {
     const v = Math.round(px);
     if (v === this.lifted) return;
     this.lifted = v;
-    this.stack.style.bottom = `${26 + v}px`;
+    this.stack.style.bottom = `${this.base + v}px`;
   }
 
   say(text: string) {

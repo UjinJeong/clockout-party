@@ -11,6 +11,8 @@ export interface NetPlayer {
   dozing: boolean;
   /** How their day went, '' until they say. */
   mood: Mood | '';
+  /** Work hours over their head, '0900-1800+540' (see shared/hours), '' when not shared. */
+  hours: string;
 }
 
 export interface PartyEvents {
@@ -48,6 +50,8 @@ export interface PartyConnection {
   stand(): void;
   /** Answer "오늘 하루 어땠어요?" (the first answer sets how charged you arrive). */
   mood(m: Mood): void;
+  /** Change (or hide, with '') the work hours over your head. */
+  hours(h: string): void;
   /** Launch fireworks from the DJ booth (the party checks you're there and not too often). */
   firework(): void;
   leave(): void;

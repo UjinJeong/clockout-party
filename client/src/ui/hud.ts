@@ -13,6 +13,7 @@ import type { Controls } from '../game/controls';
 import { isTyping } from '../game/controls';
 import { $, esc, load, onSubmit, save, toast } from './dom';
 import { sound, SOUND_LABEL } from '../audio/sound';
+import { hoursPicker, type HoursPicker } from './hoursPicker';
 
 const EMOTE_LABEL = { cheers: '건배', laugh: '웃음', clap: '박수', heart: '좋아요', wow: '놀람', wave: '손 흔들기', nod: '끄덕끄덕', zone: '같이 멍때리기' } as const;
 
@@ -234,6 +235,18 @@ export function createHud(conn: PartyConnection, controls: Controls) {
   });
   cleanups.push(() => { clearInterval(fwTimer); fwChip.hidden = true; });
 
+  // ---- ⏰ work hours, from your own name tag ----
+  const hoursCard = $('hours-card');
+  let picker: HoursPicker | null = null;
+  const openHours = () => {
+    sound.play('whoosh', { pitch: 1.2, volume: 0.7 });
+    picker?.dispose();
+    picker = hoursPicker($('hours-edit'), () => { sound.play('bubble', { pitch: 1.1 }); conn.hours(picker!.value()); });
+    hoursCard.hidden = false;
+  };
+  on($('hours-done'), 'click', () => { sound.play('tick'); hoursCard.hidden = true; });
+  cleanups.push(() => { picker?.dispose(); hoursCard.hidden = true; });
+
   const hooks = {
     room: (r: MapRoom) => { $('where').textContent = r.name; },
     painting: (p: Painting | null) => {
@@ -250,6 +263,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
     energy: (e: number) => showEnergy(e),
     charged: () => toast('⚡ 충전 완료! 오늘도 수고했어요', 4200),
     landed: () => { moodCard.hidden = false; },
+    editHours: () => openHours(),
     stage: (near: boolean) => { fwChip.hidden = !near; if (near) showFw(); },
     guests: (list: { id: string; name: string; battery: Battery; mood: Mood | ''; near: boolean; self: boolean; muted: boolean }[]) => {
       const near = list.filter(g => g.near).length;

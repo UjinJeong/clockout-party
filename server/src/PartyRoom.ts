@@ -1,6 +1,6 @@
 import { Room, type Client } from '@colyseus/core';
 import {
-  DOZE_AFTER, ENERGY, FIREWORK_COOLDOWN, nearStage, MAX_PLAYERS, MAX_SPEED, MOOD_ENERGY, batteryOf, chargeRate, finite, isEmote, isMood, isTheme, mapFor,
+  DOZE_AFTER, ENERGY, FIREWORK_COOLDOWN, nearStage, sanitizeHours, MAX_PLAYERS, MAX_SPEED, MOOD_ENERGY, batteryOf, chargeRate, finite, isEmote, isMood, isTheme, mapFor,
   moveWithCollision, nearbyIds, nearestWalkable, stepEnergy, type WorldMap, parseLook, sanitizeChat, sanitizeName, sanitizeTitle, validateVoice,
 } from '@party/shared';
 import { PartyState, Player } from './schema';
@@ -47,6 +47,12 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
       if (!isEmote(kind)) return;
       this.active(client.sessionId);
       this.toNearby(client, 'emote', { from: client.sessionId, kind });
+    },
+    /** ⏰ change (or hide, with '') the work hours over your head */
+    hours: (client: Client, m: unknown) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p) return;
+      p.hours = sanitizeHours((m as { hours?: unknown } | null)?.hours);
     },
     /** 🎆 from the DJ booth: a volley for the whole party (one every few seconds per room). */
     firework: (client: Client) => {
@@ -107,7 +113,7 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
     this.state.players.set(client.sessionId, new Player({
       name, kind: look.kind, color: look.color, hat: look.hat, hand: look.hand, outfit: look.outfit,
       x: spot.x, z: spot.z, dir: 0, moving: false,
-      energy: ENERGY.start, battery: batteryOf(ENERGY.start), seat: -1, dozing: false, mood: '',
+      energy: ENERGY.start, battery: batteryOf(ENERGY.start), seat: -1, dozing: false, mood: '', hours: sanitizeHours(options.hours),
     }));
     this.tracks.set(client.sessionId, { at: Date.now(), voiceAt: 0, energy: ENERGY.start, idle: 0, moodSet: false });
     stats.join({ id: client.sessionId, name, roomId: this.roomId, roomTitle: this.state.title, isPrivate: this.state.isPrivate, tz: options.tz });

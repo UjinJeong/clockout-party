@@ -1,5 +1,5 @@
 import {
-  customColor,
+  customColor, localOffset,
   DOZE_AFTER, EMOTES, FIREWORK_COOLDOWN, nearStage, ENERGY, KINDS, MOOD_ENERGY, MOVE_HZ, HANDS, HATS, OUTFITS, WALK_SPEED, batteryOf, chargeRate, isNear, mapFor,
   findPath, moveWithCollision, nearestWalkable, stepEnergy,
   type Emote, type Look, type Mood, type Seat, type Theme, type WorldMap,
@@ -15,6 +15,9 @@ import { Emitter, type NetPlayer, type PartyConnection, type PartyEvents } from 
  */
 /** Bots 1 and 4 wear a colour from the palette instead of a swatch. */
 const BOT_COLORS: Record<number, string> = { 1: '#2a9d8f', 4: '#b07cd8' };
+
+/** Everyone keeps different hours (on this device's clock): office, late shift, night shift, freelancer, part-time… */
+const BOT_HOURS = ['0900-1800', '1000-1900', '1300-2200', '2200-0630', '0830-1730', '1100-2000'].map(h => `${h}${localOffset() >= 0 ? '+' : '-'}${Math.abs(localOffset())}`);
 
 const BOTS: { name: string; energy: number; mood: Mood }[] = [
   { name: '월요병', energy: 12, mood: 'drained' },
@@ -75,13 +78,13 @@ export class DemoConnection implements PartyConnection {
   private map: WorldMap;
   readonly theme: Theme;
 
-  constructor(name: string, look: Look, opts: { botSuffix?: string; theme?: Theme } = {}) {
+  constructor(name: string, look: Look, opts: { botSuffix?: string; theme?: Theme; hours?: string } = {}) {
     this.map = mapFor(opts.theme);
     this.theme = this.map.theme;
     const at = nearestWalkable(this.map.spawn, this.map);
     this.me = {
       id: 'me', name, look, x: at.x, z: at.z, dir: 0, moving: false,
-      energy: ENERGY.start, battery: batteryOf(ENERGY.start), seat: -1, dozing: false, idle: 0, mood: '',
+      energy: ENERGY.start, battery: batteryOf(ENERGY.start), seat: -1, dozing: false, idle: 0, mood: '', hours: opts.hours ?? '',
     };
     BOTS.forEach((b, i) => {
       // every bot dressed differently, so the party shows off the wardrobe
@@ -96,7 +99,7 @@ export class DemoConnection implements PartyConnection {
       const pos = nearestWalkable(p, this.map);
       this.bots.push({
         id: `bot${i}`, name: b.name + (opts.botSuffix ?? ''), look: lk, x: pos.x, z: pos.z, dir: Math.random() * 6, moving: false,
-        energy: b.energy, battery: batteryOf(b.energy), seat: -1, dozing: false, idle: Math.random() * 20, mood: b.mood,
+        energy: b.energy, battery: batteryOf(b.energy), seat: -1, dozing: false, idle: Math.random() * 20, mood: b.mood, hours: BOT_HOURS[i % BOT_HOURS.length],
         target: null, route: [], wantSeat: null, wait: 2 + Math.random() * 6, lines: LINES[this.theme][i], nextLine: 3 + Math.random() * 6,
       });
     });
@@ -135,6 +138,8 @@ export class DemoConnection implements PartyConnection {
     this.wake(this.me);
     this.ev.emit('change', strip(this.me));
   }
+
+  hours(h: string) { this.me.hours = h; this.ev.emit('change', strip(this.me)); }
 
   mood(m: Mood) {
     this.me.mood = m;
@@ -277,5 +282,5 @@ export class DemoConnection implements PartyConnection {
 
 const strip = (b: NetPlayer): NetPlayer => ({
   id: b.id, name: b.name, look: b.look, x: b.x, z: b.z, dir: b.dir, moving: b.moving,
-  battery: b.battery, energy: Math.floor(b.energy), seat: b.seat, dozing: b.dozing, mood: b.mood,
+  battery: b.battery, energy: Math.floor(b.energy), seat: b.seat, dozing: b.dozing, mood: b.mood, hours: b.hours,
 });

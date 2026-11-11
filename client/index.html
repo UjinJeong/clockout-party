@@ -31,6 +31,10 @@
           <legend>파티 장소</legend>
           <div id="pick-place" class="places" role="radiogroup" aria-label="파티 장소"></div>
         </fieldset>
+        <fieldset class="hours-row">
+          <legend>⏰ 출퇴근 시간 <small>머리 위에 보여요 · 다른 사람도 봐요</small></legend>
+          <div id="pick-hours" class="hours-pick"></div>
+        </fieldset>
         <div class="dress">
           <div class="dress-look">
             <canvas id="preview" width="200" height="220" aria-label="내 캐릭터 미리보기"></canvas>
@@ -114,6 +118,12 @@
     <button id="seat-chip" class="art-chip seat-chip" type="button" hidden></button>
     <button id="fw-chip" class="art-chip fw-chip" type="button" hidden>🎆 불꽃놀이 쏘기</button>
 
+    <div id="hours-card" class="mood-card hours-card" role="dialog" aria-labelledby="hours-q" hidden>
+      <p id="hours-q" class="mood-q">⏰ 출퇴근 시간</p>
+      <div id="hours-edit" class="hours-pick"></div>
+      <p class="hours-note">내 이름 위에 보여요. 퇴근까지 얼마나 남았는지도 같이요.</p>
+      <button type="button" id="hours-done" class="btn small primary">다 됐어요</button>
+    </div>
     <div id="mood-card" class="mood-card" role="dialog" aria-labelledby="mood-q" hidden>
       <p id="mood-q" class="mood-q">오늘 하루 어땠어요?</p>
       <div id="mood-pick" class="mood-pick"></div>

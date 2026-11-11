@@ -7,6 +7,7 @@ import { buildAnimal, type AnimalRig } from '../avatar/animal';
 import { Animator } from '../avatar/animator';
 import { $, load, onSubmit, save } from './dom';
 import { Palette } from './palette';
+import { hoursPicker } from './hoursPicker';
 import { sound } from '../audio/sound';
 
 /** The invitation card: write a name, dress up your animal (colour, hat, paw, outfit), with a turning 3D preview. */
@@ -17,7 +18,7 @@ export interface StartOptions {
   onPlace?: (theme: Theme) => void;
 }
 
-export function showStart(opts: StartOptions = {}): Promise<{ name: string; look: Look; theme: Theme }> {
+export function showStart(opts: StartOptions = {}): Promise<{ name: string; look: Look; theme: Theme; hours: string }> {
   const screen = $('start');
   screen.hidden = false;
   const saved = load<{ name?: string; look?: Look; theme?: Theme }>('party.me') ?? {};
@@ -105,6 +106,9 @@ export function showStart(opts: StartOptions = {}): Promise<{ name: string; look
   dice.addEventListener('click', onDice);
   rebuild(true);
 
+  // ---- ⏰ work hours ----
+  const hours = hoursPicker($('pick-hours'), () => sound.play('bubble', { pitch: 1.1 }));
+
   // ---- where the party is ----
   const placeRow = $('place-row'), placeBox = $('pick-place');
   placeRow.hidden = !opts.places;
@@ -139,9 +143,10 @@ export function showStart(opts: StartOptions = {}): Promise<{ name: string; look
       offSubmit();
       boxes.forEach(el => el.removeEventListener('click', onPick));
       dice.removeEventListener('click', onDice);
+      hours.dispose();
       cancelAnimationFrame(redraw); palette.dispose(); palBox.hidden = true;
       screen.hidden = true;
-      resolve({ name, look, theme });
+      resolve({ name, look, theme, hours: hours.value() });
     };
     nameInput.addEventListener('input', () => nameInput.setCustomValidity(''));
     const typing = (e: KeyboardEvent) => { if (!e.isComposing && e.key.length <= 2 || e.key === 'Backspace') sound.play('key', { pitch: e.key === 'Backspace' ? 0.7 : 1 }); };

@@ -103,22 +103,22 @@ async function run() {
       const lobby = await getRoom();
       const room = lobby ? await themeRoom(lobby, theme) : null;
       try {
-        conn = room ? new LiveRoomConnection(room, me.name, me.look, theme) : new DemoConnection(me.name, me.look, { theme });
+        conn = room ? new LiveRoomConnection(room, me.name, me.look, theme, me.hours) : new DemoConnection(me.name, me.look, { theme, hours: me.hours });
       } catch (err) {
         // The shared room failed: still let them in, just with the bot guests.
         console.error(err);
         toast(`같이 둘러보기 연결이 안 돼서 혼자 체험으로 들어가요.\n[같이 둘러보기] ${describe(err)}`, 12000);
-        conn = new DemoConnection(me.name, me.look, { theme });
+        conn = new DemoConnection(me.name, me.look, { theme, hours: me.hours });
       }
     } else {
       const choice = firstJoin ?? await showLobby(lobbyError);
       firstJoin = null;
       lobbyError = undefined;
       if (choice.mode === 'back') { me = await showStart(); continue; }
-      if (choice.mode === 'demo') conn = new DemoConnection(me.name, me.look, { theme: choice.theme });
+      if (choice.mode === 'demo') conn = new DemoConnection(me.name, me.look, { theme: choice.theme, hours: me.hours });
       else {
         try {
-          conn = await join(choice, me.name, me.look);
+          conn = await join(choice, me.name, me.look, me.hours);
         } catch (err) {
           lobbyError = describeJoinError(err, choice);
           continue;
@@ -185,8 +185,8 @@ addEventListener('unhandledrejection', e => {
   toast(`문제가 생겼어요. 새로고침하면 대부분 해결돼요.\n${describe(e.reason)}`, 8000);
 });
 
-async function join(req: JoinRequest, name: string, look: Look) {
-  return connectParty(req, name, look);
+async function join(req: JoinRequest, name: string, look: Look, hours: string) {
+  return connectParty(req, name, look, hours);
 }
 
 function describeJoinError(err: unknown, req: JoinRequest): string {

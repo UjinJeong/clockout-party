@@ -22,6 +22,8 @@ export const Player = schema({
   dozing: t.boolean(),
   /** How their day went ("오늘 하루 어땠어요?"), '' until they say. */
   mood: t.string(),
+  /** Work hours shown over your head, '0900-1800+540' (see shared/hours), '' when not shared. */
+  hours: t.string(),
 }, 'Player');
 export type Player = SchemaType<typeof Player>;
 

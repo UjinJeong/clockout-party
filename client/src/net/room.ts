@@ -1,4 +1,4 @@
-import {
+import { sanitizeHours,
   ENERGY, THEME_LABEL, batteryOf, isEmote, isFireworkSeed, isMood, isNear, parseLook, sanitizeChat, sanitizeName, type Emote, type Look, type Mood, type Theme,
 } from '@party/shared';
 import { DemoConnection } from './demo';
@@ -58,8 +58,8 @@ export class LiveRoomConnection implements PartyConnection {
   private me = { x: 0, z: 0 };
   private offs: (() => void)[] = [];
 
-  constructor(private room: RoomApi, private name: string, private look: Look, readonly theme: Theme = 'gallery') {
-    this.bots = new DemoConnection(name, look, { botSuffix: ' 🤖', theme });
+  constructor(private room: RoomApi, private name: string, private look: Look, readonly theme: Theme = 'gallery', private myHours = '') {
+    this.bots = new DemoConnection(name, look, { botSuffix: ' 🤖', theme, hours: myHours });
     this.offs.push(room.onPeers(c => {
       for (const p of [...c.joined, ...c.updated]) {
         if (p.isMe && p.sameTab) continue;
@@ -100,7 +100,7 @@ export class LiveRoomConnection implements PartyConnection {
   }
 
   private presence(extra: Record<string, unknown>) {
-    return { n: this.name, k: this.look.kind, c: this.look.color, h: this.look.hat, a: this.look.hand, o: this.look.outfit, ...extra };
+    return { n: this.name, k: this.look.kind, c: this.look.color, h: this.look.hat, a: this.look.hand, o: this.look.outfit, hr: this.myHours || null, ...extra };
   }
 
   on(h: Partial<PartyEvents>) {
@@ -120,6 +120,7 @@ export class LiveRoomConnection implements PartyConnection {
   sit(seatId: number) { this.bots.sit(seatId); }
   stand() { this.bots.stand(); }
   mood(m: Mood) { this.bots.mood(m); }
+  hours(h: string) { this.myHours = h; this.bots.hours(h); void this.room.presence({ hr: h || null }).catch(() => {}); }
   firework() {
     const seed = this.bots.fireworkSeed();
     if (seed === null) return;
@@ -153,5 +154,6 @@ function toPlayer(p: RoomPeer): NetPlayer | null {
     seat: typeof s.s === 'number' && Number.isInteger(s.s) ? s.s : -1,
     dozing: s.dz === true,
     mood: isMood(s.md) ? s.md : '',
+    hours: sanitizeHours(s.hr),
   };
 }

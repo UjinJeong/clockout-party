@@ -429,3 +429,21 @@ describe('🎆 fireworks at the pool party', () => {
     expect(m).toBe(0);
   });
 });
+
+describe('⏰ work hours over your head', () => {
+  it('arrive with them, change them, hide them — and nonsense is dropped', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', {});
+    const a = await colyseus.connectTo(room, { name: 'A', look, hours: '0900-1800+540' });
+    const b = await colyseus.connectTo(room, { name: 'B', look, hours: '<b>always</b>' });
+    await room.waitForNextPatch();
+    expect(room.state.players.get(a.sessionId)!.hours).toBe('0900-1800+540');
+    expect(room.state.players.get(b.sessionId)!.hours).toBe('');
+    a.send('hours', { hours: '1000-1900+540' });
+    await wait(120);
+    expect(room.state.players.get(a.sessionId)!.hours).toBe('1000-1900+540');
+    expect((b.state as any).players.get(a.sessionId).hours).toBe('1000-1900+540'); // everyone sees it
+    a.send('hours', { hours: '' });
+    await wait(120);
+    expect(room.state.players.get(a.sessionId)!.hours).toBe('');
+  });
+});
