@@ -23,6 +23,8 @@ export interface World {
   fadeOccluders(camera: THREE.Vector3): void;
   /** Load the heavier images once the first frame is up. */
   loadArt(onProgress?: (done: number, total: number) => void): Promise<void>;
+  /** Where everyone is standing right now: things in the world can react (pool toys get shoved). */
+  nudge?(guests: { x: number; z: number }[]): void;
   /** Fireworks for everyone (pool party): `seed` makes every screen show the same volley. */
   celebrate?(seed: number): void;
   /** 0–1: something worth looking up at (fireworks) — the close camera tilts up a little. */

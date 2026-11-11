@@ -49,6 +49,8 @@ export interface WorldMap {
   seats: Seat[];
   /** A DJ booth, where fireworks can be launched (pool party). */
   stage?: Rect;
+  /** A dance floor: anyone standing still on it dances to the music. */
+  dance?: Rect;
   /** Parts drawn somewhere other than where they're walked (a second floor). */
   lifts?: Lift[];
   /** Named places within the rooms (upstairs, the stairs). */
@@ -241,6 +243,8 @@ export const POOL = {
   // off to the side of the DJ stage, so they never stand between you and it
   umbrellas: [{ x: 32.2, z: -2.4, r: 0.15 }, { x: 31.2, z: 3.4, r: 0.15 }] as Furniture[],
   dj: { x0: 35.4, x1: 38.6, z0: -4.9, z1: -3.9 } as Rect,
+  // the light-up dance floor in front of the booth: stand still on it and you dance
+  dance: { x0: 34.9, x1: 39.1, z0: -3.35, z1: -0.2 } as Rect,
   bonfire: { x: 34.2, z: 1.4, r: 0.6 } as Furniture,
   barStools: [3.6, 5.5, 7.4].map(x => ({ x, z: -2.75, r: 0.2 })) as Furniture[],
 };
@@ -271,6 +275,8 @@ export const POOL_MAP: WorldMap = {
     ...[3.6, 5.5, 7.4].map(x => seat(x, -2.75, 0.78, Math.PI, 'sit', { x, z: -1.95 })),
   ],
   stage: POOL.dj,
+  dance: POOL.dance,
+  zones: [{ id: 'dance', name: '댄스 플로어 🕺', ...POOL.dance }],
 };
 
 export const MAPS: Record<Theme, WorldMap> = { gallery: GALLERY_MAP, home: HOME_MAP, pool: POOL_MAP };
@@ -310,6 +316,12 @@ export function fromWorld(map: WorldMap, w: { x: number; y: number; z: number })
     return { x: w.x, z: r.z0 + (r.z1 - r.z0) * u };
   }
   return { x: w.x, z: w.z };
+}
+
+/** On the dance floor? */
+export function onDanceFloor(p: Vec2, map: WorldMap): boolean {
+  const d = map.dance;
+  return !!d && p.x > d.x0 && p.x < d.x1 && p.z > d.z0 && p.z < d.z1;
 }
 
 function inRect(p: Vec2, r: Rect, pad: number) {

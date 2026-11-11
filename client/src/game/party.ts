@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {
-  ENERGY, MOOD_ICON, MOOD_LABEL, MOVE_HZ, NEAR_RADIUS, WALK_SPEED, findPath, fromWorld, inWater, isNear, nearStage, toWorld, moveWithCollision, nearSeat, roomAt,
+  ENERGY, MOOD_ICON, MOOD_LABEL, MOVE_HZ, NEAR_RADIUS, WALK_SPEED, findPath, fromWorld, inWater, isNear, nearStage, onDanceFloor, toWorld, moveWithCollision, nearSeat, roomAt,
   type Battery, type Emote, type MapRoom, type Mood, type Seat, type Vec2,
 } from '@party/shared';
 import { buildAnimal, type AnimalRig } from '../avatar/animal';
@@ -377,10 +377,15 @@ export class Party {
       let moving = !seat && (id === this.conn.selfId ? g.net.moving : g.net.moving || Math.hypot(g.net.x - g.pos.x, g.net.z - g.pos.y) > 0.05);
       if (g.arrive) moving = this.arriving(g, dt, id === this.conn.selfId) || moving;
       if (id === this.conn.selfId) this.footsteps(g, moving && !g.arrive, dt);
-      g.anim.update(dt, { moving, energy: g.net.energy, pose: seat ? seat.pose : 'stand', dozing: g.net.dozing, baseY, mood: g.net.mood });
+      // standing still on the dance floor? then you're dancing (and far too busy to nod off)
+      const dancing = !seat && !moving && !g.arrive && onDanceFloor({ x: g.pos.x, z: g.pos.y }, this.world.map);
+      if (dancing && g.net.dozing) g.net = { ...g.net, dozing: false };
+      g.anim.update(dt, { moving, energy: g.net.energy, pose: seat ? seat.pose : 'stand', dozing: g.net.dozing, baseY, mood: g.net.mood, dance: dancing ? sound.beats() : undefined });
       this.dozeFx(g, dt);
       this.chargeFx(g, id === this.conn.selfId);
     }
+
+    this.world.nudge?.([...this.guests.values()].map(g => ({ x: g.pos.x, z: g.pos.y })));
 
     // camera follows you
     if (me) {

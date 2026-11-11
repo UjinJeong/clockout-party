@@ -5,6 +5,7 @@ import { canvasTexture, textPlate } from './textures';
 import { glow } from './decor';
 import { builder, flames, rnd, std, stringLights, tiles } from './kit';
 import { buildStage } from './djStage';
+import { stepFloats, type FloatBody, type Pusher } from './floatPhysics';
 import { Fireworks } from './fireworks';
 import { sound } from '../audio/sound';
 import type { WorldParts } from './world';
@@ -106,13 +107,17 @@ export function buildPool(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
   }
 
   // ---- floats drifting on the water ----
-  const floats: { obj: THREE.Object3D; cx: number; cz: number; rx: number; rz: number; speed: number; phase: number }[] = [];
-  const drift = (obj: THREE.Object3D, rx: number, rz: number, speed: number) => {
-    group.add(obj); floats.push({ obj, cx: pcx, cz: pcz, rx, rz, speed, phase: rnd(0, 6) });
+  // They really float: wade into one and it's shoved away, they bump off each
+  // other and the pool's edge (see floatPhysics).
+  const floats: { obj: THREE.Object3D; body: FloatBody; phase: number }[] = [];
+  const drift = (obj: THREE.Object3D, x: number, z: number, r: number) => {
+    group.add(obj); floats.push({ obj, body: { x, z, vx: rnd(-0.1, 0.1), vz: rnd(-0.1, 0.1), r, spin: rnd(0, 6), turn: 0 }, phase: rnd(0, 6) });
   };
-  drift(flamingo(), pw / 2 - 1.4, pd / 2 - 0.9, 0.05);
-  drift(donut(), pw / 2 - 2.2, pd / 2 - 1.1, -0.07);
-  drift(beachBall(), pw / 2 - 1.0, pd / 2 - 0.6, 0.09);
+  drift(flamingo(), pcx - pw * 0.28, pcz + 0.4, 0.62);
+  drift(donut(), pcx + pw * 0.05, pcz - 0.7, 0.55);
+  drift(beachBall(), pcx + pw * 0.3, pcz + 0.6, 0.3);
+  let waders: Pusher[] = [];
+  let lastBump = 0;
 
   // ---- 바 오두막: the cabana bar ----
   const roofMats: THREE.Material[] = [];
@@ -186,7 +191,7 @@ export function buildPool(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
     towel.rotation.x = -Math.PI / 2; towel.rotation.z = 0.2;
   });
   // the DJ stage, and fireworks over the sea
-  const stage = buildStage(group, POOL.dj, B.x1);
+  const stage = buildStage(group, POOL.dj, B.x1, POOL.dance);
   const fireworks = new Fireworks(group, {
     launch: at => sound.play('launch', { at: { x: at.x, z: -12 }, volume: 0.55, pitch: 0.9 + Math.random() * 0.25 }),
     burst: (at, shape) => {
@@ -266,6 +271,7 @@ export function buildPool(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
     floor,
     setTime,
     loadArt: async () => {},
+    nudge(guests: { x: number; z: number }[]) { waders = guests.filter(g => g.x > P.x0 && g.x < P.x1 && g.z > P.z0 && g.z < P.z1); },
     celebrate(seed: number) { fireworks.volley(seed, camX, 5); stage.cheer(); },
     lookUp() { return fireworks.busy ? 1 : 0; },
     fadeOccluders(cam: THREE.Vector3) {
@@ -288,11 +294,21 @@ export function buildPool(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
       caustic.offset.set(-t * 0.015, t * 0.02);
       caustic.rotation = Math.sin(t * 0.05) * 0.1;
       (seaMat.map as THREE.Texture).offset.set(t * 0.004, t * 0.002);
+      const bump = stepFloats(floats.map(f => f.body), waders, P, Math.min(dt, 0.05), t);
+      if (bump > 0.6 && t - lastBump > 0.25) {
+        // a rubbery boing, and a splash if it was a good shove
+        lastBump = t;
+        const at = floats.reduce((a, f) => (Math.hypot(f.body.vx, f.body.vz) > Math.hypot(a.body.vx, a.body.vz) ? f : a)).body;
+        sound.play('bubble', { at, pitch: 0.55, volume: Math.min(1, 0.4 + bump * 0.3) });
+        if (bump > 1.2) sound.play('step-water', { at, volume: 0.8 });
+      }
       for (const f of floats) {
-        const a = t * f.speed + f.phase;
-        f.obj.position.set(f.cx + Math.cos(a) * f.rx, WATER_Y + 0.02 + Math.sin(t * 1.6 + f.phase) * 0.03, f.cz + Math.sin(a) * f.rz);
-        f.obj.rotation.y = -a * Math.sign(f.speed) + Math.PI / 2;
-        f.obj.rotation.z = Math.sin(t * 1.3 + f.phase) * 0.05;
+        const b = f.body, speed = Math.hypot(b.vx, b.vz);
+        f.obj.position.set(b.x, WATER_Y + 0.02 + Math.sin(t * 1.6 + f.phase) * 0.03, b.z);
+        f.obj.rotation.y = b.spin;
+        // rocks more the faster it's going
+        f.obj.rotation.z = Math.sin(t * 1.3 + f.phase) * (0.05 + Math.min(0.2, speed * 0.12));
+        f.obj.rotation.x = Math.cos(t * 1.7 + f.phase) * Math.min(0.15, speed * 0.1);
       }
       stage.tick(dt, night, sound.beats());
       // the evening show: every guest works out the same volleys from the clock

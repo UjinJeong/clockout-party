@@ -52,8 +52,14 @@ const YAWN_EVERY = 9, YAWN_LEN = 1.8;
 export function expressionFor(mood: Mood | '', gesture: Gesture | null, p: number, t: number, charge: number): Expression {
   if (gesture && p < 0.9) return { ...FLASH[gesture] };
   const e = { ...REST[mood] };
-  // recharged: a contented little smile on anyone
-  e.smile = Math.min(1, e.smile + 0.25 * Math.max(0, (charge - 0.6) / 0.4));
+  // The charge gauge shows on the face. Running low (under 35%): the mouth and
+  // brows sag. Filling up (over 60%): a smile grows, the brows lift, cheeks glow.
+  const low = Math.max(0, 1 - charge / 0.35), high = Math.max(0, (charge - 0.6) / 0.4);
+  e.smile = Math.max(-1, Math.min(1, e.smile - 0.35 * low + 0.5 * high));
+  e.brow = Math.max(-1, Math.min(1, e.brow - 0.4 * low + 0.3 * high));
+  e.blush = Math.min(1, e.blush + 0.3 * high);
+  // fully charged: beaming, whatever kind of day it was
+  if (charge >= 0.98) e.smile = Math.max(e.smile, 0.8);
   if (mood === 'sleepy') {
     const phase = t % YAWN_EVERY;
     if (phase < YAWN_LEN) {

@@ -14,6 +14,8 @@ export interface BodyState {
   baseY: number;
   /** How their day went: sets the resting face. */
   mood?: Mood | '';
+  /** On the dance floor: beats since the music started (leave out when not dancing). */
+  dance?: number;
 }
 
 /** Emotes anyone can send, plus a few moves the party plays by itself. */
@@ -26,6 +28,8 @@ export class Animator {
   private sit = 0;             // 0..1 blend into sitting
   private lie = 0;             // 0..1 blend into lying back
   private doze = 0;            // 0..1 blend into nodding off
+  private groove = 0;          // 0..1 blend into dancing
+  private style = Math.floor(Math.random() * 3); // everyone has their own move
   private emote: Gesture | null = null;
   private emoteT = 0;
   static readonly EMOTE_TIME = 1.5;
@@ -64,6 +68,7 @@ export class Animator {
     r.bodyPivot.scale.set(1, 1 + breath, 1);
     r.bodyPivot.rotation.x = (0.05 + 0.13 * tired) * (1 - w) * (1 - this.lie);
     r.bodyPivot.rotation.z = 0;
+    r.bodyPivot.rotation.y = 0;
     r.head.rotation.z = Math.sin(t * 0.7) * 0.06 * (0.35 + 0.65 * tired) * (1 - w);
     // nodding off: the head sinks and bobs back up now and then
     const nod = this.doze * (0.38 + Math.max(0, Math.sin(t * 0.9)) * 0.14);
@@ -79,10 +84,37 @@ export class Animator {
     const open = blink ? 0.06 : 0.14 + 0.48 * charge;
     const face = expressionFor(b.mood ?? '', this.emote, this.emoteT / Animator.EMOTE_TIME, t, charge);
     if (this.doze > 0.5 && !this.emote) { face.eyes = 'shut'; face.open = 0; face.smile = Math.min(face.smile, 0.1); }
+    this.groove = ease(this.groove, b.dance !== undefined && !b.moving && b.pose === 'stand' ? 1 : 0, 5);
+    if (this.groove > 0.5 && !this.emote) { face.eyes = 'happy'; face.smile = Math.max(face.smile, 0.85); face.blush = Math.max(face.blush, 0.7); face.brow = Math.max(face.brow, 0.3); }
     r.face.update(dt, face, open);
 
+    if (this.groove > 0.01 && b.dance !== undefined) this.dance(b.dance, this.groove);
     this.gesture(dt);
     this.keepUpright();
+  }
+
+  /** Dancing to the beat: a bounce everyone shares, and one of three moves on top. */
+  private dance(beats: number, k: number) {
+    const r = this.rig, s = Math.sin(beats * Math.PI), bounce = Math.abs(s);
+    r.root.position.y += bounce * 0.09 * k;
+    r.bodyPivot.rotation.z += s * 0.12 * k;
+    r.head.rotation.z += -s * 0.1 * k;
+    r.head.rotation.x += bounce * 0.12 * k;
+    r.legL.rotation.x += Math.max(0, s) * 0.35 * k; r.legR.rotation.x += Math.max(0, -s) * 0.35 * k;
+    const hold = !!r.held; // a drink in the right paw stays up and steady
+    if (this.style === 0) {            // hands in the air, pumping
+      r.armL.rotation.z += (-2.3 - bounce * 0.4) * k;
+      if (!hold) r.armR.rotation.z += (2.3 + bounce * 0.4) * k;
+    } else if (this.style === 1) {     // side to side, arms swinging across
+      r.bodyPivot.rotation.y = s * 0.45 * k;
+      r.armL.rotation.x += (-0.9 + s * 0.6) * k; r.armL.rotation.z += -0.5 * k;
+      if (!hold) { r.armR.rotation.x += (-0.9 - s * 0.6) * k; r.armR.rotation.z += 0.5 * k; }
+    } else {                           // the point: one arm up, then the other
+      r.armL.rotation.z += -2.4 * Math.max(0, s) * k - 0.3 * k;
+      if (!hold) r.armR.rotation.z += 2.4 * Math.max(0, -s) * k + 0.3 * k;
+      r.bodyPivot.rotation.y = s * 0.2 * k;
+    }
+    if (hold) r.armR.rotation.x += -0.5 * bounce * k;
   }
 
   /**

@@ -50,6 +50,18 @@ describe('resting face follows "오늘 하루 어땠어요?"', () => {
     expect(yawning / total).toBeLessThan(0.3);     // …but not all the time
   });
 
+  it('the charge gauge shows on the face: sagging when low, brightening as it fills, beaming when full', () => {
+    for (const m of ['', ...MOODS] as const) {
+      const low = at(m, 3, 0.1), mid = at(m, 3, 0.5), high = at(m, 3, 0.85), full = at(m, 3, 1);
+      expect(low.smile).toBeLessThan(mid.smile);
+      expect(low.brow).toBeLessThan(mid.brow);
+      expect(high.smile).toBeGreaterThan(mid.smile);
+      expect(high.blush).toBeGreaterThan(mid.blush);
+      expect(full.smile).toBeGreaterThanOrEqual(0.8);
+    }
+    expect(at('drained', 3, 1).smile).toBeGreaterThan(0.7); // even a rough day ends in a smile
+  });
+
   it('fully charged: everyone looks a bit more content', () => {
     for (const m of ['', ...MOODS] as const) {
       expect(at(m, 3, 1).smile).toBeGreaterThan(at(m, 3, 0.1).smile);
@@ -163,5 +175,28 @@ describe('every animal has a face that can show it', () => {
     // the penguin's eyes sit on its white face: they stay black
     const p = buildAnimal({ kind: 'penguin', color: 7, hat: 'none', hand: 'none', outfit: 'none' });
     expect(lum(p.eyes[0].pupil.material as THREE.Material)).toBeLessThan(0.1);
+  });
+});
+
+describe('🕺 on the dance floor', () => {
+  it('standing still you dance to the beat with a happy face; walking you just walk', async () => {
+    const { buildAnimal } = await import('../src/avatar/animal');
+    const { Animator } = await import('../src/avatar/animator');
+    const r = buildAnimal({ kind: 'cat', color: 1, hat: 'none', hand: 'none', outfit: 'none' });
+    const anim = new Animator(r);
+    const base = { moving: false, energy: 20, pose: 'stand' as const, dozing: false, baseY: 0 };
+    let hi = -Infinity, lo = Infinity, armMoved = 0;
+    for (let i = 0; i < 90; i++) {
+      anim.update(1 / 30, { ...base, dance: i / 30 * (100 / 60) });
+      hi = Math.max(hi, r.root.position.y); lo = Math.min(lo, r.root.position.y);
+      armMoved = Math.max(armMoved, Math.abs(r.armL.rotation.z) + Math.abs(r.armL.rotation.x));
+    }
+    expect(hi - lo).toBeGreaterThan(0.05);      // bouncing
+    expect(armMoved).toBeGreaterThan(0.8);      // arms doing something
+    expect(r.face.shape).toBe('happy');
+    expect(r.face.smile).toBeGreaterThan(0.6);  // even at 20% charge
+    for (let i = 0; i < 60; i++) anim.update(1 / 30, base);
+    expect(r.face.shape).toBe('sleepy');        // off the floor: back to normal
+    expect(Math.abs(r.bodyPivot.rotation.y)).toBeLessThan(0.01);
   });
 });

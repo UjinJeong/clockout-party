@@ -22,7 +22,7 @@ export interface Stage {
 const BEAM_COLORS = ['#ff5dd2', '#5dd8ff', '#ffe066', '#9dff9a'];
 const FLOOR_COLORS = ['#ff5dd2', '#5dd8ff', '#ffe066', '#9dff9a', '#c49bff'].map(c => new THREE.Color(c));
 
-export function buildStage(group: THREE.Group, booth: Rect, rightEdge: number): Stage {
+export function buildStage(group: THREE.Group, booth: Rect, rightEdge: number, floor: Rect): Stage {
   const { add, box, block, cyl } = builder(group);
   const cx = (booth.x0 + booth.x1) / 2, cz = (booth.z0 + booth.z1) / 2, w = booth.x1 - booth.x0;
   const black = std('#1d1a1c', { roughness: 0.5 });
@@ -91,7 +91,8 @@ export function buildStage(group: THREE.Group, booth: Rect, rightEdge: number): 
 
   // ---- dance floor: light-up tiles on the sand ----
   const tiles: { m: THREE.MeshBasicMaterial; i: number; j: number }[] = [];
-  const TILE = 1.05, cols = 4, rows = 3, fx0 = cx - (cols * TILE) / 2, fz0 = booth.z1 + 0.55;
+  // exactly the map's dance floor, so the tiles you see are the ones that make you dance
+  const TILE = 1.05, cols = Math.round((floor.x1 - floor.x0) / TILE), rows = Math.round((floor.z1 - floor.z0) / TILE), fx0 = floor.x0, fz0 = floor.z0;
   for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
     const m = new THREE.MeshBasicMaterial({ color: FLOOR_COLORS[(i + j) % FLOOR_COLORS.length], transparent: true, opacity: 0.2, depthWrite: false, blending: THREE.AdditiveBlending });
     const t = add(new THREE.PlaneGeometry(TILE - 0.06, TILE - 0.06), m, fx0 + (i + 0.5) * TILE, 0.012, fz0 + (j + 0.5) * TILE);
@@ -99,7 +100,7 @@ export function buildStage(group: THREE.Group, booth: Rect, rightEdge: number): 
     tiles.push({ m, i, j });
   }
   // frame around the floor
-  for (const [w2, d2, x, z] of [[cols * TILE + 0.1, 0.06, cx, fz0], [cols * TILE + 0.1, 0.06, cx, fz0 + rows * TILE], [0.06, rows * TILE, fx0, fz0 + rows * TILE / 2], [0.06, rows * TILE, fx0 + cols * TILE, fz0 + rows * TILE / 2]] as const)
+  for (const [w2, d2, x, z] of [[cols * TILE + 0.1, 0.06, fx0 + cols * TILE / 2, fz0], [cols * TILE + 0.1, 0.06, fx0 + cols * TILE / 2, fz0 + rows * TILE], [0.06, rows * TILE, fx0, fz0 + rows * TILE / 2], [0.06, rows * TILE, fx0 + cols * TILE, fz0 + rows * TILE / 2]] as const)
     box(w2, 0.03, d2, steel, x, 0.015, z);
 
   // ---- DJ 칼퇴 ----
