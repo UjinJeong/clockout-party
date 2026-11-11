@@ -118,7 +118,10 @@ export class Sound {
   /** Play an effect. Returns false if it was skipped (muted, too far, too busy). */
   play(name: SfxName, o: PlayOpts = {}): boolean {
     const c = this.ctx;
-    if (!c || this.mode === 'off' || c.state !== 'running' || this.voices >= MAX_VOICES) return false;
+    if (!c || this.mode === 'off' || c.state === 'closed' || this.voices >= MAX_VOICES) return false;
+    // still waking up from the first tap (some phones need a moment): ask again and play anyway —
+    // the sound starts the instant the audio is allowed
+    if (c.state !== 'running') { if (document.hidden) return false; void c.resume().catch(() => {}); }
     let vol = o.volume ?? 1, pan = 0;
     if (o.at) {
       const s = spatial(o.at.x - this.listener.x, o.at.z - this.listener.z);

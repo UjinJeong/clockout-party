@@ -175,7 +175,8 @@ function setUrl(url: string) {
 }
 
 // Browsers only allow sound after a click or a key: wake it on the first one (and every one after, cheaply).
-for (const ev of ['pointerdown', 'keydown'] as const) addEventListener(ev, () => sound.unlock(), { capture: true, passive: true });
+// (iPhones only count the finger lifting or a click, so listen for those too)
+for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'] as const) addEventListener(ev, () => sound.unlock(), { capture: true, passive: true });
 
 // Anything unexpected shows up as a toast instead of a silently frozen screen.
 addEventListener('error', e => { console.error(e.error ?? e.message); });

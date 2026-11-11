@@ -25,6 +25,8 @@ export function showStart(opts: StartOptions = {}): Promise<{ name: string; look
   let look: Look = parseLook(saved.look ?? { ...randomLook(), hand: 'wine' });
   const nameInput = $('name') as HTMLInputElement;
   nameInput.value = saved.name ?? '';
+  // the place's own music plays behind the invitation (once the first tap lets sound start)
+  sound.setMusic(opts.places ? theme : 'gallery');
 
   // ---- preview ----
   const canvas = $('preview') as HTMLCanvasElement;
@@ -70,9 +72,11 @@ export function showStart(opts: StartOptions = {}): Promise<{ name: string; look
     outfitBox.innerHTML = chips(OUTFITS, OUTFIT_LABEL, 'outfit');
   };
   // the palette: any colour at all; the preview follows the finger (one rebuild per frame at most)
-  let redraw = 0;
+  let redraw = 0, lastNote = 0;
   const palette = new Palette(palBox, colorHex(look.color), hex => {
     look = { ...look, color: customColor(hex) };
+    const now = performance.now();
+    if (now - lastNote > 90) { lastNote = now; sound.play('note', { pitch: SCALE[Math.round(palette.hueDeg / 360 * (SCALE.length - 1))], volume: 0.45 }); }
     if (!redraw) redraw = requestAnimationFrame(() => { redraw = 0; render(); rebuild(false); });
   });
   const showPalette = (open: boolean) => {
@@ -84,16 +88,20 @@ export function showStart(opts: StartOptions = {}): Promise<{ name: string; look
     const b = (e.target as HTMLElement).closest('button');
     if (!b) return;
     if (b.dataset.k) look = { ...look, kind: b.dataset.k as Look['kind'] };
-    else if (b.dataset.pal) { sound.play('tick', { pitch: 1.3 }); showPalette(palBox.hidden); render(); return; }
+    else if (b.dataset.pal) { sound.play('whoosh', { pitch: palBox.hidden ? 1.3 : 0.9, volume: 0.7 }); showPalette(palBox.hidden); render(); return; }
     else if (b.dataset.c) { look = { ...look, color: Number(b.dataset.c) }; showPalette(false); }
     else if (b.dataset.slot && b.dataset.v) look = parseLook({ ...look, [b.dataset.slot]: b.dataset.v });
     else return;
-    sound.play('tick', { pitch: b.dataset.k ? 0.85 : b.dataset.c ? 1.15 : 1 });
+    pickSound(b);
     render(); rebuild();
   };
   const boxes = [kindBox, colorBox, hatBox, handBox, outfitBox];
   boxes.forEach(el => el.addEventListener('click', onPick));
-  const onDice = () => { sound.play('dice'); look = randomLook(); showPalette(false); render(); rebuild(); };
+  const onDice = () => {
+    sound.play('dice');
+    look = randomLook(); showPalette(false); render(); rebuild();
+    sound.play(`voice-${look.kind}`, { delay: 0.3 }); // and the new animal says hello
+  };
   dice.addEventListener('click', onDice);
   rebuild(true);
 
@@ -110,8 +118,9 @@ export function showStart(opts: StartOptions = {}): Promise<{ name: string; look
   const onPlacePick = (e: Event) => {
     const t = (e.target as HTMLElement).closest<HTMLButtonElement>('button')?.dataset.place;
     if (!isTheme(t) || t === theme) return;
-    sound.play('tick', { pitch: 0.75 });
+    sound.play('whoosh', { pitch: 0.8 });
     theme = t; renderPlaces(); opts.onPlace?.(t);
+    sound.setMusic(t); // the music follows the place
   };
   if (opts.places) { renderPlaces(); placeBox.addEventListener('click', onPlacePick); opts.onPlace?.(theme); }
 
@@ -122,6 +131,8 @@ export function showStart(opts: StartOptions = {}): Promise<{ name: string; look
       const name = sanitizeName(nameInput.value);
       if (!name) { nameInput.focus(); nameInput.setCustomValidity('이름을 적어 주세요'); nameInput.reportValidity(); return; }
       save('party.me', { name, look, theme });
+      sound.play('go');
+      nameInput.removeEventListener('keydown', typing);
       cancelAnimationFrame(raf);
       rig.dispose(); renderer.dispose(); // the canvas keeps its one context for next time
       placeBox.removeEventListener('click', onPlacePick);
@@ -133,12 +144,27 @@ export function showStart(opts: StartOptions = {}): Promise<{ name: string; look
       resolve({ name, look, theme });
     };
     nameInput.addEventListener('input', () => nameInput.setCustomValidity(''));
+    const typing = (e: KeyboardEvent) => { if (!e.isComposing && e.key.length <= 2 || e.key === 'Backspace') sound.play('key', { pitch: e.key === 'Backspace' ? 0.7 : 1 }); };
+    nameInput.addEventListener('keydown', typing);
     const offSubmit = onSubmit(form, submit);
     if (!nameInput.value) setTimeout(() => nameInput.focus(), 300);
   });
 }
 
 const any = <T>(list: readonly T[]) => list[(Math.random() * list.length) | 0];
+
+/** A major-pentatonic run (as frequency ratios): the colour swatches and the palette play it. */
+const SCALE = [1, 9 / 8, 5 / 4, 3 / 2, 5 / 3, 2, 9 / 4, 5 / 2, 3];
+
+/** What each choice on the card sounds like. */
+function pickSound(b: HTMLElement) {
+  if (b.dataset.k) sound.play(`voice-${b.dataset.k as Look['kind']}`);          // the animal says hello
+  else if (b.dataset.c) sound.play('note', { pitch: SCALE[Number(b.dataset.c) % SCALE.length] });
+  else if (b.dataset.slot) {
+    const none = b.dataset.v === 'none';
+    sound.play('bubble', { pitch: none ? 0.7 : b.dataset.slot === 'hat' ? 1.25 : b.dataset.slot === 'hand' ? 1 : 0.85 });
+  }
+}
 /** A whole outfit at random — for "🎲 아무거나". */
 export function randomLook(): Look {
   return { kind: any(KINDS), color: (Math.random() * PALETTE.length) | 0, hat: any(HATS), hand: any(HANDS), outfit: any(OUTFITS) };

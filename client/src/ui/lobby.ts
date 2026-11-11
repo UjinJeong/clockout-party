@@ -1,3 +1,4 @@
+import { sound } from '../audio/sound';
 import { MAX_PLAYERS, THEMES, THEME_ICON, THEME_LABEL, isTheme, type Theme } from '@party/shared';
 import { listRooms, type JoinRequest, type RoomListing } from '../net/colyseus';
 import { $, esc, onSubmit } from './dom';
@@ -15,6 +16,8 @@ export function parseCode(raw: string): string | null {
 export function showLobby(error?: string): Promise<LobbyChoice> {
   const screen = $('lobby');
   screen.hidden = false;
+  const tick = (e: Event) => { const b = (e.target as HTMLElement).closest('button'); if (b && !b.closest('#theme-seg')) sound.play('tick'); };
+  screen.addEventListener('click', tick);
   const list = $('room-list');
   const errBox = $('lobby-error');
   let isPrivate = false;
@@ -55,6 +58,7 @@ export function showLobby(error?: string): Promise<LobbyChoice> {
   const themeSeg = $('theme-seg');
   themeSeg.innerHTML = THEMES.map(t => `<button type="button" role="radio" data-theme="${t}">${THEME_ICON[t]} ${THEME_LABEL[t]}</button>`).join('');
   const setTheme = (t: Theme) => {
+    if (t !== theme) { sound.play('whoosh', { pitch: 0.8 }); sound.setMusic(t); }
     theme = t;
     themeSeg.querySelectorAll<HTMLButtonElement>('button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.theme === t)));
   };
@@ -76,6 +80,7 @@ export function showLobby(error?: string): Promise<LobbyChoice> {
       clearInterval(timer);
       screen.hidden = true;
       list.removeEventListener('click', onList);
+      screen.removeEventListener('click', tick);
       seg.removeEventListener('click', onSeg);
       themeSeg.removeEventListener('click', onTheme);
       offCreate(); offCode();

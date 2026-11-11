@@ -61,6 +61,9 @@ export function createHud(conn: PartyConnection, controls: Controls) {
   const clockT = setInterval(tickClock, 20_000);
   cleanups.push(() => clearInterval(clockT));
 
+  // a soft tick for the buttons along the top
+  for (const id of ['view-btn', 'people-btn', 'invite-btn']) on($(id), 'click', () => sound.play('tick'));
+
   // ---- 🔊 all → effects only → off ----
   const soundBtn = $('sound-btn');
   const showSound = () => {
@@ -211,7 +214,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
     onClose: () => { controls.enabled = true; },
   });
   const openArt = (a: Artwork) => living.open(a.i);
-  on(chip, 'click', () => { if (current) openArt(current.art); });
+  on(chip, 'click', () => { if (current) { sound.play('whoosh', { pitch: 1.1 }); openArt(current.art); } });
 
   // ---- 🎆 fireworks from the DJ booth ----
   const fwChip = $('fw-chip');
@@ -260,7 +263,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
   };
 
   const closed = new Promise<'left' | 'lost'>(resolve => {
-    on($('leave-btn'), 'click', () => { conn.leave(); resolve('left'); });
+    on($('leave-btn'), 'click', () => { sound.play('whoosh', { pitch: 0.6 }); conn.leave(); resolve('left'); });
     conn.on({ closed: r => resolve(r === 'left' ? 'left' : 'lost') });
   });
 

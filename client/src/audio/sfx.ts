@@ -24,6 +24,71 @@ export const SFX = {
     return end;
   },
 
+  /** a xylophone note: the colour swatches play a little scale (pitch = semitones-ish ratio) */
+  note: (ctx, out, t, p) => Math.max(
+    tone(ctx, out, t, { freq: hz(72) * p, peak: 0.2, attack: 0.002, decay: 0.42 }),
+    tone(ctx, out, t, { freq: hz(72) * p * 4, peak: 0.05, attack: 0.001, decay: 0.06 }),
+  ),
+  /** a soft pop: putting on a hat, picking something up */
+  bubble: (ctx, out, t, p) => tone(ctx, out, t, { freq: 320 * p, glide: 780 * p, glideTime: 0.07, peak: 0.24, attack: 0.004, decay: 0.11 }),
+  /** a quick whoosh: changing place, opening a card */
+  whoosh: (ctx, out, t, p) => noise(ctx, out, t, { freq: 500 * p, sweep: 2600 * p, q: 0.9, peak: 0.26, attack: 0.08, decay: 0.28 }),
+  /** a typewriter-soft key click */
+  key: (ctx, out, t, p) => noise(ctx, out, t, { freq: 2600 * p * r(0.15), q: 3, peak: 0.16, decay: 0.02 }),
+  /** "let's go!" — a bright little run up */
+  go: (ctx, out, t) => {
+    let end = t;
+    [67, 71, 74, 79].forEach((m, i) => { end = fm(ctx, out, t + i * 0.06, hz(m), { peak: 0.1, ratio: 2, index: 0.8, decay: i === 3 ? 0.6 : 0.2 }); });
+    return end;
+  },
+
+  // ---------------------------------------------------------------- animal voices (picking your animal)
+  'voice-bear': (ctx, out, t, p) => {
+    const f = filter(ctx, out, 'lowpass', 700, 2);
+    return tone(ctx, f, t, { type: 'sawtooth', freq: 150 * p, glide: 118 * p, glideTime: 0.4, peak: 0.19, attack: 0.05, decay: 0.42, vib: 4, vibRate: 6 });
+  },
+  'voice-cat': (ctx, out, t, p) => {
+    const f = filter(ctx, out, 'bandpass', 1500, 1.4);
+    f.frequency.setValueAtTime(900, t); f.frequency.linearRampToValueAtTime(2200, t + 0.15); f.frequency.linearRampToValueAtTime(1200, t + 0.4);
+    return tone(ctx, f, t, { type: 'sawtooth', freq: 620 * p, glide: 820 * p, glideTime: 0.14, peak: 0.34, attack: 0.03, decay: 0.38 });
+  },
+  'voice-penguin': (ctx, out, t, p) => {
+    const f = filter(ctx, out, 'bandpass', 1300, 3);
+    tone(ctx, f, t, { type: 'square', freq: 540 * p, glide: 470 * p, peak: 0.4, attack: 0.01, decay: 0.12 });
+    return tone(ctx, f, t + 0.16, { type: 'square', freq: 600 * p, glide: 500 * p, peak: 0.4, attack: 0.01, decay: 0.16 });
+  },
+  'voice-rabbit': (ctx, out, t, p) => {
+    let end = t;
+    for (let i = 0; i < 3; i++) end = tone(ctx, out, t + i * 0.08, { freq: (1500 + i * 120) * p, glide: (1900 + i * 120) * p, glideTime: 0.04, peak: 0.13, attack: 0.003, decay: 0.05 });
+    return end;
+  },
+  'voice-fox': (ctx, out, t, p) => {
+    const f = filter(ctx, out, 'bandpass', 1600, 1.5);
+    tone(ctx, f, t, { type: 'sawtooth', freq: 820 * p, glide: 1250 * p, glideTime: 0.07, peak: 0.3, attack: 0.008, decay: 0.12 });
+    return tone(ctx, f, t + 0.15, { type: 'sawtooth', freq: 900 * p, glide: 1350 * p, glideTime: 0.07, peak: 0.24, attack: 0.008, decay: 0.14 });
+  },
+  'voice-dog': (ctx, out, t, p) => {
+    const f = filter(ctx, out, 'lowpass', 1100, 1.5);
+    tone(ctx, f, t, { type: 'sawtooth', freq: 300 * p, glide: 190 * p, glideTime: 0.12, peak: 0.27, attack: 0.006, decay: 0.15 });
+    return noise(ctx, out, t, { freq: 700, q: 0.8, peak: 0.1, attack: 0.004, decay: 0.12 });
+  },
+  'voice-frog': (ctx, out, t, p) => {
+    const f = filter(ctx, out, 'bandpass', 600, 2);
+    let end = t;
+    for (const at of [0, 0.2]) {
+      // a croak: a buzzy tone chopped quickly on and off
+      const o = ctx.createOscillator(), g = ctx.createGain(), lfo = ctx.createOscillator(), depth = ctx.createGain();
+      o.type = 'sawtooth'; o.frequency.setValueAtTime(190 * p, t + at); o.frequency.linearRampToValueAtTime(150 * p, t + at + 0.16);
+      lfo.frequency.value = 34; depth.gain.value = 0.16;
+      g.gain.setValueAtTime(0.0001, t + at); g.gain.linearRampToValueAtTime(0.16, t + at + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + at + 0.17);
+      lfo.connect(depth).connect(g.gain);
+      o.connect(g).connect(f);
+      o.start(t + at); lfo.start(t + at); o.stop(t + at + 0.2); lfo.stop(t + at + 0.2);
+      end = t + at + 0.2;
+    }
+    return end;
+  },
+
   // ---------------------------------------------------------------- talking
   /** someone nearby said something */
   pop: (ctx, out, t, p) => tone(ctx, out, t, { freq: 480 * p * r(0.06), glide: 880 * p, glideTime: 0.06, peak: 0.22, attack: 0.004, decay: 0.09 }),

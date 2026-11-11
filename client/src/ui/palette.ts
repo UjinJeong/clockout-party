@@ -66,6 +66,7 @@ export class Palette {
   }
 
   get hex() { return hsvToHex(this.h, this.s, this.v); }
+  get hueDeg() { return this.h; }
 
   dispose() { this.offs.forEach(f => f()); this.offs = []; }
 
