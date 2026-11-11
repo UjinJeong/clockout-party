@@ -195,6 +195,9 @@ export class Music {
   private barStart = 0;
   private stopBed: () => void;
   private style: Style;
+  /** when the first bar started, and the tempo now, for `beats()` */
+  private origin = 0;
+  private bpmNow = 0;
 
   constructor(private ctx: AudioContext, dest: AudioNode, readonly theme: Theme, private hour: () => number) {
     this.style = STYLES[theme];
@@ -211,6 +214,7 @@ export class Music {
     this.dry.connect(verb);
     this.stopBed = startBed(ctx, this.out, this.style.bed);
     this.barStart = ctx.currentTime + 0.3;
+    this.origin = this.barStart; this.bpmNow = this.style.bpm;
     this.timer = window.setInterval(() => this.schedule(), 90);
     this.schedule();
   }
@@ -220,6 +224,7 @@ export class Music {
     const night = isNight(this.hour());
     const bpm = this.style.bpm * (night ? 0.85 : 1);
     const barLen = (60 / bpm) * 4;
+    if (bpm !== this.bpmNow) { this.origin = this.ctx.currentTime - this.beats() * 60 / bpm; this.bpmNow = bpm; }
     // fell asleep in a background tab? pick up from now instead of catching up
     if (this.barStart + barLen < now) this.barStart = now + 0.05;
     while (this.barStart < now + LOOKAHEAD) {
@@ -231,6 +236,9 @@ export class Music {
       this.barStart += barLen;
     }
   }
+
+  /** Beats played since the music started (fractional): the DJ nods along to this. */
+  beats() { return Math.max(0, (this.ctx.currentTime - this.origin) * this.bpmNow / 60); }
 
   /** Fade out and let go. */
   stop() {

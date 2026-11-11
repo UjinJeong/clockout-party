@@ -16,7 +16,10 @@ const FAR = { offset: new THREE.Vector3(0, 9.4, 11), ahead: 0.6, lookY: 0.6, fov
 /** Tall phone screens: a little higher and steeper, so the room fills the screen instead of the sky. */
 const NEAR_PORTRAIT = { offset: new THREE.Vector3(0, 6.2, 7.6), ahead: 1.4, lookY: 0.55, fov: 56 };
 
-export function cameraPose(target: THREE.Vector3, zoom: number, aspect: number): CameraPose {
+/**
+ * @param lift 0–1: tilt up toward the sky a little (fireworks!), close view only
+ */
+export function cameraPose(target: THREE.Vector3, zoom: number, aspect: number, lift = 0): CameraPose {
   const z = Math.min(1, Math.max(0, zoom));
   const ease = z * z * (3 - 2 * z);
   const portrait = aspect < 1;
@@ -28,12 +31,12 @@ export function cameraPose(target: THREE.Vector3, zoom: number, aspect: number):
 
   // Standing close to the back wall? Tilt up a little toward the paintings.
   const nearWall = Math.min(1, Math.max(0, (-target.z - 1) / 2.5));
-  const lookY = near.lookY + (FAR.lookY - near.lookY) * ease + (portrait ? 0.35 : 0.6) * nearWall * (1 - ease);
+  const lookY = near.lookY + (FAR.lookY - near.lookY) * ease + (portrait ? 0.35 : 0.6) * nearWall * (1 - ease) + 2.4 * lift * (1 - ease);
   const ahead = near.ahead + (FAR.ahead - near.ahead) * ease;
 
   return {
     position: target.clone().add(offset),
-    lookAt: new THREE.Vector3(target.x, lookY, target.z - ahead),
+    lookAt: new THREE.Vector3(target.x, target.y + lookY, target.z - ahead),
     fov,
   };
 }

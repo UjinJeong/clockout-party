@@ -1,6 +1,6 @@
 import {
   customColor,
-  DOZE_AFTER, EMOTES, ENERGY, KINDS, MOOD_ENERGY, MOVE_HZ, HANDS, HATS, OUTFITS, WALK_SPEED, batteryOf, chargeRate, isNear, mapFor,
+  DOZE_AFTER, EMOTES, FIREWORK_COOLDOWN, nearStage, ENERGY, KINDS, MOOD_ENERGY, MOVE_HZ, HANDS, HATS, OUTFITS, WALK_SPEED, batteryOf, chargeRate, isNear, mapFor,
   moveWithCollision, nearestWalkable, stepEnergy,
   type Emote, type Look, type Mood, type Seat, type Theme, type WorldMap,
 } from '@party/shared';
@@ -68,6 +68,7 @@ export class DemoConnection implements PartyConnection {
   private ev = new Emitter();
   private me: NetPlayer & Sim;
   private bots: Bot[] = [];
+  private lastFirework = 0;
   private timer: number;
   private map: WorldMap;
   readonly theme: Theme;
@@ -159,6 +160,20 @@ export class DemoConnection implements PartyConnection {
       window.setTimeout(() => this.ev.emit('emote', b.id, back), 400 + Math.random() * 900);
     }
   }
+
+  /** 🎆 from the booth, at most every FIREWORK_COOLDOWN seconds. Returns the seed used, or null if not allowed. */
+  fireworkSeed(): number | null {
+    const now = Date.now();
+    if (!nearStage(this.map, this.me) || now - this.lastFirework < FIREWORK_COOLDOWN * 1000) return null;
+    this.lastFirework = now;
+    this.wake(this.me);
+    const seed = Math.floor(Math.random() * 2 ** 31);
+    this.ev.emit('firework', 'me', seed);
+    // the guests near you cheer
+    for (const b of this.bots) if (isNear(b, this.me) && !b.dozing && Math.random() < 0.8) window.setTimeout(() => this.ev.emit('emote', b.id, Math.random() < 0.6 ? 'wow' : 'cheers'), 900 + Math.random() * 900);
+    return seed;
+  }
+  firework() { this.fireworkSeed(); }
 
   async voice(blob: Blob, ms: number) {
     // There is nobody real to hear it, so play it back as your own bubble.

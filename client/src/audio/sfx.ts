@@ -153,6 +153,24 @@ export const SFX = {
     return tone(ctx, out, t + 3.2, { freq: 140, glide: 90, peak: 0.12, attack: 0.003, decay: 0.12 }); // doors meet
   },
 
+  // ---------------------------------------------------------------- 🎆 fireworks
+  /** a rocket whistling up */
+  launch: (ctx, out, t, p) => Math.max(
+    noise(ctx, out, t, { type: 'bandpass', freq: 900 * p, sweep: 3200 * p, q: 6, peak: 0.07, attack: 0.08, decay: 0.95 }),
+    tone(ctx, out, t, { freq: 700 * p, glide: 2300 * p, glideTime: 1.0, peak: 0.025, attack: 0.1, decay: 0.9 }),
+  ),
+  /** the bang, felt more than heard */
+  boom: (ctx, out, t, p) => Math.max(
+    tone(ctx, out, t, { freq: 78 * p, glide: 32, glideTime: 0.5, peak: 0.42, attack: 0.004, decay: 1.1 }),
+    noise(ctx, out, t, { type: 'lowpass', freq: 1300 * p, sweep: 180, peak: 0.34, attack: 0.003, decay: 0.85 }),
+  ),
+  /** glitter: a shower of tiny crackles */
+  crackle: (ctx, out, t) => {
+    let end = t;
+    for (let i = 0; i < 26; i++) end = Math.max(end, noise(ctx, out, t + 0.15 + Math.random() * 1.1, { type: 'highpass', freq: 3500 + Math.random() * 3000, peak: 0.05 + Math.random() * 0.06, decay: 0.015 }));
+    return end;
+  },
+
   // ---------------------------------------------------------------- "오늘 하루 어땠어요?"
   'mood-drained': (ctx, out, t) => {
     const f = filter(ctx, out, 'lowpass', 1200, 1);

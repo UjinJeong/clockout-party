@@ -4,3 +4,4 @@ export * from './proximity';
 export * from './validate';
 export * from './energy';
 export * from './path';
+export * from './fireworks';

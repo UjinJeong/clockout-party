@@ -1,6 +1,6 @@
 import { Room, type Client } from '@colyseus/core';
 import {
-  DOZE_AFTER, ENERGY, MAX_PLAYERS, MAX_SPEED, MOOD_ENERGY, batteryOf, chargeRate, finite, isEmote, isMood, isTheme, mapFor,
+  DOZE_AFTER, ENERGY, FIREWORK_COOLDOWN, nearStage, MAX_PLAYERS, MAX_SPEED, MOOD_ENERGY, batteryOf, chargeRate, finite, isEmote, isMood, isTheme, mapFor,
   moveWithCollision, nearbyIds, nearestWalkable, stepEnergy, type WorldMap, parseLook, sanitizeChat, sanitizeName, sanitizeTitle, validateVoice,
 } from '@party/shared';
 import { PartyState, Player } from './schema';
@@ -32,6 +32,7 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
   private tracks = new Map<string, Track>();
   private map: WorldMap = mapFor('gallery');
   private guestNo = 0;
+  private lastFirework = 0;
 
   messages = {
     move: (client: Client, m: unknown) => this.onMove(client, m),
@@ -46,6 +47,16 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
       if (!isEmote(kind)) return;
       this.active(client.sessionId);
       this.toNearby(client, 'emote', { from: client.sessionId, kind });
+    },
+    /** 🎆 from the DJ booth: a volley for the whole party (one every few seconds per room). */
+    firework: (client: Client) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p || !nearStage(this.map, { x: p.x, z: p.z })) return;
+      const now = Date.now();
+      if (now - this.lastFirework < FIREWORK_COOLDOWN * 1000) return;
+      this.lastFirework = now;
+      this.active(client.sessionId);
+      this.broadcast('firework', { from: client.sessionId, seed: Math.floor(Math.random() * 2 ** 31) });
     },
     sit: (client: Client, m: unknown) => this.onSit(client, (m as { seat?: unknown } | null)?.seat),
     stand: (client: Client) => { this.standUp(client.sessionId); this.active(client.sessionId); },

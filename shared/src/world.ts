@@ -36,6 +36,8 @@ export interface WorldMap {
   spots: Vec2[];
   /** Places to sit down and recharge. */
   seats: Seat[];
+  /** A DJ booth, where fireworks can be launched (pool party). */
+  stage?: Rect;
 }
 
 let seatNo = 0;
@@ -156,7 +158,8 @@ export const POOL = {
   loungers: [15.6, 18.1, 20.6, 23.1, 25.6].map(x => ({ x0: x - 0.36, x1: x + 0.36, z0: -4.95, z1: -3.35 })) as Rect[],
   // only along the back: anything tall near the front would stand between you and the camera
   palms: [{ x: 12.9, z: -4.3, r: 0.4 }, { x: 29.1, z: -4.3, r: 0.4 }, { x: 0.9, z: -4.3, r: 0.4 }] as Furniture[],
-  umbrellas: [{ x: 32.2, z: -2.4, r: 0.15 }, { x: 37.6, z: 2.2, r: 0.15 }] as Furniture[],
+  // off to the side of the DJ stage, so they never stand between you and it
+  umbrellas: [{ x: 32.2, z: -2.4, r: 0.15 }, { x: 31.2, z: 3.4, r: 0.15 }] as Furniture[],
   dj: { x0: 35.4, x1: 38.6, z0: -4.9, z1: -3.9 } as Rect,
   bonfire: { x: 34.2, z: 1.4, r: 0.6 } as Furniture,
   barStools: [3.6, 5.5, 7.4].map(x => ({ x, z: -2.75, r: 0.2 })) as Furniture[],
@@ -187,6 +190,7 @@ export const POOL_MAP: WorldMap = {
     // stools at the cabana bar
     ...[3.6, 5.5, 7.4].map(x => seat(x, -2.75, 0.78, Math.PI, 'sit', { x, z: -1.95 })),
   ],
+  stage: POOL.dj,
 };
 
 export const MAPS: Record<Theme, WorldMap> = { gallery: GALLERY_MAP, home: HOME_MAP, pool: POOL_MAP };

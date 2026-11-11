@@ -148,6 +148,15 @@ export class Sound {
     this.music = new Music(this.ctx, this.musicBus, this.want.theme, this.want.hour);
   }
 
+  /**
+   * Beats since the music started — the DJ and the stage lights move to it. With
+   * the music off it keeps counting at the pool's tempo, so the party still dances.
+   */
+  beats(): number {
+    if (this.music) return this.music.beats();
+    return (performance.now() / 1000) * 100 / 60;
+  }
+
   /** Turn the music down while someone's voice message plays. */
   duck(seconds: number) {
     const c = this.ctx;

@@ -21,6 +21,8 @@ export interface PartyEvents {
   emote(from: string, kind: Emote): void;
   voice(from: string, blob: Blob, ms: number): void;
   snap(x: number, z: number): void;
+  /** 🎆 someone launched fireworks from the DJ booth (`seed` makes every screen show the same volley). */
+  firework(from: string, seed: number): void;
   closed(reason: string): void;
 }
 
@@ -46,6 +48,8 @@ export interface PartyConnection {
   stand(): void;
   /** Answer "오늘 하루 어땠어요?" (the first answer sets how charged you arrive). */
   mood(m: Mood): void;
+  /** Launch fireworks from the DJ booth (the party checks you're there and not too often). */
+  firework(): void;
   leave(): void;
 }
 

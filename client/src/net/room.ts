@@ -1,5 +1,5 @@
 import {
-  ENERGY, THEME_LABEL, batteryOf, isEmote, isMood, isNear, parseLook, sanitizeChat, sanitizeName, type Emote, type Look, type Mood, type Theme,
+  ENERGY, THEME_LABEL, batteryOf, isEmote, isFireworkSeed, isMood, isNear, parseLook, sanitizeChat, sanitizeName, type Emote, type Look, type Mood, type Theme,
 } from '@party/shared';
 import { DemoConnection } from './demo';
 import { Emitter, type NetPlayer, type PartyConnection, type PartyEvents } from './types';
@@ -77,8 +77,10 @@ export class LiveRoomConnection implements PartyConnection {
     const heard = (topic: 'chat' | 'emote') => room.on(topic, m => {
       if (m.sameTab) return;
       const from = this.peers.get('peer:' + m.peer);
-      if (!from || !isNear(from, this.me)) return; // only people near you are heard
       const d = (m.data ?? {}) as Record<string, unknown>;
+      // fireworks are for the whole party; everything else only for people near you
+      if (from && topic === 'emote' && isFireworkSeed(d.fw)) { this.ev.emit('firework', from.id, d.fw); return; }
+      if (!from || !isNear(from, this.me)) return;
       if (topic === 'chat') { const t = sanitizeChat(d.text); if (t) this.ev.emit('chat', from.id, t); }
       else if (isEmote(d.kind)) this.ev.emit('emote', from.id, d.kind);
     });
@@ -118,6 +120,11 @@ export class LiveRoomConnection implements PartyConnection {
   sit(seatId: number) { this.bots.sit(seatId); }
   stand() { this.bots.stand(); }
   mood(m: Mood) { this.bots.mood(m); }
+  firework() {
+    const seed = this.bots.fireworkSeed();
+    if (seed === null) return;
+    void this.room.emit('emote', { fw: seed }).catch(() => {});
+  }
   leave() {
     this.offs.forEach(f => f());
     void this.room.presence({ x: null, z: null, n: null }).catch(() => {});

@@ -1,4 +1,4 @@
-import {
+import { FIREWORK_COOLDOWN,
   BATTERY_LABEL, EMOTES, EMOTE_ICON, ENERGY, MOODS, MOOD_ENERGY, MOOD_ICON, MOOD_LABEL, VOICE_MAX_MS,
   type Battery, type MapRoom, type Mood, type Seat,
 } from '@party/shared';
@@ -213,6 +213,24 @@ export function createHud(conn: PartyConnection, controls: Controls) {
   const openArt = (a: Artwork) => living.open(a.i);
   on(chip, 'click', () => { if (current) openArt(current.art); });
 
+  // ---- 🎆 fireworks from the DJ booth ----
+  const fwChip = $('fw-chip');
+  let fwReady = 0, fwTimer = 0;
+  const showFw = () => {
+    const wait = Math.ceil((fwReady - Date.now()) / 1000);
+    fwChip.textContent = wait > 0 ? `🎆 ${wait}초 뒤에 또 쏠 수 있어요` : '🎆 불꽃놀이 쏘기';
+    fwChip.toggleAttribute('disabled', wait > 0);
+  };
+  on(fwChip, 'click', () => {
+    if (!party || Date.now() < fwReady) return;
+    party.firework();
+    fwReady = Date.now() + FIREWORK_COOLDOWN * 1000;
+    showFw();
+    clearInterval(fwTimer);
+    fwTimer = window.setInterval(() => { showFw(); if (Date.now() >= fwReady) clearInterval(fwTimer); }, 500);
+  });
+  cleanups.push(() => { clearInterval(fwTimer); fwChip.hidden = true; });
+
   const hooks = {
     room: (r: MapRoom) => { $('where').textContent = r.name; },
     painting: (p: Painting | null) => {
@@ -229,6 +247,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
     energy: (e: number) => showEnergy(e),
     charged: () => toast('⚡ 충전 완료! 오늘도 수고했어요', 4200),
     landed: () => { moodCard.hidden = false; },
+    stage: (near: boolean) => { fwChip.hidden = !near; if (near) showFw(); },
     guests: (list: { id: string; name: string; battery: Battery; mood: Mood | ''; near: boolean; self: boolean; muted: boolean }[]) => {
       const near = list.filter(g => g.near).length;
       $('who').textContent = near ? `${list.length}명 있어요, 근처에 ${near}명` : `${list.length}명 있어요`;

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {
-  ENERGY, MOOD_ICON, MOOD_LABEL, MOVE_HZ, NEAR_RADIUS, WALK_SPEED, findPath, inWater, isNear, moveWithCollision, nearSeat, roomAt,
+  ENERGY, MOOD_ICON, MOOD_LABEL, MOVE_HZ, NEAR_RADIUS, WALK_SPEED, findPath, inWater, isNear, nearStage, moveWithCollision, nearSeat, roomAt,
   type Battery, type Emote, type MapRoom, type Mood, type Seat, type Vec2,
 } from '@party/shared';
 import { buildAnimal, type AnimalRig } from '../avatar/animal';
@@ -63,6 +63,8 @@ export interface PartyHooks {
   charged(): void;
   /** You've stepped out of the lift and are at the party. */
   landed(): void;
+  /** Standing at the DJ booth (fireworks can be launched from here), or not. */
+  stage(near: boolean): void;
 }
 
 
@@ -153,6 +155,7 @@ export class Party {
         g.tag.voice(blob, ms, from === conn.selfId);
         if (from !== conn.selfId) sound.play('pop', { at: { x: g.pos.x, z: g.pos.y }, pitch: 0.8 });
       },
+      firework: (_from, seed) => { this.world.celebrate?.(seed); },
       snap: (x, z) => { const me = this.self(); if (me) { me.pos.set(x, z); me.net.x = x; me.net.z = z; } },
     });
 
@@ -168,6 +171,9 @@ export class Party {
   mute(id: string, on: boolean) { if (on) this.muted.add(id); else this.muted.delete(id); this.listDirty = true; }
 
   emote(kind: Emote) { this.conn.emote(kind); }
+
+  /** 🎆 from the DJ booth. */
+  firework() { this.conn.firework(); }
 
   /** Walk to a painting and tell the UI once we are standing in front of it. */
   goTo(p: Painting) { this.walkTo = p; this.walkAlong(p.stand); }
@@ -333,7 +339,7 @@ export class Party {
 
   private snapCamera() {
     const aspect = this.dom.clientWidth / Math.max(1, this.dom.clientHeight);
-    const pose = cameraPose(this.camTarget, this.zoom, aspect);
+    const pose = cameraPose(this.camTarget, this.zoom, aspect, this.lift);
     if (Math.abs(this.camera.fov - pose.fov) > 0.05) { this.camera.fov = pose.fov; this.camera.updateProjectionMatrix(); }
     this.camera.position.copy(pose.position);
     this.camera.lookAt(pose.lookAt);
@@ -377,6 +383,9 @@ export class Party {
       this.camTarget.x += (tx - this.camTarget.x) * k;
       this.camTarget.z += (tz - this.camTarget.z) * k;
       this.zoom += (this.zoomGoal - this.zoom) * (1 - Math.exp(-dt * 6));
+      // fireworks: look up a little (less while walking about)
+      const lift = (this.world.lookUp?.() ?? 0) * (me.net.moving ? 0.35 : 1);
+      this.lift += (lift - this.lift) * (1 - Math.exp(-dt * 1.5));
       this.snapCamera();
       this.world.fadeOccluders(this.camera.position);
       this.ring.position.set(me.pos.x, 0.015, me.pos.y);
@@ -464,6 +473,8 @@ export class Party {
       this.offeredSeat = offer;
       this.hooks.seat(near ? { seat: near, seated: !!mySeat } : null);
     }
+    const atStage = nearStage(this.world.map, { x: me.pos.x, z: me.pos.y });
+    if (atStage !== this.atStage) { this.atStage = atStage; this.hooks.stage(atStage); }
     if (me.net.energy !== this.lastEnergyShown) { this.lastEnergyShown = me.net.energy; this.hooks.energy(me.net.energy); }
   }
 
@@ -540,6 +551,8 @@ export class Party {
     sound.play(wet ? 'step-water' : this.conn.theme === 'pool' ? 'step-deck' : 'step-wood', { volume: 0.7 });
   }
   private stepT = 0.2;
+  private lift = 0;
+  private atStage = false;
 
   /** Nodding off: a few Z's drift up from the head. */
   private dozeFx(g: Guest, dt: number) {

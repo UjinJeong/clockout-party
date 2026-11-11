@@ -1,9 +1,12 @@
 import * as THREE from 'three';
-import { POOL, POOL_MAP } from '@party/shared';
+import { POOL, POOL_MAP, showAt } from '@party/shared';
 import { SkyPainter, skyAt } from './sky';
 import { canvasTexture, textPlate } from './textures';
 import { glow } from './decor';
 import { builder, flames, rnd, std, stringLights, tiles } from './kit';
+import { buildStage } from './djStage';
+import { Fireworks } from './fireworks';
+import { sound } from '../audio/sound';
 import type { WorldParts } from './world';
 
 /**
@@ -182,29 +185,18 @@ export function buildPool(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
     const towel = add(new THREE.PlaneGeometry(0.9, 1.7), std(k ? '#f0c75e' : '#8fb8a0', { roughness: 1 }), u.x + 0.75, 0.01, u.z + 0.3);
     towel.rotation.x = -Math.PI / 2; towel.rotation.z = 0.2;
   });
-  const djLights: THREE.Sprite[] = [];
-  const decks: THREE.Mesh[] = [];
-  {
-    const d = POOL.dj, cx = (d.x0 + d.x1) / 2, cz = (d.z0 + d.z1) / 2, w = d.x1 - d.x0;
-    block(d, 0.95, M.black);
-    box(w - 0.2, 0.5, 0.02, std('#2a1840', { emissive: 0x7a3cff, emissiveIntensity: 0.6 }), cx, 0.5, d.z1 + 0.01);
-    for (const dx of [-0.8, 0.8]) {
-      box(0.6, 0.05, 0.5, std('#3a3a3e'), cx + dx, 0.98, cz);
-      decks.push(cyl(0.2, 0.2, 0.02, std('#111'), cx + dx, 1.02, cz, 20));
-    }
-    box(0.3, 0.2, 0.25, std('#b9bec4', { metalness: 0.5 }), cx, 1.06, cz - 0.05); // a laptop
-    for (const sx of [d.x0 - 0.45, d.x1 + 0.3]) {
-      const sxc = Math.min(sx, B.x1 - 0.4);
-      box(0.6, 1.3, 0.55, M.black, sxc, 0.65, cz);
-      for (const y of [0.4, 0.95]) { const cone = cyl(0.18, 0.18, 0.02, std('#333'), sxc, y, cz + 0.28, 16); cone.rotation.x = Math.PI / 2; }
-    }
-    const neon = textPlate([{ text: 'DJ 칼퇴', font: '800 60px "IBM Plex Sans KR", sans-serif', color: '#ff7ad9', y: 74 }], 320, 112);
-    add(new THREE.PlaneGeometry(1.5, 0.52), new THREE.MeshBasicMaterial({ map: neon, transparent: true }), cx, 1.75, d.z0 + 0.05);
-    for (let k = 0; k < 4; k++) {
-      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow(), color: ['#ff7ad9', '#7ad7ff', '#ffe066', '#9dff9a'][k], transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-      s.position.set(d.x0 + 0.4 + k * 0.8, 1.5, d.z0 + 0.3); s.scale.setScalar(1.2); group.add(s); djLights.push(s);
-    }
-  }
+  // the DJ stage, and fireworks over the sea
+  const stage = buildStage(group, POOL.dj, B.x1);
+  const fireworks = new Fireworks(group, {
+    launch: at => sound.play('launch', { at: { x: at.x, z: -12 }, volume: 0.55, pitch: 0.9 + Math.random() * 0.25 }),
+    burst: (at, shape) => {
+      // sound travels: the bang arrives a moment after the flash
+      const delay = Math.min(0.25, Math.abs(at.z) / 343);
+      sound.play('boom', { at: { x: at.x, z: -9 }, delay, volume: 0.8, pitch: 0.85 + Math.random() * 0.3 });
+      if (shape === 'glitter' || shape === 'willow') sound.play('crackle', { at: { x: at.x, z: -9 }, delay: delay + 0.2, volume: 0.6 });
+    },
+  });
+  let showSlot = -1, showCheck = 0, camX = 20;
   const fireLight = new THREE.PointLight(0xff8a3a, 0, 9, 1.5);
   const sparks: { s: THREE.Sprite; phase: number }[] = [];
   {
@@ -265,7 +257,6 @@ export function buildPool(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
     waterMat.emissive = new THREE.Color('#1aa3d6').multiplyScalar(0.35 * s.night);
     causticMat.opacity = 0.55 - 0.25 * s.night;
     for (const g of poolGlow) (g.material as THREE.SpriteMaterial).opacity = 0.15 + 0.85 * s.night;
-    for (const d of djLights) (d.material as THREE.SpriteMaterial).opacity = 0.2 + 0.8 * s.night;
     fireLight.intensity = 0.2 + 2.2 * s.night;
     return s;
   };
@@ -275,7 +266,10 @@ export function buildPool(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
     floor,
     setTime,
     loadArt: async () => {},
+    celebrate(seed: number) { fireworks.volley(seed, camX, 5); stage.cheer(); },
+    lookUp() { return fireworks.busy ? 1 : 0; },
     fadeOccluders(cam: THREE.Vector3) {
+      camX = cam.x;
       // fade the bar's thatched roof when the camera is right behind it
       const b = POOL.bar;
       const over = cam.x > b.x0 - 2.5 && cam.x < b.x1 + 2.5 && cam.z < 5.2 ? 1 : 0;
@@ -300,8 +294,19 @@ export function buildPool(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
         f.obj.rotation.y = -a * Math.sign(f.speed) + Math.PI / 2;
         f.obj.rotation.z = Math.sin(t * 1.3 + f.phase) * 0.05;
       }
-      for (const d of decks) d.rotation.y -= dt * 4;
-      djLights.forEach((s, k) => { s.scale.setScalar(0.8 + 0.6 * Math.abs(Math.sin(t * 2.2 + k * 1.3)) * (0.3 + night)); });
+      stage.tick(dt, night, sound.beats());
+      // the evening show: every guest works out the same volleys from the clock
+      if ((showCheck -= dt) <= 0) {
+        showCheck = 0.25;
+        const now = new Date();
+        if (showAt(now)) {
+          const slot = Math.floor(now.getTime() / 1600);
+          if (slot !== showSlot) { showSlot = slot; fireworks.volley(slot % 2 ** 31, camX, 2 + (slot % 2)); }
+        }
+      }
+      fireworks.tick(dt);
+      // the bursts light up the party a little
+      ambient.color.setRGB(1, 0.886, 0.753).add(fireworks.flash);
       fireLight.intensity *= 0.95 + 0.1 * Math.random();
       const f = POOL.bonfire;
       for (const sp of sparks) {

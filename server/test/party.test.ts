@@ -384,3 +384,48 @@ describe('one server for everything', () => {
     expect(Array.isArray(await (await fetch('http://localhost:2568/rooms')).json())).toBe(true);
   });
 });
+
+describe('🎆 fireworks at the pool party', () => {
+  const booth = { x: 37, z: -3.0 }; // on the sand in front of the DJ booth
+
+  it('from the DJ booth, everyone at the party sees them (not just people nearby)', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', { theme: 'pool' });
+    const dj = await colyseus.connectTo(room, { name: 'DJ', look });
+    const far = await colyseus.connectTo(room, { name: 'far', look });
+    await room.waitForNextPatch();
+    Object.assign(room.state.players.get(dj.sessionId)!, booth);
+    room.state.players.get(far.sessionId)!.x = 3; // over at the cabana bar
+    const got: { from: string; seed: number }[] = [];
+    far.onMessage('firework', (m: any) => got.push(m));
+    dj.onMessage('firework', () => {});
+    dj.send('firework', {});
+    await wait(150);
+    expect(got).toHaveLength(1);
+    expect(got[0].from).toBe(dj.sessionId);
+    expect(Number.isInteger(got[0].seed)).toBe(true);
+  });
+
+  it('not from the middle of the pool, not at other parties, and not every second', async () => {
+    const pool = await colyseus.createRoom<PartyRoom>('party', { theme: 'pool' });
+    const a = await colyseus.connectTo(pool, { name: 'A', look });
+    await pool.waitForNextPatch();
+    let n = 0;
+    a.onMessage('firework', () => n++);
+    Object.assign(pool.state.players.get(a.sessionId)!, { x: 20, z: 0 });
+    a.send('firework', {});
+    await wait(120);
+    expect(n).toBe(0);                      // too far from the booth
+    Object.assign(pool.state.players.get(a.sessionId)!, booth);
+    a.send('firework', {}); a.send('firework', {}); a.send('firework', {});
+    await wait(150);
+    expect(n).toBe(1);                      // one volley, then a short wait
+
+    const home = await colyseus.createRoom<PartyRoom>('party', { theme: 'home' });
+    const h = await colyseus.connectTo(home, { name: 'H', look });
+    let m = 0;
+    h.onMessage('firework', () => m++);
+    h.send('firework', {});
+    await wait(120);
+    expect(m).toBe(0);
+  });
+});
