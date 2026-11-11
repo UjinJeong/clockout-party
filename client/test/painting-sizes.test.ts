@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ART, hangY, slotsFor, wallSize } from '../src/world/art';
+import { ART, RAIL_TOP, hangY, slotsFor, wallSize } from '../src/world/art';
 
 describe('paintings sized by their own images', () => {
   it('keeps each painting’s own proportions', () => {
@@ -17,7 +17,7 @@ describe('paintings sized by their own images', () => {
     expect(Math.max(...areas)).toBeGreaterThan(Math.min(...areas) * 1.8);
   });
 
-  it('fits the spot it hangs in, centred near eye level, never touching the floor', () => {
+  it('fits the spot it hangs in, near eye level, with its frame clear above the wall rail', () => {
     for (const room of ['garden', 'face', 'toy', 'pond'] as const) {
       const slots = slotsFor(room);
       ART.filter(a => a.room === room).forEach((a, k) => {
@@ -26,9 +26,9 @@ describe('paintings sized by their own images', () => {
         expect(s.w).toBeLessThanOrEqual(slot.maxW + 1e-9);
         expect(s.h).toBeLessThanOrEqual(slot.maxH + 1e-9);
         const y = hangY(s.h);
-        expect(y - s.h / 2).toBeGreaterThanOrEqual(0.6 - 1e-9);
+        expect(y - s.h / 2 - 0.09).toBeGreaterThan(RAIL_TOP);          // frame (9 cm) above the gilt rail
         expect(y + s.h / 2 + 0.3).toBeLessThan(4.2);
-        expect(y).toBeLessThan(2.3);
+        expect(y).toBeLessThan(2.4);
       });
     }
   });

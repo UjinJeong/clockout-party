@@ -26,8 +26,13 @@ export function wallSize(a: Artwork, slot?: Pick<Slot, 'maxW' | 'maxH'>): { w: n
   return { w, h };
 }
 
-/** How high to hang it: centred at eye level, with at least 60 cm of wall underneath. */
-export const hangY = (h: number) => Math.max(EYE, h / 2 + 0.6);
+/** The walls have a dark wainscot with a gilt rail on top, up to this height. */
+export const RAIL_TOP = 1.06;
+/**
+ * How high to hang it: centred at eye level, but always with its frame clear
+ * above the wainscot rail (a big painting is raised just enough).
+ */
+export const hangY = (h: number) => Math.max(EYE, h / 2 + RAIL_TOP + 0.2);
 
 const pad = (n: number) => String(n).padStart(2, '0');
 export const wallSrc = (a: Artwork) => `art/wall/${pad(a.i)}.jpg`;
