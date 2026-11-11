@@ -2,8 +2,8 @@ import { formatHours, localOffset, parseHours, sanitizeHours } from '@party/shar
 import { load, save } from './dom';
 
 /**
- * ⏰ "출퇴근 시간" picker: two time lists (every 30 minutes) and a show/hide
- * switch. Used on the invitation card and again in the party, from your own
+ * ⏰ "출퇴근 시간" picker: two time boxes you can type into (any minute, e.g.
+ * 09:10) or pick from, and a show/hide switch. Used on the invitation card and again in the party, from your own
  * name tag. The choice is remembered on this device.
  */
 const KEY = 'party.hours';
@@ -21,18 +21,23 @@ export function hoursValue(s: Saved = savedHours()): string {
 }
 
 const label = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-const options = (sel: number) => Array.from({ length: 48 }, (_, i) => i * 30)
-  .map(m => `<option value="${m}"${m === sel ? ' selected' : ''}>${label(m)}</option>`).join('');
+/** "09:10" → 550. Anything that isn't a time → null. */
+export function parseTime(v: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(v.trim());
+  if (!m) return null;
+  const h = Number(m[1]), min = Number(m[2]);
+  return h < 24 && min < 60 ? h * 60 + min : null;
+}
 
 export interface HoursPicker { value(): string; saved(): Saved; dispose(): void }
 
 export function hoursPicker(host: HTMLElement, onChange?: (s: Saved) => void): HoursPicker {
   let s = savedHours();
-  host.innerHTML = `<select class="hp-start" aria-label="출근 시간">${options(s.start)}</select>
+  host.innerHTML = `<input type="time" class="hp-start" aria-label="출근 시간" value="${label(s.start)}" required />
     <span class="hp-dash" aria-hidden="true">~</span>
-    <select class="hp-end" aria-label="퇴근 시간">${options(s.end)}</select>
+    <input type="time" class="hp-end" aria-label="퇴근 시간" value="${label(s.end)}" required />
     <button type="button" class="hp-show" aria-pressed="${s.show}"></button>`;
-  const start = host.querySelector<HTMLSelectElement>('.hp-start')!, end = host.querySelector<HTMLSelectElement>('.hp-end')!;
+  const start = host.querySelector<HTMLInputElement>('.hp-start')!, end = host.querySelector<HTMLInputElement>('.hp-end')!;
   const show = host.querySelector<HTMLButtonElement>('.hp-show')!;
   const paint = () => {
     show.textContent = s.show ? '👀 보여주기' : '🙈 숨기기';
@@ -40,18 +45,22 @@ export function hoursPicker(host: HTMLElement, onChange?: (s: Saved) => void): H
     host.classList.toggle('hidden-hours', !s.show);
   };
   const changed = () => {
-    let a = Number(start.value), b = Number(end.value);
-    if (a === b) { b = (b + 30) % 1440; end.value = String(b); } // can't start and finish at the same time
+    const a = parseTime(start.value);
+    let b = parseTime(end.value);
+    if (a === null || b === null) return;               // half-typed: wait for a whole time
+    if (a === b) { b = (b + 30) % 1440; end.value = label(b); } // can't start and finish at the same time
     s = { start: a, end: b, show: s.show };
     save(KEY, s); paint(); onChange?.(s);
   };
   const toggle = () => { s = { ...s, show: !s.show }; save(KEY, s); paint(); onChange?.(s); };
-  start.addEventListener('change', changed); end.addEventListener('change', changed); show.addEventListener('click', toggle);
+  const tidy = () => { if (parseTime(start.value) === null) start.value = label(s.start); if (parseTime(end.value) === null) end.value = label(s.end); };
+  for (const el of [start, end]) { el.addEventListener('change', changed); el.addEventListener('input', changed); el.addEventListener('blur', tidy); }
+  show.addEventListener('click', toggle);
   paint();
   return {
     value: () => hoursValue(s),
     saved: () => s,
-    dispose() { start.removeEventListener('change', changed); end.removeEventListener('change', changed); show.removeEventListener('click', toggle); },
+    dispose() { for (const el of [start, end]) { el.removeEventListener('change', changed); el.removeEventListener('input', changed); el.removeEventListener('blur', tidy); } show.removeEventListener('click', toggle); },
   };
 }
 
