@@ -16,7 +16,13 @@ export interface BodyState {
   mood?: Mood | '';
   /** On the dance floor: beats since the music started (leave out when not dancing). */
   dance?: number;
+  /** Which way the camera is from here (world yaw). With it, a guest with their back to you glances round when their face changes. */
+  camYaw?: number;
 }
+
+/** A glance over the shoulder: how far the face has to be turned away before it's worth it, and how far the neck and shoulders go. */
+export const GLANCE = { away: 1.25, head: 1.45, body: 0.95, short: 0.35 } as const;
+const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
 /** Emotes anyone can send, plus a few moves the party plays by itself. */
 export type Gesture = Emote | 'sigh';
@@ -33,12 +39,27 @@ export class Animator {
   private emote: Gesture | null = null;
   private emoteT = 0;
   static readonly EMOTE_TIME = 1.5;
+  private glanceT = 0;         // seconds of "show them my face" left
+  private glance = 0;          // 0..1 blend into the over-the-shoulder look
+  private glanceSide = 1;      // which shoulder (kept for the whole glance, so it never flips)
+  private lastMood: Mood | '' | undefined;
 
   constructor(private rig: AnimalRig) {
     rig.root.rotation.order = 'YXZ'; // turn first, then lean back (lying on a lounger)
   }
 
-  play(kind: Gesture) { this.emote = kind; this.emoteT = 0; }
+  play(kind: Gesture) {
+    this.emote = kind; this.emoteT = 0;
+    if (kind !== 'zone' && kind !== 'sigh') this.glanceT = Animator.EMOTE_TIME + 0.3; // those two look away on purpose
+  }
+
+  /** Carry on from another animator mid-motion (the animal was rebuilt, e.g. recoloured), so nothing jumps. */
+  adopt(o: Animator) {
+    this.t = o.t; this.walk = o.walk; this.sit = o.sit; this.lie = o.lie; this.doze = o.doze; this.groove = o.groove;
+    this.style = o.style; this.emote = o.emote; this.emoteT = o.emoteT;
+    this.glanceT = o.glanceT; this.glance = o.glance; this.glanceSide = o.glanceSide; this.lastMood = o.lastMood;
+    this.rig.face.adopt(o.rig.face);
+  }
 
   update(dt: number, b: BodyState) {
     const r = this.rig;
@@ -69,6 +90,7 @@ export class Animator {
     r.bodyPivot.rotation.x = (0.05 + 0.13 * tired) * (1 - w) * (1 - this.lie);
     r.bodyPivot.rotation.z = 0;
     r.bodyPivot.rotation.y = 0;
+    r.head.rotation.y = 0;
     r.head.rotation.z = Math.sin(t * 0.7) * 0.06 * (0.35 + 0.65 * tired) * (1 - w);
     // nodding off: the head sinks and bobs back up now and then
     const nod = this.doze * (0.38 + Math.max(0, Math.sin(t * 0.9)) * 0.14);
@@ -89,8 +111,33 @@ export class Animator {
     r.face.update(dt, face, open);
 
     if (this.groove > 0.01 && b.dance !== undefined) this.dance(b.dance, this.groove);
+    this.lookRound(dt, b);
     this.gesture(dt);
     this.keepUpright();
+  }
+
+  /**
+   * Back to the camera when the face changes (a reaction, a new mood)? Glance over the
+   * shoulder so it can be seen: shoulders a little, the neck the rest, never all the way round.
+   */
+  private lookRound(dt: number, b: BodyState) {
+    const r = this.rig;
+    const mood = b.mood ?? '';
+    if (this.lastMood !== undefined && mood !== this.lastMood && mood) this.glanceT = 2.2;
+    this.lastMood = mood;
+    this.glanceT = Math.max(0, this.glanceT - dt);
+    const rel = b.camYaw === undefined ? 0 : wrap(b.camYaw - r.root.rotation.y); // 0 = facing the camera
+    const want = this.glanceT > 0 && Math.abs(rel) > GLANCE.away && b.pose !== 'lie' && !b.dozing;
+    if (want && this.glance < 0.02) this.glanceSide = rel < 0 ? -1 : 1;
+    this.glance += ((want ? 1 : 0) - this.glance) * Math.min(1, dt * (want ? 9 : 5));
+    if (this.glance < 0.002) return;
+    const k = this.glance * this.glance * (3 - 2 * this.glance);
+    const need = Math.max(0, Math.abs(rel) - GLANCE.short);            // stop a little short of the camera
+    const body = Math.min(GLANCE.body, need * 0.4), head = Math.min(GLANCE.head, need - body);
+    r.bodyPivot.rotation.y += this.glanceSide * body * k;
+    r.head.rotation.y += this.glanceSide * head * k;
+    r.head.rotation.x -= 0.12 * k;                                      // chin up a touch: the camera is above
+    r.head.rotation.z *= 1 - k;
   }
 
   /** Dancing to the beat: a bounce everyone shares, and one of three moves on top. */

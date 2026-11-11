@@ -55,7 +55,10 @@ export function showStart(opts: StartOptions = {}): Promise<{ name: string; look
   };
   raf = requestAnimationFrame(loop);
   const rebuild = (emote = true) => {
-    rig.dispose(); rig = buildAnimal(look); anim = new Animator(rig); scene.add(rig.root);
+    const was = anim, old = rig;
+    rig = buildAnimal(look); anim = new Animator(rig);
+    if (!emote) anim.adopt(was); // only the colour changed: carry on mid-breath, or it jitters while you drag
+    rig.root.rotation.y = old.root.rotation.y; old.dispose(); scene.add(rig.root);
     if (emote) anim.play('wave');
   };
 

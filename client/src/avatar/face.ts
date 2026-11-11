@@ -193,6 +193,9 @@ export class Face {
     this.cheeks = cheeks;
   }
 
+  /** Carry on from another face mid-expression (the animal was rebuilt, e.g. recoloured). */
+  adopt(o: Face) { this.smile = o.smile; this.open = o.open; this.brow = o.brow; this.blush = o.blush; this.shape = o.shape; this.pop = o.pop; this.t = o.t; }
+
   /**
    * Ease towards an expression.
    * @param open how far open the sleepy eyes are right now (energy, blinking)

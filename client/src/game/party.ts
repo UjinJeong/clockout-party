@@ -380,7 +380,8 @@ export class Party {
       // standing still on the dance floor? then you're dancing (and far too busy to nod off)
       const dancing = !seat && !moving && !g.arrive && onDanceFloor({ x: g.pos.x, z: g.pos.y }, this.world.map);
       if (dancing && g.net.dozing) g.net = { ...g.net, dozing: false };
-      g.anim.update(dt, { moving, energy: g.net.energy, pose: seat ? seat.pose : 'stand', dozing: g.net.dozing, baseY, mood: g.net.mood, dance: dancing ? sound.beats() : undefined });
+      g.anim.update(dt, { moving, energy: g.net.energy, pose: seat ? seat.pose : 'stand', dozing: g.net.dozing, baseY, mood: g.net.mood, dance: dancing ? sound.beats() : undefined,
+        camYaw: Math.atan2(this.camera.position.x - w.x, this.camera.position.z - w.z) });
       this.dozeFx(g, dt);
       this.chargeFx(g, id === this.conn.selfId);
     }
