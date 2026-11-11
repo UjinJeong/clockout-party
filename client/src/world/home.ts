@@ -460,6 +460,7 @@ export function buildHome(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
     paintings: [],
     floor,
     setTime,
+    tv() { upstairs.tv(); },
     loadArt: async () => {},
     fadeOccluders(cam: THREE.Vector3) {
       for (const h of headers) {
@@ -703,6 +704,7 @@ function buildUpstairs(
     }
   }
   // the game corner: a TV playing a little platformer, a console, a bean bag
+  let channel = 0; // 0 the game, 1 a fireplace, 2 퇴근 뉴스
   const tvCanvas = document.createElement('canvas'); tvCanvas.width = 80; tvCanvas.height = 48;
   const tvTex = new THREE.CanvasTexture(tvCanvas); tvTex.colorSpace = THREE.SRGBColorSpace; tvTex.magFilter = THREE.NearestFilter;
   {
@@ -739,16 +741,41 @@ function buildUpstairs(
 
   let t = 0, last = -1;
   return {
+    tv() { channel = (channel + 1) % 3; last = -1; },
     light,
     tick(dt: number) {
       t += dt;
       const frame = Math.floor(t * 10);
       if (frame === last) return;
       last = frame;
-      // a tiny side-scroller: hills scroll by, the hero hops over blocks
       const g = tvCanvas.getContext('2d');
       if (!g) return;
       const W = tvCanvas.width, Hh = tvCanvas.height, off = (t * 18) % 40;
+      if (channel === 1) {
+        // 불멍 채널: a fireplace to stare into
+        g.fillStyle = '#1a0d0a'; g.fillRect(0, 0, W, Hh);
+        for (let k = 0; k < 9; k++) {
+          const fx = 12 + k * 7, fh = 14 + Math.sin(t * 7 + k * 1.7) * 6 + Math.sin(t * 13 + k) * 3;
+          g.fillStyle = k % 2 ? '#ff9d2e' : '#ff5a1f'; g.beginPath(); g.ellipse(fx, Hh - 8, 5, fh, 0, 0, 7); g.fill();
+          g.fillStyle = '#ffe08a'; g.beginPath(); g.ellipse(fx, Hh - 7, 2.5, fh * 0.45, 0, 0, 7); g.fill();
+        }
+        g.fillStyle = '#3a2416'; g.fillRect(6, Hh - 8, W - 12, 5);
+        tvTex.needsUpdate = true; return;
+      }
+      if (channel === 2) {
+        // 퇴근 뉴스: a ticker that only brings good news
+        g.fillStyle = '#16335c'; g.fillRect(0, 0, W, Hh);
+        g.fillStyle = '#e8eef7'; g.fillRect(6, 6, 30, 22);
+        g.fillStyle = '#c98b5a'; g.beginPath(); g.arc(21, 15, 6, 0, 7); g.fill(); g.fillRect(13, 21, 16, 7);   // the anchor (a bear, naturally)
+        g.fillStyle = '#ffffff'; g.font = 'bold 9px sans-serif'; g.fillText('퇴근 뉴스', 40, 15);
+        g.fillStyle = '#ffd23f'; g.fillRect(40, 19, 26 + Math.sin(t * 2) * 6, 3);
+        g.fillStyle = '#c8102e'; g.fillRect(0, Hh - 13, W, 13);
+        g.fillStyle = '#ffffff'; g.font = '8px sans-serif';
+        const msg = '속보: 내일 회의 전면 취소 · 금요일 조기 퇴근 확정 · 월요일 연기 검토 중 · ';
+        g.fillText(msg + msg, -((t * 22) % (msg.length * 7.2)), Hh - 3.5);
+        tvTex.needsUpdate = true; return;
+      }
+      // a tiny side-scroller: hills scroll by, the hero hops over blocks
       g.fillStyle = '#7ad7ff'; g.fillRect(0, 0, W, Hh);
       g.fillStyle = '#ffffff'; for (let k = 0; k < 3; k++) g.fillRect(((k * 31 - t * 6) % 100 + 100) % 100 - 10, 6 + k * 4, 12, 3);
       g.fillStyle = '#6f9d63'; for (let k = -1; k < 4; k++) { g.beginPath(); g.ellipse(k * 40 - off * 0.5, Hh - 8, 22, 12, 0, 0, 7); g.fill(); }

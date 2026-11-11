@@ -1,4 +1,4 @@
-import type { Battery, BoardSnapshot, Emote, Look, Mood, Note, Theme } from '@party/shared';
+import type { Act, Battery, BoardSnapshot, Emote, Look, Mood, Note, Theme } from '@party/shared';
 
 /** Everything the game needs from "the party", whether it is a real server or the demo. */
 export interface NetPlayer {
@@ -31,6 +31,8 @@ export interface PartyEvents {
   board(b: BoardSnapshot): void;
   note(n: Note): void;
   likes(art: string, n: number): void;
+  /** Someone dived, squirted the water pistol, or changed the TV channel. */
+  act(from: string, kind: Act): void;
   /** 🥂 짠! two guests near each other raised a glass together. */
   clink(a: string, b: string): void;
   /** 🚪 someone is going home: their lift comes, they wave, the doors close. */
@@ -64,6 +66,8 @@ export interface PartyConnection {
   hours(h: string): void;
   /** Launch fireworks from the DJ booth (the party checks you're there and not too often). */
   firework(): void;
+  /** Do a little thing everyone sees: dive, squirt, next TV channel. */
+  act(kind: Act): void;
   /** Change your look while at the party (a new drink from the bar). */
   setLook(l: Look): void;
   /** Ask for the guest book and hearts left so far (answered with a `board` event). */

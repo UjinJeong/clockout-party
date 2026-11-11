@@ -246,6 +246,8 @@ export const POOL = {
   // the light-up dance floor in front of the booth: stand still on it and you dance
   dance: { x0: 34.9, x1: 39.1, z0: -3.35, z1: -0.2 } as Rect,
   bonfire: { x: 34.2, z: 1.4, r: 0.6 } as Furniture,
+  // the diving board on the pool's left edge: stand on its deck end, land in the water
+  board: { x: 13.9, z: -0.6, to: { x: 17.0, z: -0.6 } },
   barStools: [3.6, 5.5, 7.4].map(x => ({ x, z: -2.75, r: 0.2 })) as Furniture[],
 };
 export const POOL_MAP: WorldMap = {

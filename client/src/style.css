@@ -389,3 +389,6 @@ html.touch .joystick { display: block; }
 @media (max-width: 720px) { .like-chip { bottom: calc(166px + var(--safe-b)); } }
 .drink-chip { left: 14px; transform: none; bottom: calc(150px + var(--safe-b)); font-size: 13.5px; padding: 8px 12px; animation: none; }
 @media (max-width: 720px) { .drink-chip { bottom: calc(200px + var(--safe-b)); } }
+.act-chip { bottom: calc(132px + var(--safe-b)); }
+.squirt-chip { bottom: calc(196px + var(--safe-b)); }
+@media (max-width: 720px) { .act-chip { bottom: calc(166px + var(--safe-b)); } .squirt-chip { bottom: calc(246px + var(--safe-b)); } }

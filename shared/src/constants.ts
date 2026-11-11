@@ -80,10 +80,10 @@ export const HAND_LABEL: Record<Hand, string> = {
 };
 
 /** What hangs around the neck. */
-export const OUTFITS = ['none', 'tie', 'scarf', 'badge', 'pajama'] as const;
+export const OUTFITS = ['none', 'tie', 'scarf', 'badge', 'pajama', 'slippers'] as const;
 export type Outfit = (typeof OUTFITS)[number];
 export const OUTFIT_LABEL: Record<Outfit, string> = {
-  none: '없음', tie: '넥타이', scarf: '목도리', badge: '사원증', pajama: '잠옷',
+  none: '없음', tie: '넥타이', scarf: '목도리', badge: '사원증', pajama: '잠옷', slippers: '슬리퍼',
 };
 
 /** The drinks you can swap between at a bar or in the kitchen, in order. */
@@ -102,3 +102,13 @@ export const BATTERY_LABEL: Record<Battery, string> = {
 };
 
 export const DEFAULT_TITLE = '퇴근 파티';
+
+/** Little things to do at a place, seen by everyone: a dive off the board, a squirt of the water pistol, the next TV channel. */
+export const ACTS = ['dive', 'squirt', 'tv'] as const;
+export type Act = (typeof ACTS)[number];
+export const isAct = (v: unknown): v is Act => (ACTS as readonly unknown[]).includes(v);
+/** Seconds between two acts from the same guest. */
+export const ACT_EVERY = 1.2;
+/** A dive: how long it takes, and how far the water pistol reaches. */
+export const DIVE_TIME = 1.2;
+export const SQUIRT_REACH = 3.2;

@@ -1,6 +1,6 @@
 import { Room, type Client } from '@colyseus/core';
 import {
-  Board, CLINK, Clinks, TOGETHER, hasCompany, isNear, DOZE_AFTER, ENERGY, FIREWORK_COOLDOWN, nearStage, sanitizeHours, MAX_PLAYERS, MAX_SPEED, MOOD_ENERGY, batteryOf, chargeRate, finite, isEmote, isMood, isTheme, mapFor,
+  ACT_EVERY, isAct, Board, CLINK, Clinks, TOGETHER, hasCompany, isNear, DOZE_AFTER, ENERGY, FIREWORK_COOLDOWN, nearStage, sanitizeHours, MAX_PLAYERS, MAX_SPEED, MOOD_ENERGY, batteryOf, chargeRate, finite, isEmote, isMood, isTheme, mapFor,
   moveWithCollision, nearbyIds, nearestWalkable, stepEnergy, type WorldMap, parseLook, sanitizeChat, sanitizeName, sanitizeTitle, validateVoice,
 } from '@party/shared';
 import { PartyState, Player } from './schema';
@@ -14,6 +14,8 @@ interface Track {
   energy: number;
   /** Seconds since the player last did anything. */
   idle: number;
+  /** When they last did a little act (dive, squirt, TV). */
+  actAt?: number;
   /** Only the first answer to "how was your day" sets your arrival energy. */
   moodSet: boolean;
 }
@@ -74,6 +76,16 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
       this.saidBye.add(client.sessionId);
       this.standUp(client.sessionId);
       this.broadcast('bye', { from: client.sessionId });
+    },
+    /** a dive, a squirt of the water pistol, the next TV channel: everyone sees it */
+    act: (client: Client, m: unknown) => {
+      const kind = (m as { kind?: unknown } | null)?.kind, t = this.tracks.get(client.sessionId);
+      if (!t || !isAct(kind)) return;
+      const now = Date.now();
+      if (now - (t.actAt ?? 0) < ACT_EVERY * 1000) return;
+      t.actAt = now;
+      this.active(client.sessionId);
+      this.broadcast('act', { from: client.sessionId, kind });
     },
     /** 🍹 change what you're wearing or holding while at the party (a new drink from the bar) */
     look: (client: Client, m: unknown) => {

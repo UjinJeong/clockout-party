@@ -524,3 +524,16 @@ describe('🍹 a new drink from the bar', () => {
     expect(room.state.players.get(a.sessionId)!.hand).toBe('none');
   });
 });
+
+describe('little acts: dive, squirt, TV', () => {
+  it('everyone sees it; nonsense and spamming are dropped', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', { theme: 'pool' });
+    const a = await colyseus.connectTo(room, { name: '다이버' });
+    const b = await colyseus.connectTo(room, { name: '구경꾼' });
+    const got: any[] = [];
+    b.onMessage('act', (m: any) => got.push(m)); a.onMessage('act', () => {});
+    a.send('act', { kind: 'dive' }); a.send('act', { kind: 'squirt' }); a.send('act', { kind: 'explode' });
+    await new Promise(r => setTimeout(r, 80));
+    expect(got).toEqual([{ from: a.sessionId, kind: 'dive' }]);
+  });
+});

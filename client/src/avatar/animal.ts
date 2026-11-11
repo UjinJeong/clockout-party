@@ -213,7 +213,7 @@ export function buildAnimal(look: Look): AnimalRig {
   });
 
   addHat(look, head);
-  addOutfit(look, bodyPivot, isPenguin);
+  addOutfit(look, bodyPivot, isPenguin, [legL, legR]);
   const held = addHand(look, armR, isPenguin ? mat(tint(base, -0.35)) : fur);
 
   root.traverse(o => { if ((o as THREE.Mesh).isMesh) o.castShadow = false; });
@@ -367,7 +367,7 @@ function addHat(look: Look, head: THREE.Group) {
   }
 }
 
-function addOutfit(look: Look, body: THREE.Group, isPenguin: boolean) {
+function addOutfit(look: Look, body: THREE.Group, isPenguin: boolean, legs: THREE.Group[]) {
   const front = isPenguin ? 0.02 : 0; // the penguin's belly sticks out a touch more
   switch (look.outfit) {
     case 'tie': {
@@ -387,6 +387,17 @@ function addOutfit(look: Look, body: THREE.Group, isPenguin: boolean) {
       const tail = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.24, 0.05), m);
       tail.position.set(0.12, 0.86, 0.27 + front); tail.rotation.set(-0.3, 0, 0.12);
       body.add(ring, tail);
+      break;
+    }
+    case 'slippers': {
+      // 슬리퍼: fluffy pink house slippers, one on each foot
+      const pink = mat('#f4a6bd', { roughness: 1 }), sole = mat('#fff3e6', { roughness: 0.9 });
+      for (const leg of legs) {
+        const base = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.035, 0.26), sole); base.position.set(0, -0.295, 0.05);
+        const upper = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), pink); upper.position.set(0, -0.285, 0.1); upper.scale.set(0.95, 0.75, 1.15);
+        const pom = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 5), sole); pom.position.set(0, -0.2, 0.17);
+        leg.add(base, upper, pom);
+      }
       break;
     }
     case 'pajama': {

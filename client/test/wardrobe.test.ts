@@ -44,7 +44,7 @@ describe('wardrobe', () => {
 
   it.each(OUTFITS.filter(o => o !== 'none'))('the %s actually shows on the body', async outfit => {
     const plain = await build({}), dressed = await build({ outfit });
-    expect(meshes(dressed.bodyPivot)).toBeGreaterThan(meshes(plain.bodyPivot));
+    expect(meshes(dressed.root)).toBeGreaterThan(meshes(plain.root)); // (slippers go on the feet, the rest on the body)
   });
 
   it('only a paw holding something has a held item', async () => {

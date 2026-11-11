@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {
-  ENERGY, hasCompany, nextDrink, MOOD_ICON, MOOD_LABEL, MOVE_HZ, NEAR_RADIUS, WALK_SPEED, clockedOut, findPath, parseHours, fromWorld, inWater, isNear, nearStage, onDanceFloor, toWorld, moveWithCollision, nearSeat, roomAt,
-  type Battery, type Hand, type Emote, type MapRoom, type Mood, type Seat, type Vec2,
+  DIVE_TIME, ENERGY, POOL, SQUIRT_REACH, hasCompany, nextDrink, MOOD_ICON, MOOD_LABEL, MOVE_HZ, NEAR_RADIUS, WALK_SPEED, clockedOut, findPath, parseHours, fromWorld, inWater, isNear, nearStage, onDanceFloor, toWorld, moveWithCollision, nearSeat, roomAt,
+  type Act, type Battery, type Hand, type Emote, type MapRoom, type Mood, type Seat, type Vec2,
 } from '@party/shared';
 import { addAntenna, addCrown, buildAnimal, type AnimalRig } from '../avatar/animal';
 import { struck, timeMood } from './timeEvents';
@@ -44,6 +44,8 @@ interface Guest {
   gone: boolean;
   /** The rig that is wearing the fully-charged crown (a rebuilt rig needs a new one). */
   crownOn: AnimalRig | null;
+  /** Mid-dive: seconds since leaving the board, and (for yourself) where from and to. */
+  dive: { t: number; from?: Vec2; to?: Vec2 } | null;
 }
 
 const zTex = () => canvasTexture(64, 64, (x, w, h) => {
@@ -73,8 +75,12 @@ export interface PartyHooks {
   charged(): void;
   /** The clock says something: the 6pm bell, 불금, or late night. */
   timeEvent(kind: 'bell' | 'friday' | 'late' | 'none', first: boolean): void;
+  /** Things you could do right here: dive off the board, squirt the water pistol, change the TV channel. */
+  acts(a: { dive: boolean; squirt: boolean; tv: boolean }): void;
   /** You're sitting next to someone: charging together is faster. */
   company(): void;
+  /** Someone got you with the water pistol. */
+  squirted(by: string): void;
   /** 짠! You clinked glasses with this guest (a little charge for both). */
   clinked(name: string): void;
   /** You've stepped out of the lift and are at the party. */
@@ -177,6 +183,7 @@ export class Party {
       firework: (_from, seed) => { this.world.celebrate?.(seed); },
       bye: from => this.startBye(from),
       clink: (a, b) => this.clink(a, b),
+      act: (from, kind) => this.onAct(from, kind),
       snap: (x, z) => { const me = this.self(); if (me) { me.pos.set(x, z); me.net.x = x; me.net.z = z; } },
     });
 
@@ -233,7 +240,7 @@ export class Party {
       arrive: isSelf || this.settled
         ? new Elevator(this.scene, new THREE.Vector3(p.x, 0, p.z), 0, isSelf ? undefined : () => sound.play('ding', { at: { x: p.x, z: p.z }, volume: 0.6 }))
         : null,
-      sighed: false, hooray: -1, leave: null, waved: false, gone: false, crownOn: null,
+      sighed: false, hooray: -1, leave: null, waved: false, gone: false, crownOn: null, dive: null,
     });
     const g0 = this.guests.get(p.id)!;
     if (g0.arrive) { g0.dir = 0; g0.rig.root.visible = false; }
@@ -406,6 +413,7 @@ export class Party {
       g.anim.update(dt, { moving, energy: g.net.energy, pose: seat ? seat.pose : 'stand', dozing: g.net.dozing, baseY, mood: g.net.mood, dance: dancing ? sound.beats() : undefined,
         camYaw: Math.atan2(this.camera.position.x - w.x, this.camera.position.z - w.z) });
       this.dozeFx(g, dt);
+      if (g.dive) this.diveFx(g, dt);
       this.chargeFx(g, id === this.conn.selfId);
       if (id === this.conn.selfId) this.companyFx(g);
     }
@@ -457,7 +465,17 @@ export class Party {
 
   private moveSelf(me: Guest, dt: number) {
     let { x: dx, z: dz } = this.controls.direction();
-    if (me.leave || me.gone) { this.controls.target = null; return; } // in the lift home: no more wandering
+    if (me.leave || me.gone) { this.controls.target = null; return; }
+    if (me.dive?.from && me.dive.to) {
+      // through the air: the board decides where you go
+      const k = Math.min(1, me.dive.t / DIVE_TIME), f = me.dive.from, to = me.dive.to;
+      me.pos.set(f.x + (to.x - f.x) * k, f.z + (to.z - f.z) * k);
+      me.dir = Math.atan2(to.x - f.x, to.z - f.z);
+      me.net.x = me.pos.x; me.net.z = me.pos.y; me.net.dir = me.dir; me.net.moving = false;
+      this.controls.target = null;
+      if ((this.sendT -= dt) <= 0) { this.sendT = 1 / MOVE_HZ; this.conn.move(me.pos.x, me.pos.y, me.dir, true); }
+      return;
+    } // in the lift home: no more wandering
     // still in the lift: wait for the doors
     if (me.arrive && me.arrive.t < ARRIVAL.out) { dx = 0; dz = 0; this.controls.target = null; }
     // any steering while seated gets you up first
@@ -534,12 +552,17 @@ export class Party {
     }
     const atStage = nearStage(this.world.map, { x: me.pos.x, z: me.pos.y });
     if (atStage !== this.atStage) { this.atStage = atStage; this.hooks.stage(atStage); }
+    const board = this.world.map.theme === 'pool' && !me.dive && me.net.seat < 0 && Math.hypot(me.pos.x - POOL.board.x, me.pos.y - POOL.board.z) < 1;
+    const squirt = this.world.map.theme === 'pool' && me.net.seat < 0 && !me.dive;
+    const tv = this.world.map.theme === 'home' && room.id === 'upstairs' && me.pos.x > 7.5;
+    const key = `${board}${squirt}${tv}`;
+    if (key !== this.actsKey) { this.actsKey = key; this.hooks.acts({ dive: board, squirt, tv }); }
     if (me.net.energy !== this.lastEnergyShown) { this.lastEnergyShown = me.net.energy; this.hooks.energy(me.net.energy); }
   }
 
   /** In the pool, sink to the waist on a swim ring and bob gently; climb out on land. Returns the height to stand at. */
   private wade(g: Guest, dt: number): number {
-    const wet = inWater({ x: g.pos.x, z: g.pos.y }, this.world.map) ? 1 : 0;
+    const wet = !g.dive && inWater({ x: g.pos.x, z: g.pos.y }, this.world.map) ? 1 : 0; // the swim ring waits until you land
     g.wet += (wet - g.wet) * (1 - Math.exp(-dt * 6));
     if (g.wet < 0.01 && !g.floatie) return 0;
     if (!g.floatie) {
@@ -582,6 +605,64 @@ export class Party {
     me.net.seat = -1; me.net.x = seat.stand.x; me.net.z = seat.stand.z;
     this.conn.stand();
     sound.play('stand');
+  }
+
+  private actsKey = '';
+  /** Do the thing on offer here (everyone sees it): the party tells us back, and that's when it happens. */
+  act(kind: Act) {
+    const me = this.self();
+    if (!me || me.leave || me.gone || me.dive) return;
+    this.conn.act(kind);
+  }
+
+  private onAct(from: string, kind: Act) {
+    if (kind === 'tv') { this.world.tv?.(); sound.play('tick', { pitch: 0.7 }); return; }
+    const g = this.guests.get(from);
+    if (!g || this.muted.has(from) || g.leave || g.gone) return;
+    const isSelf = from === this.conn.selfId, where = { at: { x: g.pos.x, z: g.pos.y } };
+    if (kind === 'dive') {
+      if (this.world.map.theme !== 'pool' || g.dive) return;
+      g.dive = isSelf ? { t: 0, from: { ...POOL.board }, to: { ...POOL.board.to } } : { t: 0 };
+      if (isSelf) { g.pos.set(POOL.board.x, POOL.board.z); }
+      g.anim.play('dive');
+      sound.play('whoosh', { ...where, pitch: 1.4 });
+      if (!isSelf) g.tag.say('간다~! 🤿');
+      return;
+    }
+    // squirt: a jet from the paw, and anyone standing in the way gets it
+    g.anim.play('squirt');
+    const dir = { x: Math.sin(g.dir), z: Math.cos(g.dir) };
+    const w = toWorld(this.world.map, { x: g.pos.x, z: g.pos.y });
+    this.sparkles.spray(new THREE.Vector3(w.x + dir.x * 0.4, w.y + 0.95, w.z + dir.z * 0.4), dir, ['#bfe9ff', '#7fd0ff', '#ffffff'], 46);
+    sound.play('step-water', { ...where, pitch: 1.5, volume: 0.8 });
+    for (const [id, o] of this.guests) {
+      if (id === from || o.gone) continue;
+      const dx = o.pos.x - g.pos.x, dz = o.pos.y - g.pos.y, d = Math.hypot(dx, dz);
+      if (d > SQUIRT_REACH || d < 0.2 || (dx * dir.x + dz * dir.z) / d < 0.82) continue;
+      setTimeout(() => {
+        if (this.disposed || !this.guests.has(id)) return;
+        o.anim.play('wow');
+        this.sparkles.burst(o.rig.head.getWorldPosition(new THREE.Vector3()), ['#bfe9ff', '#ffffff'], 22);
+        sound.play('bubble', { at: { x: o.pos.x, z: o.pos.y }, pitch: 1.3 });
+        if (id === this.conn.selfId) this.hooks.squirted(g.net.name);
+      }, 260 + d * 60);
+    }
+  }
+
+  /** In the air, then the splash. */
+  private diveFx(g: Guest, dt: number) {
+    const d = g.dive!;
+    const before = d.t; d.t += dt;
+    if (before < DIVE_TIME * 0.93 && d.t >= DIVE_TIME * 0.93) {
+      const at = g.rig.root.position.clone(); at.y = 0.15;
+      this.sparkles.burst(at, ['#bfe9ff', '#7fd0ff', '#ffffff', '#e8f8ff'], 110);
+      sound.play('step-water', { at: { x: g.pos.x, z: g.pos.y }, volume: 1 });
+      sound.play('boom', { at: { x: g.pos.x, z: g.pos.y }, pitch: 1.6, volume: 0.25 });
+    }
+    if (d.t >= DIVE_TIME) {
+      g.dive = null;
+      if (g.net.id === this.conn.selfId) this.conn.move(g.pos.x, g.pos.y, g.dir, false);
+    }
   }
 
   /** 🍹 At a bar or in the kitchen: swap your drink for the next one. Returns what you're holding now. */

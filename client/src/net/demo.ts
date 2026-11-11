@@ -1,8 +1,8 @@
 import {
   customColor, localOffset,
-  Board, CLINK, Clinks, TOGETHER, hasCompany, DOZE_AFTER, EMOTES, FIREWORK_COOLDOWN, nearStage, ENERGY, KINDS, MOOD_ENERGY, MOVE_HZ, HANDS, HATS, OUTFITS, WALK_SPEED, batteryOf, chargeRate, isNear, mapFor,
+  ACT_EVERY, Board, CLINK, Clinks, TOGETHER, hasCompany, DOZE_AFTER, EMOTES, FIREWORK_COOLDOWN, nearStage, ENERGY, KINDS, MOOD_ENERGY, MOVE_HZ, HANDS, HATS, OUTFITS, WALK_SPEED, batteryOf, chargeRate, isNear, mapFor,
   findPath, moveWithCollision, nearestWalkable, stepEnergy,
-  type Emote, type Look, type Mood, type Seat, type Theme, type WorldMap,
+  type Act, type Emote, type Look, type Mood, type Seat, type Theme, type WorldMap,
 } from '@party/shared';
 import { Emitter, type NetPlayer, type PartyConnection, type PartyEvents } from './types';
 
@@ -180,6 +180,8 @@ export class DemoConnection implements PartyConnection {
   writeNote(text: string) { const n = this.board.note('me', this.me.name, text, Date.now()); if (n) this.ev.emit('note', n); }
   like(art: string) { const n = this.board.like('me', art); if (n !== null) this.ev.emit('likes', art, n); }
   /** Call once the party is listening: what was left before you came. */
+  private actAt = 0;
+  act(kind: Act) { const now = Date.now(); if (now - this.actAt < ACT_EVERY * 1000) return; this.actAt = now; this.wake(this.me); this.ev.emit('act', 'me', kind); }
   setLook(l: Look) { this.me.look = l; this.ev.emit('change', strip(this.me)); }
   askBoard() { this.ev.emit('board', this.board.snapshot()); }
   private peerAt = new Map<string, { x: number; z: number }>();

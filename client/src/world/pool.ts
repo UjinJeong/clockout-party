@@ -266,6 +266,15 @@ export function buildPool(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
     return s;
   };
 
+  // ---- the diving board, out over the left end of the pool ----
+  {
+    const d = { x: POOL.board.x, z: POOL.board.z - 0.62 }; // just behind where you stand, so you're beside it, not in it
+    box(0.5, 0.5, 0.5, M.white, d.x - 0.35, 0.25, d.z);                       // the stand
+    for (const sx of [-0.2, 0.2]) cyl(0.03, 0.03, 0.75, M.coping, d.x - 0.35 + sx, 0.85, d.z - 0.2);
+    box(2.2, 0.07, 0.5, std('#7fc8dc', { roughness: 0.5 }), d.x + 0.55, 0.56, d.z);
+    box(0.5, 0.012, 0.52, std('#f6f1e6'), d.x + 1.35, 0.6, d.z);              // the grippy end
+  }
+
   return {
     paintings: [],
     floor,

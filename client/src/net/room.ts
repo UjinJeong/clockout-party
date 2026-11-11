@@ -1,4 +1,4 @@
-import { sanitizeHours,
+import { isAct, type Act, sanitizeHours,
   ENERGY, THEME_LABEL, batteryOf, isEmote, isFireworkSeed, isMood, isNear, parseLook, sanitizeChat, sanitizeName, type Emote, type Look, type Mood, type Theme,
 } from '@party/shared';
 import { DemoConnection } from './demo';
@@ -80,6 +80,7 @@ export class LiveRoomConnection implements PartyConnection {
       const d = (m.data ?? {}) as Record<string, unknown>;
       // fireworks are for the whole party; everything else only for people near you
       if (from && topic === 'emote' && isFireworkSeed(d.fw)) { this.ev.emit('firework', from.id, d.fw); return; }
+      if (from && topic === 'emote' && isAct(d.act)) { this.ev.emit('act', from.id, d.act); return; }
       if (from && topic === 'emote' && d.bye === 1) { this.ev.emit('bye', from.id); return; }
       if (!from || !isNear(from, this.me)) return;
       if (topic === 'chat') { const t = sanitizeChat(d.text); if (t) this.ev.emit('chat', from.id, t); }
@@ -122,6 +123,7 @@ export class LiveRoomConnection implements PartyConnection {
   stand() { this.bots.stand(); }
   mood(m: Mood) { this.bots.mood(m); }
   hours(h: string) { this.myHours = h; this.bots.hours(h); void this.room.presence({ hr: h || null }).catch(() => {}); }
+  act(kind: Act) { this.bots.act(kind); void this.room.emit('emote', { act: kind }).catch(() => {}); }
   setLook(l: Look) { this.look = l; this.bots.setLook(l); void this.room.presence(this.presence({})).catch(() => {}); }
   askBoard() { this.bots.askBoard(); }
   writeNote(text: string) { this.bots.writeNote(text); }

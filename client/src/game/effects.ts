@@ -38,6 +38,19 @@ export class Sparkles {
     }
   }
 
+  /** A jet in one direction (the water pistol): `dir` is a unit vector on the floor, `speed` in m/s. */
+  spray(at: THREE.Vector3, dir: { x: number; z: number }, colors: THREE.ColorRepresentation[], count = 40, speed = 5.5) {
+    for (let k = 0; k < count; k++) {
+      const i = this.next; this.next = (this.next + 1) % MAX;
+      const v = speed * (0.55 + Math.random() * 0.5), wob = (Math.random() - 0.5) * 0.5;
+      this.pos.set([at.x, at.y, at.z], i * 3);
+      this.vel.set([dir.x * v - dir.z * wob, 0.9 + Math.random() * 0.8, dir.z * v + dir.x * wob], i * 3);
+      const c = new THREE.Color(colors[k % colors.length]);
+      this.col.set([c.r, c.g, c.b], i * 3);
+      this.life[i] = 0.8 + Math.random() * 0.5;
+    }
+  }
+
   tick(dt: number) {
     for (let i = 0; i < MAX; i++) {
       if (this.life[i] <= 0) continue;

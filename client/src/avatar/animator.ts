@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ENERGY, type Emote, type Mood } from '@party/shared';
+import { DIVE_TIME, ENERGY, type Emote, type Mood } from '@party/shared';
 import type { AnimalRig } from './animal';
 import { expressionFor } from './face';
 
@@ -25,9 +25,9 @@ export const GLANCE = { away: 1.25, head: 1.45, body: 0.95, short: 0.35, zone: 0
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
 /** Emotes anyone can send, plus a few moves the party plays by itself. */
-export type Gesture = Emote | 'sigh' | 'hooray';
+export type Gesture = Emote | 'sigh' | 'hooray' | 'dive' | 'squirt';
 /** Most gestures take EMOTE_TIME; the 퇴근 celebration is three whole jumps. */
-export const gestureTime = (g: Gesture) => g === 'hooray' ? 2.7 : 1.5;
+export const gestureTime = (g: Gesture) => g === 'hooray' ? 2.7 : g === 'dive' ? DIVE_TIME : g === 'squirt' ? 0.9 : 1.5;
 
 /** Code-driven motion: walking, idle breathing, sitting, lying, dozing, and a short gesture per emote. */
 export class Animator {
@@ -53,7 +53,7 @@ export class Animator {
 
   play(kind: Gesture) {
     this.emote = kind; this.emoteT = 0;
-    if (kind === 'sigh') return;                       // the tie-loosening sigh is a private moment
+    if (kind === 'sigh' || kind === 'dive' || kind === 'squirt') return;                       // the tie-loosening sigh is a private moment
     this.glanceT = gestureTime(kind) + 0.3;
     this.glanceAmt = kind === 'zone' ? GLANCE.zone : 1; // zoning out: only a profile, still staring at nothing
   }
@@ -226,6 +226,22 @@ export class Animator {
       case 'nod':
         // slow, agreeable nods: "mm, mm"
         r.head.rotation.x += Math.abs(Math.sin(this.emoteT * 6.5)) * 0.32 * env;
+        break;
+      case 'dive': {
+        // off the board: up in an arc, one somersault about the tummy, arms stretched for the water
+        const a = Math.PI * 2 * Math.min(1, Math.max(0, (p - 0.12) / 0.7)), mid = 0.65;
+        r.root.rotation.x = a;
+        r.root.position.y += Math.sin(Math.PI * Math.min(1, p / 0.92)) * 1.25 + mid * (1 - Math.cos(a));
+        const back = -mid * Math.sin(a), yaw = r.root.rotation.y;
+        r.root.position.x += Math.sin(yaw) * back; r.root.position.z += Math.cos(yaw) * back;
+        r.armL.rotation.x = -2.9 * env; r.armR.rotation.x = -2.9 * env;
+        r.legL.rotation.x = 0.5 * Math.sin(a); r.legR.rotation.x = 0.5 * Math.sin(a);
+        break;
+      }
+      case 'squirt':
+        // water pistol: the free paw points straight ahead, a little kick back
+        r.armL.rotation.x = -1.5 * env;
+        r.bodyPivot.rotation.x -= 0.1 * Math.sin(Math.min(1, p * 4) * Math.PI);
         break;
       case 'hooray': {
         // 퇴근이다! three jumps, arms thrown up (a drink goes up in a toast instead)

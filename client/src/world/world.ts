@@ -27,6 +27,8 @@ export interface World {
   nudge?(guests: { x: number; z: number }[]): void;
   /** Fireworks for everyone (pool party): `seed` makes every screen show the same volley. */
   celebrate?(seed: number): void;
+  /** 📺 next channel on the TV (home party). */
+  tv?(): void;
   /** 0–1: something worth looking up at (fireworks) — the close camera tilts up a little. */
   lookUp?(): number;
   /** Take everything off the scene and free it. */

@@ -244,6 +244,10 @@ export function createHud(conn: PartyConnection, controls: Controls) {
     if (saved?.look) save('party.me', { ...saved, look: { ...saved.look, hand } });
   });
 
+  // ---- things to do right here: the diving board, the water pistol, the TV ----
+  const actChips = { dive: $('dive-chip'), squirt: $('squirt-chip'), tv: $('tv-chip') };
+  for (const kind of ['dive', 'squirt', 'tv'] as const) on(actChips[kind], 'click', () => party?.act(kind));
+
   // ---- people panel ----
   const peopleBtn = $('people-btn'), people = $('people'), plist = $('people-list');
   on(peopleBtn, 'click', () => {
@@ -332,6 +336,8 @@ export function createHud(conn: PartyConnection, controls: Controls) {
       if (first && kind === 'friday') toast('🔥 불금 시작! 이번 주도 수고했어요', 4200);
       if (first && kind === 'late') toast('🌙 자정이 넘었어요. 막차 조심하세요', 4200);
     },
+    acts: (a: { dive: boolean; squirt: boolean; tv: boolean }) => { actChips.dive.hidden = !a.dive; actChips.squirt.hidden = !a.squirt; actChips.tv.hidden = !a.tv; },
+    squirted: (by: string) => toast(`💦 ${by}님의 물총에 맞았어요!`, 2400),
     clinked: (name: string) => toast(`🥂 ${name}님과 짠! 충전 +3`, 2600),
     company: () => toast('💞 나란히 앉으면 충전이 더 빨라요', 3200),
     editHours: () => openHours(),
@@ -374,7 +380,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
       cleanups.forEach(f => f());
       living.close();
       $('bye-card').hidden = true; $('dock').hidden = false; $('night-veil').hidden = true; $('event-chip').hidden = true;
-      hud.hidden = true; people.hidden = true; chip.hidden = true; drinkChip.hidden = true; book.hidden = true; likeChip.hidden = true;
+      hud.hidden = true; people.hidden = true; chip.hidden = true; drinkChip.hidden = true; for (const c of Object.values(actChips)) c.hidden = true; book.hidden = true; likeChip.hidden = true;
       $('help').hidden = true;
     },
   };
