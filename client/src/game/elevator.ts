@@ -17,6 +17,15 @@ export const ARRIVAL = {
   end: 4.0,   // sunk away
 } as const;
 
+/** Going home: the same lift, the other way round. You walk in, turn, wave; the doors close on you. */
+export const DEPARTURE = {
+  rise: 0.7,  // coming up through the floor
+  open: 1.4,  // doors open
+  inside: 2.5, // walked in and turned round by here
+  close: 3.4, // doors shut on a wave
+  end: 4.2,   // sunk away
+} as const;
+
 const W = 1.36, H = 2.3, DEPTH = 0.9;
 /** How far inside the lift a guest stands before stepping out. */
 const INSIDE = 0.62;
@@ -35,13 +44,15 @@ export class Elevator {
   private doors: THREE.Mesh[] = [];
   private halo: THREE.Sprite;
   private dinged = false;
+  private baseY = 0; // the floor it comes up through (upstairs is higher)
 
-  constructor(private scene: THREE.Scene, at: THREE.Vector3, dir: number, private onDing?: () => void) {
+  constructor(private scene: THREE.Scene, at: THREE.Vector3, dir: number, private onDing?: () => void, readonly leaving = false) {
     // The lift stands just behind where the guest will be, facing the way they face.
     const g = this.group;
     g.rotation.y = dir;
     const back = new THREE.Vector3(0, 0, -INSIDE).applyAxisAngle(new THREE.Vector3(0, 1, 0), dir);
-    g.position.set(at.x + back.x, -H - 0.2, at.z + back.z);
+    this.baseY = at.y;
+    g.position.set(at.x + back.x, at.y - H - 0.2, at.z + back.z);
     const add = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number) => {
       const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m;
     };
@@ -73,6 +84,13 @@ export class Elevator {
   /** Door opening, 0 (shut) to 1 (wide open), at the current time. */
   private openness() {
     const t = this.t;
+    if (this.leaving) {
+      const D = DEPARTURE;
+      if (t < D.rise) return 0;
+      if (t < D.open) return smooth((t - D.rise) / (D.open - D.rise));
+      if (t < D.inside + 0.25) return 1;
+      return 1 - smooth((t - D.inside - 0.25) / (D.close - D.inside - 0.25));
+    }
     if (t < ARRIVAL.rise) return 0;
     if (t < ARRIVAL.open) return smooth((t - ARRIVAL.rise) / (ARRIVAL.open - ARRIVAL.rise));
     if (t < ARRIVAL.out) return 1;
@@ -84,32 +102,37 @@ export class Elevator {
   doorGap() { return Math.abs(this.doors[1].position.x - this.doors[0].position.x) - W / 2; }
 
   /** Should the arriving guest be drawn yet? (Not while the doors are still shut on the way up.) */
-  guestVisible() { return this.t >= ARRIVAL.rise + 0.15; }
+  guestVisible() { return this.leaving ? this.t < DEPARTURE.close - 0.05 : this.t >= ARRIVAL.rise + 0.15; }
 
   /** How far back inside the lift the guest is right now (0 = out on the floor). */
   guestOffset() {
     const t = this.t;
+    if (this.leaving) return INSIDE * smooth((t - DEPARTURE.open) / (DEPARTURE.inside - 0.35 - DEPARTURE.open));
     if (t < ARRIVAL.open - 0.3) return INSIDE;
     if (t >= ARRIVAL.out) return 0;
     return INSIDE * (1 - smooth((t - (ARRIVAL.open - 0.3)) / (ARRIVAL.out - (ARRIVAL.open - 0.3))));
   }
 
   /** Is the guest walking out right now? (for the walk cycle) */
-  stepping() { return this.t > ARRIVAL.open - 0.3 && this.t < ARRIVAL.out; }
+  stepping() { return this.leaving ? this.t > DEPARTURE.open && this.t < DEPARTURE.inside - 0.35 : this.t > ARRIVAL.open - 0.3 && this.t < ARRIVAL.out; }
+
+  /** Leaving: walked in and turned to face the room (time to wave)? */
+  turned() { return this.leaving && this.t >= DEPARTURE.inside - 0.35; }
 
   update(dt: number) {
     if (this.done) return;
     this.t += dt;
     const t = this.t;
     // up through the floor, and back down at the end
-    const y = t < ARRIVAL.rise ? -(H + 0.2) * (1 - smooth(t / ARRIVAL.rise))
-      : t > ARRIVAL.close ? -(H + 0.2) * smooth((t - ARRIVAL.close) / (ARRIVAL.end - ARRIVAL.close)) : 0;
-    this.group.position.y = y;
-    if (!this.dinged && t >= ARRIVAL.rise) { this.dinged = true; this.onDing?.(); }
+    const T = this.leaving ? DEPARTURE : ARRIVAL;
+    const y = t < T.rise ? -(H + 0.2) * (1 - smooth(t / T.rise))
+      : t > T.close ? -(H + 0.2) * smooth((t - T.close) / (T.end - T.close)) : 0;
+    this.group.position.y = this.baseY + y;
+    if (!this.dinged && t >= T.rise) { this.dinged = true; this.onDing?.(); }
     const o = this.openness();
     for (const d of this.doors) d.position.x = (d.userData.side as number) * (W / 4 + o * W * 0.47);
     (this.halo.material as THREE.SpriteMaterial).opacity = o * 0.75;
-    if (t >= ARRIVAL.end) this.dispose();
+    if (t >= T.end) this.dispose();
   }
 
   dispose() {

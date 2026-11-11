@@ -80,6 +80,7 @@ export class LiveRoomConnection implements PartyConnection {
       const d = (m.data ?? {}) as Record<string, unknown>;
       // fireworks are for the whole party; everything else only for people near you
       if (from && topic === 'emote' && isFireworkSeed(d.fw)) { this.ev.emit('firework', from.id, d.fw); return; }
+      if (from && topic === 'emote' && d.bye === 1) { this.ev.emit('bye', from.id); return; }
       if (!from || !isNear(from, this.me)) return;
       if (topic === 'chat') { const t = sanitizeChat(d.text); if (t) this.ev.emit('chat', from.id, t); }
       else if (isEmote(d.kind)) this.ev.emit('emote', from.id, d.kind);
@@ -121,6 +122,7 @@ export class LiveRoomConnection implements PartyConnection {
   stand() { this.bots.stand(); }
   mood(m: Mood) { this.bots.mood(m); }
   hours(h: string) { this.myHours = h; this.bots.hours(h); void this.room.presence({ hr: h || null }).catch(() => {}); }
+  bye() { this.bots.bye(); void this.room.emit('emote', { bye: 1 }).catch(() => {}); }
   firework() {
     const seed = this.bots.fireworkSeed();
     if (seed === null) return;

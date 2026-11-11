@@ -25,6 +25,8 @@ export interface PartyEvents {
   snap(x: number, z: number): void;
   /** 🎆 someone launched fireworks from the DJ booth (`seed` makes every screen show the same volley). */
   firework(from: string, seed: number): void;
+  /** 🚪 someone is going home: their lift comes, they wave, the doors close. */
+  bye(from: string): void;
   closed(reason: string): void;
 }
 
@@ -54,6 +56,8 @@ export interface PartyConnection {
   hours(h: string): void;
   /** Launch fireworks from the DJ booth (the party checks you're there and not too often). */
   firework(): void;
+  /** Say you're going home (everyone sees you take the lift). Call leave() once the doors have shut. */
+  bye(): void;
   leave(): void;
 }
 

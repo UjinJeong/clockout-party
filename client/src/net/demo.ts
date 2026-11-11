@@ -181,6 +181,11 @@ export class DemoConnection implements PartyConnection {
     return seed;
   }
   firework() { this.fireworkSeed(); }
+  /** Going home: the guests near you wave you off. */
+  bye() {
+    this.ev.emit('bye', 'me');
+    for (const b of this.bots) if (isNear(b, this.me) && !b.dozing) window.setTimeout(() => this.ev.emit('emote', b.id, 'wave'), 900 + Math.random() * 1200);
+  }
 
   async voice(blob: Blob, ms: number) {
     // There is nobody real to hear it, so play it back as your own bubble.

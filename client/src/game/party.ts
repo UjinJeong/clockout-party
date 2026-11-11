@@ -36,6 +36,11 @@ interface Guest {
   sighed: boolean;
   /** 퇴근 celebration: seconds since it began (−1 when not celebrating). */
   hooray: number;
+  /** Going home: the lift they're stepping into. */
+  leave: Elevator | null;
+  waved: boolean;
+  /** The doors have shut on them; not drawn any more (they're about to be removed). */
+  gone: boolean;
 }
 
 const zTex = () => canvasTexture(64, 64, (x, w, h) => {
@@ -161,6 +166,7 @@ export class Party {
         if (from !== conn.selfId) sound.play('pop', { at: { x: g.pos.x, z: g.pos.y }, pitch: 0.8 });
       },
       firework: (_from, seed) => { this.world.celebrate?.(seed); },
+      bye: from => this.startBye(from),
       snap: (x, z) => { const me = this.self(); if (me) { me.pos.set(x, z); me.net.x = x; me.net.z = z; } },
     });
 
@@ -216,7 +222,7 @@ export class Party {
       arrive: isSelf || this.settled
         ? new Elevator(this.scene, new THREE.Vector3(p.x, 0, p.z), 0, isSelf ? undefined : () => sound.play('ding', { at: { x: p.x, z: p.z }, volume: 0.6 }))
         : null,
-      sighed: false, hooray: -1,
+      sighed: false, hooray: -1, leave: null, waved: false, gone: false,
     });
     const g0 = this.guests.get(p.id)!;
     if (g0.arrive) { g0.dir = 0; g0.rig.root.visible = false; }
@@ -265,7 +271,7 @@ export class Party {
     if (!g) return;
     g.rig.dispose(); g.tag.dispose();
     for (const z of g.zzz ?? []) z.removeFromParent();
-    g.arrive?.dispose();
+    g.arrive?.dispose(); g.leave?.dispose();
     this.guests.delete(id);
     this.listDirty = true;
   }
@@ -273,6 +279,7 @@ export class Party {
   private playEmote(from: string, kind: Emote) {
     const g = this.guests.get(from);
     if (!g) return;
+    if (from === this.conn.selfId) this.stats.sent++; else this.stats.got++;
     g.anim.play(kind);
     g.tag.emote(kind);
     sound.play(kind, { at: { x: g.pos.x, z: g.pos.y }, pitch: from === this.conn.selfId ? 1 : 0.92 + (hash(from) % 6) * 0.03 });
@@ -378,6 +385,8 @@ export class Party {
       const baseY = w.y + (seat ? (seat.pose === 'lie' ? seat.y - 0.04 : seat.y - 0.24) : this.wade(g, dt));
       let moving = !seat && (id === this.conn.selfId ? g.net.moving : g.net.moving || Math.hypot(g.net.x - g.pos.x, g.net.z - g.pos.y) > 0.05);
       if (g.arrive) moving = this.arriving(g, dt, id === this.conn.selfId) || moving;
+      if (g.leave) moving = this.leaving(g, dt);
+      if (g.gone) g.rig.root.visible = false;
       if (id === this.conn.selfId) this.footsteps(g, moving && !g.arrive, dt);
       // standing still on the dance floor? then you're dancing (and far too busy to nod off)
       const dancing = !seat && !moving && !g.arrive && onDanceFloor({ x: g.pos.x, z: g.pos.y }, this.world.map);
@@ -433,6 +442,7 @@ export class Party {
 
   private moveSelf(me: Guest, dt: number) {
     let { x: dx, z: dz } = this.controls.direction();
+    if (me.leave || me.gone) { this.controls.target = null; return; } // in the lift home: no more wandering
     // still in the lift: wait for the doors
     if (me.arrive && me.arrive.t < ARRIVAL.out) { dx = 0; dz = 0; this.controls.target = null; }
     // any steering while seated gets you up first
@@ -559,6 +569,53 @@ export class Party {
     sound.play('stand');
   }
 
+  /** Reactions sent and received this visit (for the goodbye card). */
+  readonly stats = { sent: 0, got: 0 };
+  private byeDone: (() => void) | null = null;
+
+  /** 🚪 Go home: your lift comes, you step in, turn, wave; resolves when the doors have shut. */
+  farewell(): Promise<void> {
+    const me = this.self();
+    if (!me || me.leave || me.gone) return Promise.resolve();
+    if (me.net.seat >= 0) this.standUp();
+    this.conn.bye();
+    return new Promise(done => {
+      this.byeDone = done;
+      setTimeout(() => { if (this.byeDone === done) { this.byeDone = null; done(); } }, 12000); // never leave anyone stuck
+    });
+  }
+
+  private startBye(id: string) {
+    const g = this.guests.get(id);
+    if (!g || g.leave || g.gone) return;
+    const isSelf = id === this.conn.selfId;
+    g.arrive?.dispose(); g.arrive = null; g.rig.root.visible = true;
+    const w = toWorld(this.world.map, { x: g.pos.x, z: g.pos.y });
+    const where = { at: { x: g.pos.x, z: g.pos.y } };
+    // the lift comes up just behind them, doors towards the room (and the camera)
+    g.leave = new Elevator(this.scene, new THREE.Vector3(w.x, w.y, w.z), 0, isSelf ? undefined : () => sound.play('ding', { ...where, volume: 0.6 }), true);
+    g.waved = false;
+    if (isSelf) sound.play('lift'); else g.tag.say('먼저 들어가 볼게요 👋');
+  }
+
+  /** Stepping into the lift home: face it, walk in, turn round, wave, and the doors close. */
+  private leaving(g: Guest, dt: number): boolean {
+    const e = g.leave!;
+    e.update(dt);
+    const turned = e.turned();
+    g.dir = turn(g.dir, turned ? 0 : Math.PI, dt * 9);
+    g.rig.root.rotation.y = g.dir;
+    g.rig.root.position.z -= e.guestOffset();
+    g.rig.root.visible = e.guestVisible();
+    if (turned && !g.waved) { g.waved = true; g.anim.play('wave'); sound.play('wave', { at: { x: g.pos.x, z: g.pos.y } }); }
+    if (e.done || !e.guestVisible()) {
+      g.gone = true;
+      if (g.net.id === this.conn.selfId && this.byeDone) { const done = this.byeDone; this.byeDone = null; setTimeout(done, 700); }
+    }
+    if (e.done) g.leave = null;
+    return e.stepping();
+  }
+
   /** Stepping out of the lift: drawn a little back inside it until the doors are open, then out, then a sigh. */
   private arriving(g: Guest, dt: number, isSelf: boolean): boolean {
     const e = g.arrive!;
@@ -662,7 +719,7 @@ export class Party {
       v.set(g.rig.root.position.x, 1.85 + g.rig.root.position.y, g.rig.root.position.z).project(this.camera);
       const vis = v.z < 1 && v.x > -1.2 && v.x < 1.2 && v.y > -1.2 && v.y < 1.3;
       const sx = (v.x * 0.5 + 0.5) * w, sy = (-v.y * 0.5 + 0.5) * h;
-      g.tag.place(sx, sy, vis, v.z);
+      g.tag.place(sx, sy, vis && g.rig.root.visible, v.z);
       if (me && id !== this.conn.selfId) g.tag.setNear(isNear(me.net, g.net));
       if (vis) {
         plates.push({ l: sx - 45, r: sx + 45, t: sy - 22, b: sy });

@@ -30,6 +30,8 @@ export function createHud(conn: PartyConnection, controls: Controls) {
   if (conn.note) $('demo-banner').textContent = conn.note;
   $('invite-btn').hidden = conn.demo;
   let party: Party | null = null;
+  const joinedAt = Date.now();
+  let firstEnergy = -1, lastEnergy = 0;
   let current: Painting | null = null;
   const cleanups: (() => void)[] = [];
   const on = <K extends keyof HTMLElementEventMap>(el: EventTarget, ev: K, fn: (e: HTMLElementEventMap[K]) => void) => {
@@ -261,7 +263,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
       seatChip.hidden = !o;
       if (o) seatChip.textContent = o.seated ? '🚶 일어나기' : o.seat.pose === 'lie' ? '🏖️ 누워서 충전하기' : '🛋️ 앉아서 충전하기';
     },
-    energy: (e: number) => showEnergy(e),
+    energy: (e: number) => { if (firstEnergy < 0) firstEnergy = e; lastEnergy = e; showEnergy(e); },
     charged: () => toast('⚡ 충전 완료! 오늘도 수고했어요', 4200),
     landed: () => { moodCard.hidden = false; },
     editHours: () => openHours(),
@@ -278,7 +280,21 @@ export function createHud(conn: PartyConnection, controls: Controls) {
   };
 
   const closed = new Promise<'left' | 'lost'>(resolve => {
-    on($('leave-btn'), 'click', () => { sound.play('whoosh', { pitch: 0.6 }); conn.leave(); resolve('left'); });
+    // 🚪 going home: the lift comes, you wave, the doors close — then a small record of the visit
+    let leaving = false;
+    on($('leave-btn'), 'click', async () => {
+      if (leaving) return;
+      leaving = true;
+      sound.play('whoosh', { pitch: 0.6 });
+      for (const id of ['mood-card', 'hours-card']) $(id).hidden = true;
+      $('dock').hidden = true;
+      try { await party?.farewell(); } catch (err) { console.error(err); }
+      const stats = party?.stats ?? { sent: 0, got: 0 };
+      $('bye-list').innerHTML = byeLines({ ms: Date.now() - joinedAt, from: firstEnergy, to: lastEnergy, ...stats }).map(l => `<li>${esc(l)}</li>`).join('');
+      $('bye-card').hidden = false;
+      sound.play('charged', { volume: 0.5 });
+      on($('bye-done'), 'click', () => { $('bye-card').hidden = true; conn.leave(); resolve('left'); });
+    });
     conn.on({ closed: r => resolve(r === 'left' ? 'left' : 'lost') });
   });
 
@@ -289,8 +305,19 @@ export function createHud(conn: PartyConnection, controls: Controls) {
     dispose() {
       cleanups.forEach(f => f());
       living.close();
+      $('bye-card').hidden = true; $('dock').hidden = false;
       hud.hidden = true; people.hidden = true; chip.hidden = true;
       $('help').hidden = true;
     },
   };
+}
+
+/** The goodbye card: how long you stayed, how much you recharged, the reactions that went round. */
+export function byeLines(v: { ms: number; from: number; to: number; sent: number; got: number }): string[] {
+  const min = Math.max(1, Math.round(v.ms / 60000));
+  const stay = min < 60 ? `${min}분` : `${Math.floor(min / 60)}시간${min % 60 ? ` ${min % 60}분` : ''}`;
+  const lines = [`⏱ 머문 시간 ${stay}`];
+  if (v.from >= 0) lines.push(v.to > v.from ? `🔋 충전 ${Math.round(v.from)}% → ${Math.round(v.to)}%` : `🔋 지금 충전 ${Math.round(v.to)}%`);
+  lines.push(v.got || v.sent ? `🥂 받은 반응 ${v.got}번 · 보낸 반응 ${v.sent}번` : '🫥 조용히 쉬다 가요');
+  return lines;
 }

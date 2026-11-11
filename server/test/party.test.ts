@@ -447,3 +447,18 @@ describe('⏰ work hours over your head', () => {
     expect(room.state.players.get(a.sessionId)!.hours).toBe('');
   });
 });
+
+describe('🚪 going home', () => {
+  it('everyone is told once, and the leaver gets up from their seat', async () => {
+    const room = await colyseus.createRoom('party', {});
+    const a = await colyseus.connectTo(room, { name: '가는이' });
+    const b = await colyseus.connectTo(room, { name: '남는이' });
+    const got: any[] = [];
+    b.onMessage('bye', (m: any) => got.push(m));
+    a.onMessage('bye', () => {});
+    a.send('bye', {}); a.send('bye', {});
+    await room.waitForNextPatch();
+    await new Promise(r => setTimeout(r, 50));
+    expect(got).toEqual([{ from: a.sessionId }]);
+  });
+});

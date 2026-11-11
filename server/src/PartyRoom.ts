@@ -33,6 +33,7 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
   private map: WorldMap = mapFor('gallery');
   private guestNo = 0;
   private lastFirework = 0;
+  private saidBye = new Set<string>();
 
   messages = {
     move: (client: Client, m: unknown) => this.onMove(client, m),
@@ -63,6 +64,13 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
       this.lastFirework = now;
       this.active(client.sessionId);
       this.broadcast('firework', { from: client.sessionId, seed: Math.floor(Math.random() * 2 ** 31) });
+    },
+    /** 🚪 going home: everyone sees the lift come for you (once; the client leaves when the doors shut) */
+    bye: (client: Client) => {
+      if (!this.state.players.has(client.sessionId) || this.saidBye.has(client.sessionId)) return;
+      this.saidBye.add(client.sessionId);
+      this.standUp(client.sessionId);
+      this.broadcast('bye', { from: client.sessionId });
     },
     sit: (client: Client, m: unknown) => this.onSit(client, (m as { seat?: unknown } | null)?.seat),
     stand: (client: Client) => { this.standUp(client.sessionId); this.active(client.sessionId); },
