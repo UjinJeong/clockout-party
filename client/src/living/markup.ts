@@ -8,6 +8,10 @@ export const VIEWER_HTML = `
     <canvas id="fx"></canvas></div>
     <div class="vloading" id="v-loading" hidden>그림을 걸고 있어요…</div>
     <button class="ibtn" id="close" type="button" aria-label="전시실 나가기">✕</button>
+    <div class="motion-seg" id="motion-seg" role="radiogroup" aria-label="그림 보는 방법">
+      <button type="button" role="radio" data-m="live" aria-checked="true">🎞️ 움직이는 그림</button>
+      <button type="button" role="radio" data-m="still" aria-checked="false">🖼️ 원본</button>
+    </div>
     <p class="zhint" id="zhint">스크롤하거나 두 손가락으로 벌리면 확대돼요</p>
     <div class="zoombar" role="toolbar" aria-label="보기 도구">
       <button type="button" id="z-out" aria-label="축소">−</button>

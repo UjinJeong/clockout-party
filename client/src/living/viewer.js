@@ -9,6 +9,7 @@ import { VIEWER_HTML } from './markup';
 import './viewer.css';
 import { QUESTIONS, playAnswer } from './docent';
 import { ANSWERS } from './answers';
+import { artMotion, setArtMotion } from '../ui/artMotion';
 
 
 let made = null;
@@ -570,13 +571,25 @@ async function openViewer(k){
     S.par=[0,0];S.tl=[0,0];    S.maskImg=mask;S.night=0;S.dusk=0;
     K=(KINDS[a.kind]||(()=>({})))(ex);
     if(K.controls)K.controls.forEach(c=>{const b=document.createElement('button');b.className='btn';b.type='button';b.textContent=c.label;b.setAttribute('aria-pressed','false');b.onclick=()=>c.on(b);ctl.appendChild(b);});
-    S.ready=true;$('v-loading').hidden=true;
+    S.ready=true;$('v-loading').hidden=true;applyMotion();
     if(!glOK){frame.style.background=`center/cover url(${a.img})`;const n=$('v-note');n.textContent='이 기기에서는 그래픽 가속(WebGL)을 쓸 수 없어 그림 자체의 일렁임이 꺼져 있어요. 날아다니는 효과만 보여요.';n.hidden=false;}
   }catch(e){$('v-loading').textContent='그림을 불러오지 못했어요. 다시 시도해 주세요.';}
   if(!S.run){S.run=true;S.last=performance.now();requestAnimationFrame(loop);}
   $('close').focus({preventScroll:true});
 }
 function closeViewer(){if(viewer.hidden)return;viewer.hidden=true;document.body.style.overflow='';S.run=false;stopMic();opts.onClose&&opts.onClose();}
+/* ---------- moving ↔ original ---------- */
+// "still" shows the painting exactly as painted: no effects canvas, no warping,
+// just the image (the same path as devices without WebGL). Remembered, and the
+// wall paintings in the gallery follow the same choice.
+S.still=artMotion()==='still';
+function applyMotion(){
+  viewer.classList.toggle('still',S.still);
+  for(const b of document.querySelectorAll('#motion-seg button'))b.setAttribute('aria-checked',String((b.dataset.m==='still')===S.still));
+  if(S.art)frame.style.background=(S.still||!glOK)?`center/cover url(${S.art.img})`:'';
+  const how=$('v-how').closest('.sect');if(how)how.hidden=S.still;$('v-ctl').hidden=S.still;
+}
+$('motion-seg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const st=b.dataset.m==='still';if(st===S.still)return;S.still=st;setArtMotion(st?'still':'live');applyMotion();});
 $('close').onclick=closeViewer;$('prev').onclick=()=>openViewer(S.art.k-1);$('next').onclick=()=>openViewer(S.art.k+1);
 addEventListener('keydown',e=>{if(viewer.hidden)return;if(e.key==='Escape')closeViewer();else if(e.key==='ArrowRight')openViewer(S.art.k+1);else if(e.key==='ArrowLeft')openViewer(S.art.k-1);
   else if(e.key===' '&&S.art.kind==='dandelion'){e.preventDefault();if(!S.down){S.down=true;}}});
@@ -671,6 +684,7 @@ function loop(now){if(!S.run)return;requestAnimationFrame(loop);let dt=Math.min(
    S.par=[-S.tl[0]*.065,-S.tl[1]*.065];
    const cx=S.fr.x+S.fr.w/2,cy=S.fr.y+S.fr.h/2;scene.style.transformOrigin=`${cx}px ${cy}px`;
    scene.style.transform='';}
+  if(S.still){ctx.setTransform(S.dpr,0,0,S.dpr,0,0);ctx.clearRect(0,0,S.vw,S.vh);return;}
   if(S.art.kind!=='dandelion')S.gust*=Math.exp(-dt*1.8);
   K&&K.update&&K.update(dt);
   const f=S.art.fx;

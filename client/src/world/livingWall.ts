@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { RoomId } from '@party/shared';
+import { artMotion, onArtMotion } from '../ui/artMotion';
 
 /**
  * The paintings on the gallery walls breathe a little, each room in its own way:
@@ -74,9 +75,10 @@ const MAP_CHUNK = /* glsl */ `
 `;
 
 const clock = { value: 0 };
-const strength = {
-  value: typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 1,
-};
+/** 1 = breathing, 0 = exactly as painted. Eases toward `goal` so switching is a soft settle, not a jump. */
+const strength = { value: artMotion() === 'live' ? 1 : 0 };
+let goal = strength.value;
+onArtMotion(m => { goal = m === 'live' ? 1 : 0; });
 
 /** A painting canvas material for `room`; `seed` keeps neighbouring paintings out of step. */
 export function livingCanvas(room: RoomId, seed: number): THREE.MeshBasicMaterial {
@@ -101,4 +103,8 @@ export function livingCanvas(room: RoomId, seed: number): THREE.MeshBasicMateria
 /** Advance the paintings' shared clock. */
 export function tickLivingWall(dt: number) {
   clock.value += dt;
+  strength.value += (goal - strength.value) * Math.min(1, dt * 4);
 }
+
+/** How much the wall paintings move right now (0–1). */
+export const wallStrength = () => strength.value;

@@ -69,3 +69,10 @@
 @keyframes vdot{0%,20%{opacity:.15}50%{opacity:1}100%{opacity:.15}}
 #viewer .answer .caret{display:inline-block;width:7px;height:1.05em;margin-left:2px;vertical-align:-2px;background:var(--on-dark);animation:vcaret .9s steps(1) infinite}
 @keyframes vcaret{50%{opacity:0}}
+
+/* moving ↔ original */
+#viewer .motion-seg{position:absolute;z-index:6;top:max(16px,env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));display:flex;gap:2px;padding:4px;border-radius:999px;background:rgba(20,20,22,.6);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+#viewer .motion-seg button{appearance:none;border:0;background:none;color:var(--on-dark-2);font:inherit;font-size:13px;height:34px;padding:0 13px;border-radius:999px;cursor:pointer;white-space:nowrap}
+#viewer .motion-seg button[aria-checked="true"]{background:rgba(255,255,255,.16);color:var(--on-dark)}
+#viewer .motion-seg button:focus-visible{outline:2px solid rgba(255,255,255,.5);outline-offset:1px}
+#viewer.still #gl,#viewer.still #fx{visibility:hidden}
