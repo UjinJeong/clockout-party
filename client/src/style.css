@@ -339,10 +339,11 @@ html.touch .joystick { display: block; }
 /* ⏰ work hours: on the invitation, in the edit card, and over your head */
 .hours-row legend small { font-weight: 400; color: var(--ink-2); font-size: 11.5px; margin-left: 4px; }
 .hours-pick { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.hours-pick input[type=time] { appearance: none; -webkit-appearance: none; font: 500 15px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink); background: #fbf6ec; border: 1px solid #cdbd9e; padding: 7px 10px; border-radius: 2px; cursor: pointer; }
+.hours-pick input[type=text] { width: 7.4em; text-align: center; font: 500 15px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink); background: #fbf6ec; border: 1px solid #cdbd9e; padding: 7px 10px; border-radius: 2px; cursor: text; caret-color: var(--ink); }
+.hours-pick input[type=text]:focus { outline: 2px solid #b8894a; outline-offset: 1px; background: #fff; }
 .hours-pick .hp-dash { color: var(--ink-2); }
 .hours-pick .hp-show { appearance: none; border: 1px solid #cdbd9e; background: #fbf6ec; color: var(--ink); font: inherit; font-size: 12.5px; padding: 7px 10px; border-radius: 2px; cursor: pointer; margin-left: 4px; }
-.hours-pick.hidden-hours input[type=time] { opacity: .45; }
+.hours-pick.hidden-hours input[type=text] { opacity: .45; }
 .hours-card .hours-note { margin: 8px 0 10px; font-size: 12.5px; color: var(--ink-2); }
 .tag .hours { position: absolute; bottom: 24px; left: 0; transform: translateX(-50%); white-space: nowrap; font-size: 11px; line-height: 1; padding: 4px 7px; border-radius: 999px;
   background: rgba(24, 18, 20, .72); color: #f3e7cf; opacity: .55; transition: opacity .2s; }

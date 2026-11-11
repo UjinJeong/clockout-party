@@ -1,9 +1,9 @@
-import { formatHours, localOffset, parseHours, sanitizeHours } from '@party/shared';
+import { clockLabel, formatHours, localOffset, parseClock, parseHours, sanitizeHours } from '@party/shared';
 import { load, save } from './dom';
 
 /**
- * ⏰ "출퇴근 시간" picker: two time boxes you can type into (any minute, e.g.
- * 09:10) or pick from, and a show/hide switch. Used on the invitation card and again in the party, from your own
+ * ⏰ "출퇴근 시간" picker: two plain text boxes you type a time into ("9", "930",
+ * "09:10" — a real caret, unlike the native time control), with a list of half hours to pick from and ↑↓ to nudge, and a show/hide switch. Used on the invitation card and again in the party, from your own
  * name tag. The choice is remembered on this device.
  */
 const KEY = 'party.hours';
@@ -20,22 +20,23 @@ export function hoursValue(s: Saved = savedHours()): string {
   return s.show ? sanitizeHours(formatHours({ start: s.start, end: s.end, tz: localOffset() })) : '';
 }
 
-const label = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-/** "09:10" → 550. Anything that isn't a time → null. */
-export function parseTime(v: string): number | null {
-  const m = /^(\d{1,2}):(\d{2})$/.exec(v.trim());
-  if (!m) return null;
-  const h = Number(m[1]), min = Number(m[2]);
-  return h < 24 && min < 60 ? h * 60 + min : null;
-}
+const label = clockLabel;
+/** A typed time → minutes. Forgiving: "9", "930", "9:30", "18시" (see shared parseClock). */
+export const parseTime = parseClock;
+const OPTIONS = Array.from({ length: 48 }, (_, i) => `<option value="${clockLabel(i * 30)}"></option>`).join('');
+let lists = 0;
 
 export interface HoursPicker { value(): string; saved(): Saved; dispose(): void }
 
 export function hoursPicker(host: HTMLElement, onChange?: (s: Saved) => void): HoursPicker {
   let s = savedHours();
-  host.innerHTML = `<input type="time" class="hp-start" aria-label="출근 시간" value="${label(s.start)}" required />
+  const list = `hp-times-${++lists}`;
+  const box = (cls: string, name: string, v: number) =>
+    `<input type="text" class="${cls}" aria-label="${name} 시간" value="${label(v)}" inputmode="numeric" maxlength="8" placeholder="${label(v)}" list="${list}" autocomplete="off" spellcheck="false" enterkeyhint="done" />`;
+  host.innerHTML = `${box('hp-start', '출근', s.start)}
     <span class="hp-dash" aria-hidden="true">~</span>
-    <input type="time" class="hp-end" aria-label="퇴근 시간" value="${label(s.end)}" required />
+    ${box('hp-end', '퇴근', s.end)}
+    <datalist id="${list}">${OPTIONS}</datalist>
     <button type="button" class="hp-show" aria-pressed="${s.show}"></button>`;
   const start = host.querySelector<HTMLInputElement>('.hp-start')!, end = host.querySelector<HTMLInputElement>('.hp-end')!;
   const show = host.querySelector<HTMLButtonElement>('.hp-show')!;
@@ -48,19 +49,28 @@ export function hoursPicker(host: HTMLElement, onChange?: (s: Saved) => void): H
     const a = parseTime(start.value);
     let b = parseTime(end.value);
     if (a === null || b === null) return;               // half-typed: wait for a whole time
-    if (a === b) { b = (b + 30) % 1440; end.value = label(b); } // can't start and finish at the same time
+    if (a === b) { b = (b + 30) % 1440; if (document.activeElement !== end) end.value = label(b); } // can't start and finish at the same time
     s = { start: a, end: b, show: s.show };
     save(KEY, s); paint(); onChange?.(s);
   };
   const toggle = () => { s = { ...s, show: !s.show }; save(KEY, s); paint(); onChange?.(s); };
-  const tidy = () => { if (parseTime(start.value) === null) start.value = label(s.start); if (parseTime(end.value) === null) end.value = label(s.end); };
-  for (const el of [start, end]) { el.addEventListener('change', changed); el.addEventListener('input', changed); el.addEventListener('blur', tidy); }
+  const tidy = () => { start.value = label(s.start); end.value = label(s.end); };  // "930" → "09:30"; nonsense → the last good time
+  const keys = (e: KeyboardEvent) => {
+    const el = e.target as HTMLInputElement;
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      const now = parseTime(el.value); if (now === null) return;
+      e.preventDefault();
+      el.value = label((now + (e.key === 'ArrowUp' ? 10 : 1430)) % 1440); changed();
+    } else if (e.key === 'Enter') { e.preventDefault(); el.blur(); }  // finish this box, don't send the whole form
+  };
+  const pickAll = (e: Event) => (e.target as HTMLInputElement).select();
+  for (const el of [start, end]) { el.addEventListener('change', changed); el.addEventListener('input', changed); el.addEventListener('blur', tidy); el.addEventListener('keydown', keys); el.addEventListener('focus', pickAll); }
   show.addEventListener('click', toggle);
   paint();
   return {
     value: () => hoursValue(s),
     saved: () => s,
-    dispose() { for (const el of [start, end]) { el.removeEventListener('change', changed); el.removeEventListener('input', changed); el.removeEventListener('blur', tidy); } show.removeEventListener('click', toggle); },
+    dispose() { for (const el of [start, end]) { el.removeEventListener('change', changed); el.removeEventListener('input', changed); el.removeEventListener('blur', tidy); el.removeEventListener('keydown', keys); el.removeEventListener('focus', pickAll); } show.removeEventListener('click', toggle); },
   };
 }
 

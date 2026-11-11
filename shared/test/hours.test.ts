@@ -53,3 +53,13 @@ describe('⏰ work hours', () => {
     expect(duration(305)).toBe('5시간');
   });
 });
+
+import { parseClock, clockLabel } from '../src/hours';
+describe('parseClock: a time as people type it', () => {
+  it.each([
+    ['9', 540], ['18', 1080], ['930', 570], ['0910', 550], ['9:10', 550], ['09:10', 550], ['9.10', 550],
+    ['9시', 540], ['9시 30분', 570], ['오후 6시', 1080], ['오전 12시', 0], ['6pm', 1080], [' 18:05 ', 1085], ['0', 0], ['2359', 1439],
+  ])('%s → %i', (text, want) => expect(parseClock(text)).toBe(want));
+  it.each(['', 'abc', '24', '2460', '9:60', '12345', ':', '9:1:2'])('rejects "%s"', text => expect(parseClock(text)).toBeNull());
+  it('labels round-trip', () => { for (const m of [0, 550, 1439]) expect(parseClock(clockLabel(m))).toBe(m); });
+});

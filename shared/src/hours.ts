@@ -55,3 +55,26 @@ export function hoursStatus(h: WorkHours, nowMs: number): { state: WorkState; te
 
 /** This device's UTC offset in minutes (Seoul: +540). */
 export const localOffset = (d = new Date()) => -d.getTimezoneOffset();
+
+/**
+ * A time as people type it → minutes since midnight, or null.
+ * "9", "18", "930", "0910", "9:10", "9.10", "9시 30분", "오후 6시", "6pm" all work.
+ */
+export function parseClock(text: string): number | null {
+  let v = text.trim().toLowerCase();
+  if (!v) return null;
+  const pm = /오후|pm|p\.m\./.test(v), am = /오전|am|a\.m\./.test(v);
+  v = v.replace(/오전|오후|[ap]\.?m\.?/g, '').replace(/시/g, ':').replace(/분/g, '').replace(/[.:\s]+/g, ':').replace(/^:+|:+$/g, '');
+  let h: number, min: number;
+  let m = /^(\d{1,2}):(\d{1,2})$/.exec(v);
+  if (m) { h = Number(m[1]); min = Number(m[2]); }
+  else if ((m = /^(\d{1,2})$/.exec(v))) { h = Number(m[1]); min = 0; }
+  else if ((m = /^(\d{1,2})(\d{2})$/.exec(v))) { h = Number(m[1]); min = Number(m[2]); }
+  else return null;
+  if (pm && h < 12) h += 12;
+  if (am && h === 12) h = 0;
+  return h < 24 && min < 60 ? h * 60 + min : null;
+}
+
+/** Minutes since midnight → "09:10". */
+export const clockLabel = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
