@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { colorHex, type Look } from '@party/shared';
 import { blobShadow } from '../world/textures';
+import { Face } from './face';
 
 /**
  * Low-poly animals built from a handful of shared primitives: no model files,
@@ -14,6 +15,8 @@ export interface AnimalRig {
   legL: THREE.Group; legR: THREE.Group;
   /** Sleepy eyes: a black half-moon under a heavy black lid line. Squash `pupil.scale.y` to close them. */
   eyes: { pupil: THREE.Mesh; lid: THREE.Mesh }[];
+  /** Brows, mouth, spare eye shapes and blushing cheeks (see face.ts). */
+  face: Face;
   /** Something held in the right paw (the wine glass); the animator keeps it upright. */
   held: THREE.Group | null;
   look: Look;
@@ -40,7 +43,6 @@ const G = {
   foxTail: new THREE.CapsuleGeometry(0.1, 0.34, 3, 6),
   floppyEar: new THREE.CapsuleGeometry(0.08, 0.2, 3, 6),
   eyeBump: new THREE.SphereGeometry(0.11, 8, 6),
-  mouth: new THREE.CapsuleGeometry(0.012, 0.2, 2, 6),
   shadow: new THREE.PlaneGeometry(1.1, 1.1),
 };
 
@@ -58,6 +60,8 @@ function mat(color: string, opts: Partial<THREE.MeshStandardMaterialParameters> 
   return m;
 }
 const EYE_BLACK = new THREE.MeshBasicMaterial({ color: '#141012' });
+/** Eyes for very dark fur, where black ones would vanish. */
+const EYE_LIGHT = new THREE.MeshBasicMaterial({ color: '#f4e9d6' });
 const tint = (hex: string, k: number) => '#' + new THREE.Color(hex).lerp(new THREE.Color(k > 0 ? '#ffffff' : '#000000'), Math.abs(k)).getHexString();
 
 export function buildAnimal(look: Look): AnimalRig {
@@ -65,6 +69,9 @@ export function buildAnimal(look: Look): AnimalRig {
   const isPenguin = look.kind === 'penguin';
   const isFrog = look.kind === 'frog';
   const fur = mat(isPenguin ? tint(base, -0.35) : base);
+  // very dark fur: draw the eyes, brows and face lines light (the penguin's eyes sit on its white face)
+  const darkFur = !isPenguin && new THREE.Color(base).getHSL({ h: 0, s: 0, l: 0 }).l < 0.25;
+  const ink = darkFur ? EYE_LIGHT : EYE_BLACK;
   const light = mat(isPenguin ? '#f6f1e6' : tint(base, 0.55));
   const dark = mat('#231a1c', { roughness: 0.4 });
   const pink = mat('#f19aa8', { roughness: 0.9 });
@@ -111,6 +118,7 @@ export function buildAnimal(look: Look): AnimalRig {
   // Sleepy eyes. Unlit black so lighting can never wash them out to grey;
   // the outer corners droop a little, like someone who just got off work.
   const eyes: AnimalRig['eyes'] = [];
+  const cheeks: THREE.Mesh[] = [];
   const eyeZ = isPenguin ? 0.33 : 0.312;
   for (const side of [-1, 1]) {
     const eye = new THREE.Group();
@@ -119,16 +127,16 @@ export function buildAnimal(look: Look): AnimalRig {
     else eye.position.set(side * 0.13, 0.045, eyeZ);
     eye.rotation.set(0, side * (isFrog ? 0.22 : 0.38), -side * 0.2, 'YXZ');
     head.add(eye);
-    const pupil = new THREE.Mesh(G.pupil, EYE_BLACK);
+    const pupil = new THREE.Mesh(G.pupil, ink);
     pupil.scale.set(1.15, 0.55, 0.45);
-    const lid = new THREE.Mesh(G.lidLine, EYE_BLACK);
+    const lid = new THREE.Mesh(G.lidLine, ink);
     lid.rotation.z = Math.PI / 2;
     lid.position.set(0, 0.002, 0.008);
     eye.add(pupil, lid);
     eyes.push({ pupil, lid });
     const ch = add(head, G.cheek, pink, side * 0.2, -0.07, 0.29);
     ch.lookAt(head.position.clone().add(new THREE.Vector3(side * 0.6, -0.2, 2)));
-    (ch.material as THREE.Material).transparent = true;
+    cheeks.push(ch);
   }
 
   switch (look.kind) {
@@ -186,8 +194,7 @@ export function buildAnimal(look: Look): AnimalRig {
     }
     case 'frog': {
       for (const s of [-1, 1]) add(head, G.eyeBump, fur, s * 0.15, 0.24, 0.12);
-      // a wide, flat, slightly tired mouth
-      const m = add(head, G.mouth, dark, 0, -0.1, 0.31); m.rotation.z = Math.PI / 2; m.name = 'frog-mouth';
+      // (its wide mouth is the face's mouth, stretched: see face.ts)
       break;
     }
     case 'penguin': {
@@ -198,14 +205,21 @@ export function buildAnimal(look: Look): AnimalRig {
     }
   }
 
+  const face = new Face(head, look.kind, eyes, cheeks, {
+    ink,
+    // the mouth sits on a pale muzzle (or the penguin's white face); only the frog's is on its fur
+    mouthInk: darkFur && isFrog ? EYE_LIGHT : EYE_BLACK,
+    brow: darkFur ? tint(base, 0.6) : tint(isPenguin ? tint(base, -0.35) : base, -0.72),
+  });
+
   addHat(look, head);
   addOutfit(look, bodyPivot, isPenguin);
   const held = addHand(look, armR, isPenguin ? mat(tint(base, -0.35)) : fur);
 
   root.traverse(o => { if ((o as THREE.Mesh).isMesh) o.castShadow = false; });
   return {
-    root, bodyPivot, head, armL, armR, legL, legR, eyes, held, look,
-    dispose() { root.removeFromParent(); (shadow.material as THREE.Material).dispose(); },
+    root, bodyPivot, head, armL, armR, legL, legR, eyes, face, held, look,
+    dispose() { root.removeFromParent(); (shadow.material as THREE.Material).dispose(); face.dispose(); },
   };
 }
 

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { ENERGY, type Emote } from '@party/shared';
+import { ENERGY, type Emote, type Mood } from '@party/shared';
 import type { AnimalRig } from './animal';
+import { expressionFor } from './face';
 
 /** How a guest is doing right now, as the animator needs it. */
 export interface BodyState {
@@ -11,6 +12,8 @@ export interface BodyState {
   dozing: boolean;
   /** Height of the root: a seat (minus hip height), or below the waterline in the pool. */
   baseY: number;
+  /** How their day went: sets the resting face. */
+  mood?: Mood | '';
 }
 
 /** Emotes anyone can send, plus a few moves the party plays by itself. */
@@ -70,11 +73,13 @@ export class Animator {
     r.root.rotation.x = -1.2 * this.lie;
     r.root.position.y = b.baseY;
 
-    // eyes: barely open when drained, a little more as you recharge; shut when dozing; a slow blink
+    // the face: resting expression from their mood, a flash of feeling during a reaction.
+    // Sleepy eyes: barely open when drained, a little more as you recharge; shut when dozing; a slow blink.
     const blink = (t % 4.3) > 4.1;
-    const open = 0.14 + 0.48 * charge;
-    const target = this.doze > 0.5 ? 0.04 : blink ? 0.06 : open;
-    for (const e of r.eyes) e.pupil.scale.y += (target - e.pupil.scale.y) * Math.min(1, dt * 15);
+    const open = blink ? 0.06 : 0.14 + 0.48 * charge;
+    const face = expressionFor(b.mood ?? '', this.emote, this.emoteT / Animator.EMOTE_TIME, t, charge);
+    if (this.doze > 0.5 && !this.emote) { face.eyes = 'shut'; face.open = 0; face.smile = Math.min(face.smile, 0.1); }
+    r.face.update(dt, face, open);
 
     this.gesture(dt);
     this.keepUpright();
@@ -153,7 +158,6 @@ export class Animator {
         r.head.rotation.z += 0.28 * env;
         r.head.rotation.x -= 0.1 * env;
         r.bodyPivot.rotation.z = Math.sin(this.emoteT * 2) * 0.04 * env;
-        for (const e of r.eyes) e.pupil.scale.y = Math.min(e.pupil.scale.y, 0.3);
         break;
     }
     // keep the held item level through the gesture too

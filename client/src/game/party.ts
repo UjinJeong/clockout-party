@@ -334,7 +334,7 @@ export class Party {
       const baseY = seat ? (seat.pose === 'lie' ? seat.y - 0.04 : seat.y - 0.24) : this.wade(g, dt);
       let moving = !seat && (id === this.conn.selfId ? g.net.moving : g.net.moving || Math.hypot(g.net.x - g.pos.x, g.net.z - g.pos.y) > 0.05);
       if (g.arrive) moving = this.arriving(g, dt, id === this.conn.selfId) || moving;
-      g.anim.update(dt, { moving, energy: g.net.energy, pose: seat ? seat.pose : 'stand', dozing: g.net.dozing, baseY });
+      g.anim.update(dt, { moving, energy: g.net.energy, pose: seat ? seat.pose : 'stand', dozing: g.net.dozing, baseY, mood: g.net.mood });
       this.dozeFx(g, dt);
       this.chargeFx(g, id === this.conn.selfId);
     }

@@ -14,7 +14,8 @@ const build = async (look: Partial<Look>) => (await import('../src/avatar/animal
 
 function triangles(r: AnimalRig) {
   let n = 0;
-  r.root.traverse(o => {
+  // only what's drawn: spare face parts (heart eyes, an open mouth…) wait hidden until needed
+  r.root.traverseVisible(o => {
     const g = (o as THREE.Mesh).geometry as THREE.BufferGeometry | undefined;
     if (!(o as THREE.Mesh).isMesh || !g) return;
     n += (g.index ? g.index.count : g.getAttribute('position').count) / 3;
