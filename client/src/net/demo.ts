@@ -1,6 +1,6 @@
 import {
   customColor, localOffset,
-  DOZE_AFTER, EMOTES, FIREWORK_COOLDOWN, nearStage, ENERGY, KINDS, MOOD_ENERGY, MOVE_HZ, HANDS, HATS, OUTFITS, WALK_SPEED, batteryOf, chargeRate, isNear, mapFor,
+  CLINK, Clinks, TOGETHER, hasCompany, DOZE_AFTER, EMOTES, FIREWORK_COOLDOWN, nearStage, ENERGY, KINDS, MOOD_ENERGY, MOVE_HZ, HANDS, HATS, OUTFITS, WALK_SPEED, batteryOf, chargeRate, isNear, mapFor,
   findPath, moveWithCollision, nearestWalkable, stepEnergy,
   type Emote, type Look, type Mood, type Seat, type Theme, type WorldMap,
 } from '@party/shared';
@@ -159,12 +159,33 @@ export class DemoConnection implements PartyConnection {
 
   emote(kind: Emote) {
     this.wake(this.me);
-    this.ev.emit('emote', 'me', kind);
+    this.say('me', kind);
     for (const b of this.bots) if (isNear(b, this.me) && Math.random() < 0.7) {
       // tired guests answer with tired reactions
       const pool: Emote[] = b.energy < ENERGY.low ? ['nod', 'zone', 'wave'] : [...EMOTES];
       const back: Emote = kind === 'cheers' ? 'cheers' : kind === 'nod' || kind === 'zone' ? kind : pool[(Math.random() * pool.length) | 0];
-      window.setTimeout(() => this.ev.emit('emote', b.id, back), 400 + Math.random() * 900);
+      window.setTimeout(() => this.say(b.id, back), 400 + Math.random() * 900);
+    }
+  }
+
+  private clinks = new Clinks();
+  private peerAt = new Map<string, { x: number; z: number }>();
+  private say(id: string, kind: Emote) {
+    this.ev.emit('emote', id, kind);
+    if (kind === 'cheers') this.cheered(id);
+  }
+  /** Someone raised a glass (you, a bot, or a real guest in the shared preview room at `at`): 짠 with anyone near who just did too. */
+  cheered(id: string, at?: { x: number; z: number }) {
+    if (at) this.peerAt.set(id, at);
+    const pos = (who: string) => who === 'me' ? this.me : this.bots.find(b => b.id === who) ?? this.peerAt.get(who);
+    const here = pos(id);
+    if (!here) return;
+    for (const other of this.clinks.cheer(id, Date.now() / 1000, o => { const p = pos(o); return !!p && isNear(here, p); })) {
+      for (const who of [id, other]) {
+        const p = who === 'me' ? this.me : this.bots.find(b => b.id === who);
+        if (p) { p.energy = stepEnergy(p.energy, CLINK.bonus, 1); p.battery = batteryOf(p.energy); }
+      }
+      this.ev.emit('clink', id, other);
     }
   }
 
@@ -177,14 +198,14 @@ export class DemoConnection implements PartyConnection {
     const seed = Math.floor(Math.random() * 2 ** 31);
     this.ev.emit('firework', 'me', seed);
     // the guests near you cheer
-    for (const b of this.bots) if (isNear(b, this.me) && !b.dozing && Math.random() < 0.8) window.setTimeout(() => this.ev.emit('emote', b.id, Math.random() < 0.6 ? 'wow' : 'cheers'), 900 + Math.random() * 900);
+    for (const b of this.bots) if (isNear(b, this.me) && !b.dozing && Math.random() < 0.8) window.setTimeout(() => this.say(b.id, Math.random() < 0.6 ? 'wow' : 'cheers'), 900 + Math.random() * 900);
     return seed;
   }
   firework() { this.fireworkSeed(); }
   /** Going home: the guests near you wave you off. */
   bye() {
     this.ev.emit('bye', 'me');
-    for (const b of this.bots) if (isNear(b, this.me) && !b.dozing) window.setTimeout(() => this.ev.emit('emote', b.id, 'wave'), 900 + Math.random() * 1200);
+    for (const b of this.bots) if (isNear(b, this.me) && !b.dozing) window.setTimeout(() => this.say(b.id, 'wave'), 900 + Math.random() * 1200);
   }
 
   async voice(blob: Blob, ms: number) {
@@ -225,7 +246,8 @@ export class DemoConnection implements PartyConnection {
     p.dozing = p.idle >= DOZE_AFTER;
     const seat = p.seat >= 0 ? this.map.seats.find(s => s.id === p.seat) : undefined;
     const pose = seat ? seat.pose : p.moving ? 'walk' : 'stand';
-    p.energy = stepEnergy(p.energy, chargeRate(pose, p.dozing), dt);
+    const company = hasCompany(p, [this.me, ...this.bots]) ? TOGETHER.boost : 1;
+    p.energy = stepEnergy(p.energy, chargeRate(pose, p.dozing) * company, dt);
     p.battery = batteryOf(p.energy);
   }
 
@@ -272,7 +294,7 @@ export class DemoConnection implements PartyConnection {
           if (b.energy >= ENERGY.low || Math.random() < 0.3) {
             this.ev.emit('chat', b.id, b.lines[(Math.random() * b.lines.length) | 0]);
             if (!b.moving && b.seat < 0) b.dir = Math.atan2(this.me.x - b.x, this.me.z - b.z);
-          } else this.ev.emit('emote', b.id, Math.random() < 0.5 ? 'nod' : 'wave');
+          } else this.say(b.id, Math.random() < 0.5 ? 'nod' : 'wave');
         }
       }
       this.ev.emit('change', strip(b));
@@ -280,7 +302,7 @@ export class DemoConnection implements PartyConnection {
     // once in a while somebody across the room cheers
     if (Math.random() < 0.004) {
       const b = this.bots[(Math.random() * this.bots.length) | 0];
-      if (isNear(b, this.me) && !b.dozing) this.ev.emit('emote', b.id, 'cheers');
+      if (isNear(b, this.me) && !b.dozing) this.say(b.id, 'cheers');
     }
   }
 }

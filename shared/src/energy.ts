@@ -24,6 +24,38 @@ export function stepEnergy(energy: number, rate: number, dt: number): number {
   return Math.min(ENERGY.max, Math.max(0, energy + rate * dt));
 }
 
+/**
+ * 짠! Two guests near each other who both raise a glass within a few seconds
+ * clink, and each gets a little charge. One clink per pair every so often.
+ */
+export const CLINK = { window: 3, bonus: 3, cooldown: 20 } as const;
+export class Clinks {
+  private last = new Map<string, number>();
+  private pairs = new Map<string, number>();
+  /** `id` raised a glass at time `t` (seconds). Returns who they clinked with. */
+  cheer(id: string, t: number, near: (other: string) => boolean): string[] {
+    const out: string[] = [];
+    for (const [other, at] of this.last) {
+      if (other === id || t - at > CLINK.window || !near(other)) continue;
+      const key = id < other ? `${id}|${other}` : `${other}|${id}`;
+      if (t - (this.pairs.get(key) ?? -Infinity) < CLINK.cooldown) continue;
+      this.pairs.set(key, t);
+      out.push(other);
+    }
+    this.last.set(id, t);
+    return out;
+  }
+  forget(id: string) { this.last.delete(id); }
+}
+
+/** Sitting (or lying) with someone else close by recharges you a little faster: company helps. */
+export const TOGETHER = { radius: 2.3, boost: 1.25 } as const;
+export function hasCompany(me: { x: number; z: number; seat: number }, others: Iterable<{ x: number; z: number; seat: number }>): boolean {
+  if (me.seat < 0) return false;
+  for (const o of others) if (o !== me && o.seat >= 0 && o.seat !== me.seat && Math.hypot(o.x - me.x, o.z - me.z) <= TOGETHER.radius) return true;
+  return false;
+}
+
 export const batteryOf = (energy: number): Battery => (energy < ENERGY.low ? 'low' : 'charging');
 
 /** A place to sit (or lie). `dir` is the way you face; `stand` is open floor to get up onto. */

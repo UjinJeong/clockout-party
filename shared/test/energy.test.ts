@@ -77,3 +77,38 @@ describe('오늘 하루 어땠어요?', () => {
     expect(isMood('angry')).toBe(false);
   });
 });
+
+import { Clinks, CLINK, hasCompany, TOGETHER } from '../src/energy';
+describe('짠! clinking glasses', () => {
+  const all = () => true;
+  it('two cheers close in time clink once; the pair then waits', () => {
+    const c = new Clinks();
+    expect(c.cheer('a', 0, all)).toEqual([]);
+    expect(c.cheer('b', 1, all)).toEqual(['a']);
+    expect(c.cheer('a', 2, all)).toEqual([]);               // same pair, too soon
+    expect(c.cheer('b', 2 + CLINK.cooldown, all)).toEqual([]); // a's cheer is stale by now
+    c.cheer('a', 30, all);
+    expect(c.cheer('b', 31, all)).toEqual(['a']);
+  });
+  it('too late or too far: no clink', () => {
+    const c = new Clinks();
+    c.cheer('a', 0, all);
+    expect(c.cheer('b', CLINK.window + 0.5, all)).toEqual([]);
+    c.cheer('a', 10, all);
+    expect(c.cheer('b', 11, () => false)).toEqual([]);
+  });
+  it('a round of three: the third clinks with both', () => {
+    const c = new Clinks();
+    c.cheer('a', 0, all); c.cheer('b', 0.5, all);
+    expect(c.cheer('c', 1, all).sort()).toEqual(['a', 'b']);
+  });
+});
+describe('company on the sofa', () => {
+  it('counts someone seated close by, on another seat', () => {
+    const me = { x: 0, z: 0, seat: 1 };
+    expect(hasCompany(me, [me, { x: 1, z: 0, seat: 2 }])).toBe(true);
+    expect(hasCompany(me, [me, { x: 1, z: 0, seat: -1 }])).toBe(false);
+    expect(hasCompany(me, [me, { x: TOGETHER.radius + 1, z: 0, seat: 2 }])).toBe(false);
+    expect(hasCompany({ x: 0, z: 0, seat: -1 }, [{ x: 1, z: 0, seat: 2 }])).toBe(false);
+  });
+});

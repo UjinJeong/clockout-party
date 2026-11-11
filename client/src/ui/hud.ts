@@ -266,6 +266,8 @@ export function createHud(conn: PartyConnection, controls: Controls) {
     energy: (e: number) => { if (firstEnergy < 0) firstEnergy = e; lastEnergy = e; showEnergy(e); },
     charged: () => toast('⚡ 충전 완료! 오늘도 수고했어요', 4200),
     landed: () => { moodCard.hidden = false; },
+    clinked: (name: string) => toast(`🥂 ${name}님과 짠! 충전 +3`, 2600),
+    company: () => toast('💞 나란히 앉으면 충전이 더 빨라요', 3200),
     editHours: () => openHours(),
     stage: (near: boolean) => { fwChip.hidden = !near; if (near) showFw(); },
     guests: (list: { id: string; name: string; battery: Battery; mood: Mood | ''; near: boolean; self: boolean; muted: boolean }[]) => {
@@ -289,7 +291,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
       for (const id of ['mood-card', 'hours-card']) $(id).hidden = true;
       $('dock').hidden = true;
       try { await party?.farewell(); } catch (err) { console.error(err); }
-      const stats = party?.stats ?? { sent: 0, got: 0 };
+      const stats = party?.stats ?? { sent: 0, got: 0, clinks: 0 };
       $('bye-list').innerHTML = byeLines({ ms: Date.now() - joinedAt, from: firstEnergy, to: lastEnergy, ...stats }).map(l => `<li>${esc(l)}</li>`).join('');
       $('bye-card').hidden = false;
       sound.play('charged', { volume: 0.5 });
@@ -313,11 +315,12 @@ export function createHud(conn: PartyConnection, controls: Controls) {
 }
 
 /** The goodbye card: how long you stayed, how much you recharged, the reactions that went round. */
-export function byeLines(v: { ms: number; from: number; to: number; sent: number; got: number }): string[] {
+export function byeLines(v: { ms: number; from: number; to: number; sent: number; got: number; clinks?: number }): string[] {
   const min = Math.max(1, Math.round(v.ms / 60000));
   const stay = min < 60 ? `${min}분` : `${Math.floor(min / 60)}시간${min % 60 ? ` ${min % 60}분` : ''}`;
   const lines = [`⏱ 머문 시간 ${stay}`];
   if (v.from >= 0) lines.push(v.to > v.from ? `🔋 충전 ${Math.round(v.from)}% → ${Math.round(v.to)}%` : `🔋 지금 충전 ${Math.round(v.to)}%`);
   lines.push(v.got || v.sent ? `🥂 받은 반응 ${v.got}번 · 보낸 반응 ${v.sent}번` : '🫥 조용히 쉬다 가요');
+  if (v.clinks) lines.push(`✨ 짠! ${v.clinks}번`);
   return lines;
 }

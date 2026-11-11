@@ -25,6 +25,8 @@ export interface PartyEvents {
   snap(x: number, z: number): void;
   /** 🎆 someone launched fireworks from the DJ booth (`seed` makes every screen show the same volley). */
   firework(from: string, seed: number): void;
+  /** 🥂 짠! two guests near each other raised a glass together. */
+  clink(a: string, b: string): void;
   /** 🚪 someone is going home: their lift comes, they wave, the doors close. */
   bye(from: string): void;
   closed(reason: string): void;

@@ -83,7 +83,7 @@ export class LiveRoomConnection implements PartyConnection {
       if (from && topic === 'emote' && d.bye === 1) { this.ev.emit('bye', from.id); return; }
       if (!from || !isNear(from, this.me)) return;
       if (topic === 'chat') { const t = sanitizeChat(d.text); if (t) this.ev.emit('chat', from.id, t); }
-      else if (isEmote(d.kind)) this.ev.emit('emote', from.id, d.kind);
+      else if (isEmote(d.kind)) { this.ev.emit('emote', from.id, d.kind); if (d.kind === 'cheers') this.bots.cheered(from.id, { x: from.x, z: from.z }); }
     });
     this.offs.push(heard('chat'), heard('emote'));
     void room.presence(this.presence({ e: ENERGY.start, s: -1, dz: false })).catch(() => {});

@@ -71,6 +71,7 @@ class ColyseusConnection implements PartyConnection {
     room.onMessage('voice', (m: { from: string; mime: string; ms: number; data: Uint8Array }) => {
       this.ev.emit('voice', m.from, new Blob([new Uint8Array(m.data)], { type: m.mime }), m.ms);
     });
+    room.onMessage('clink', (m: { a: string; b: string }) => this.ev.emit('clink', m.a, m.b));
     room.onMessage('bye', (m: { from: string }) => this.ev.emit('bye', m.from));
     room.onMessage('firework', (m: { from: string; seed: number }) => this.ev.emit('firework', m.from, m.seed));
     room.onMessage('snap', (m: { x: number; z: number }) => this.ev.emit('snap', m.x, m.z));

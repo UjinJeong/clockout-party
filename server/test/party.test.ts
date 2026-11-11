@@ -462,3 +462,31 @@ describe('🚪 going home', () => {
     expect(got).toEqual([{ from: a.sessionId }]);
   });
 });
+
+describe('🥂 짠! and company', () => {
+  it('two guests near each other who both cheer clink: both charge a little, once', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', {});
+    const a = await colyseus.connectTo(room, { name: '하나' });
+    const b = await colyseus.connectTo(room, { name: '둘' });
+    const got: any[] = [];
+    for (const c of [a, b]) { c.onMessage('emote', () => {}); c.onMessage('clink', (m: any) => got.push(m)); }
+    const before = [...room.state.players.values()].map(p => p.energy);
+    a.send('emote', { kind: 'cheers' });
+    b.send('emote', { kind: 'cheers' });
+    await new Promise(r => setTimeout(r, 80));
+    b.send('emote', { kind: 'cheers' }); // again straight away: no second clink
+    await new Promise(r => setTimeout(r, 80));
+    expect(got.filter(m => m.a === b.sessionId && m.b === a.sessionId)).toHaveLength(2); // one clink, heard by both
+    const after = [...room.state.players.values()].map(p => p.energy);
+    expect(after).toEqual(before.map(e => e + 3));
+  });
+  it('a cheer on your own is just a cheer', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', {});
+    const a = await colyseus.connectTo(room, { name: '혼자' });
+    let n = 0;
+    a.onMessage('emote', () => {}); a.onMessage('clink', () => n++);
+    a.send('emote', { kind: 'cheers' }); a.send('emote', { kind: 'cheers' });
+    await new Promise(r => setTimeout(r, 80));
+    expect(n).toBe(0);
+  });
+});

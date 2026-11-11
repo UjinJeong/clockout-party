@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {
-  ENERGY, MOOD_ICON, MOOD_LABEL, MOVE_HZ, NEAR_RADIUS, WALK_SPEED, clockedOut, findPath, parseHours, fromWorld, inWater, isNear, nearStage, onDanceFloor, toWorld, moveWithCollision, nearSeat, roomAt,
+  ENERGY, hasCompany, MOOD_ICON, MOOD_LABEL, MOVE_HZ, NEAR_RADIUS, WALK_SPEED, clockedOut, findPath, parseHours, fromWorld, inWater, isNear, nearStage, onDanceFloor, toWorld, moveWithCollision, nearSeat, roomAt,
   type Battery, type Emote, type MapRoom, type Mood, type Seat, type Vec2,
 } from '@party/shared';
 import { buildAnimal, type AnimalRig } from '../avatar/animal';
@@ -68,6 +68,10 @@ export interface PartyHooks {
   energy(e: number): void;
   /** You just reached full charge. */
   charged(): void;
+  /** You're sitting next to someone: charging together is faster. */
+  company(): void;
+  /** 짠! You clinked glasses with this guest (a little charge for both). */
+  clinked(name: string): void;
   /** You've stepped out of the lift and are at the party. */
   landed(): void;
   /** Standing at the DJ booth (fireworks can be launched from here), or not. */
@@ -167,6 +171,7 @@ export class Party {
       },
       firework: (_from, seed) => { this.world.celebrate?.(seed); },
       bye: from => this.startBye(from),
+      clink: (a, b) => this.clink(a, b),
       snap: (x, z) => { const me = this.self(); if (me) { me.pos.set(x, z); me.net.x = x; me.net.z = z; } },
     });
 
@@ -395,6 +400,7 @@ export class Party {
         camYaw: Math.atan2(this.camera.position.x - w.x, this.camera.position.z - w.z) });
       this.dozeFx(g, dt);
       this.chargeFx(g, id === this.conn.selfId);
+      if (id === this.conn.selfId) this.companyFx(g);
     }
 
     this.world.nudge?.([...this.guests.values()].map(g => ({ x: g.pos.x, z: g.pos.y })));
@@ -570,7 +576,20 @@ export class Party {
   }
 
   /** Reactions sent and received this visit (for the goodbye card). */
-  readonly stats = { sent: 0, got: 0 };
+  readonly stats = { sent: 0, got: 0, clinks: 0 };
+
+  /** 🥂 짠! A spark between the two glasses, a ring, and a little charge for both (the party adds that). */
+  private clink(a: string, b: string) {
+    const ga = this.guests.get(a), gb = this.guests.get(b);
+    if (!ga || !gb || this.muted.has(a) || this.muted.has(b)) return;
+    const pa = ga.rig.head.getWorldPosition(new THREE.Vector3()), pb = gb.rig.head.getWorldPosition(new THREE.Vector3());
+    const mid = pa.add(pb).multiplyScalar(0.5); mid.y += 0.35;
+    this.sparkles.burst(mid, ['#fff6d8', '#ffd27a', '#ffe9a8', '#ffffff'], 60);
+    sound.play('clink', { at: { x: (ga.pos.x + gb.pos.x) / 2, z: (ga.pos.y + gb.pos.y) / 2 } });
+    ga.tag.say('짠! 🥂');
+    const self = this.conn.selfId;
+    if (a === self || b === self) { this.stats.clinks++; this.hooks.clinked((a === self ? gb : ga).net.name); }
+  }
   private byeDone: (() => void) | null = null;
 
   /** 🚪 Go home: your lift comes, you step in, turn, wave; resolves when the doors have shut. */
@@ -693,6 +712,14 @@ export class Party {
       z.scale.setScalar(0.12 + u * 0.16);
       (z.material as THREE.SpriteMaterial).opacity = Math.sin(u * Math.PI) * 0.95;
     });
+  }
+
+  private hadCompany = false;
+  /** Sat down next to someone? Say so once: company charges you faster. */
+  private companyFx(me: Guest) {
+    const now = hasCompany(me.net, [...this.guests.values()].map(g => g.net));
+    if (now && !this.hadCompany) this.hooks.company();
+    this.hadCompany = now;
   }
 
   /** The moment someone is fully recharged: a burst of light and a little cheer. */

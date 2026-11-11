@@ -204,6 +204,11 @@ export const SFX = {
     [72, 76, 79, 84, 88].forEach((m, i) => { end = fm(ctx, out, t + i * 0.075, hz(m) * p, { peak: 0.11, ratio: 2, index: 0.9, decay: i === 4 ? 1.2 : 0.4 }); });
     return end;
   },
+  /** 짠! two glasses touching: a bright double ring */
+  clink: (ctx, out, t, p) => Math.max(
+    fm(ctx, out, t, 2637 * p, { peak: 0.16, ratio: 2.76, index: 0.9, decay: 0.7 }),
+    fm(ctx, out, t + 0.035, 3136 * p, { peak: 0.12, ratio: 2.4, index: 0.7, decay: 0.9 }),
+  ),
   ding: (ctx, out, t, p) => Math.max(
     fm(ctx, out, t, 1318.5 * p, { peak: 0.13, ratio: 3.5, index: 0.5, decay: 0.9 }),
     fm(ctx, out, t + 0.16, 1046.5 * p, { peak: 0.13, ratio: 3.5, index: 0.5, decay: 1.1 }),

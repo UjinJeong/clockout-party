@@ -1,6 +1,6 @@
 import { Room, type Client } from '@colyseus/core';
 import {
-  DOZE_AFTER, ENERGY, FIREWORK_COOLDOWN, nearStage, sanitizeHours, MAX_PLAYERS, MAX_SPEED, MOOD_ENERGY, batteryOf, chargeRate, finite, isEmote, isMood, isTheme, mapFor,
+  CLINK, Clinks, TOGETHER, hasCompany, isNear, DOZE_AFTER, ENERGY, FIREWORK_COOLDOWN, nearStage, sanitizeHours, MAX_PLAYERS, MAX_SPEED, MOOD_ENERGY, batteryOf, chargeRate, finite, isEmote, isMood, isTheme, mapFor,
   moveWithCollision, nearbyIds, nearestWalkable, stepEnergy, type WorldMap, parseLook, sanitizeChat, sanitizeName, sanitizeTitle, validateVoice,
 } from '@party/shared';
 import { PartyState, Player } from './schema';
@@ -34,6 +34,7 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
   private guestNo = 0;
   private lastFirework = 0;
   private saidBye = new Set<string>();
+  private clinks = new Clinks();
 
   messages = {
     move: (client: Client, m: unknown) => this.onMove(client, m),
@@ -48,6 +49,7 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
       if (!isEmote(kind)) return;
       this.active(client.sessionId);
       this.toNearby(client, 'emote', { from: client.sessionId, kind });
+      if (kind === 'cheers') this.clink(client);
     },
     /** ⏰ change (or hide, with '') the work hours over your head */
     hours: (client: Client, m: unknown) => {
@@ -203,11 +205,31 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
       if (p.dozing !== dozing) p.dozing = dozing;
       const seat = p.seat >= 0 ? this.map.seats.find(s => s.id === p.seat) : undefined;
       const pose = seat ? seat.pose : p.moving ? 'walk' : 'stand';
-      t.energy = stepEnergy(t.energy, chargeRate(pose, dozing), dt);
+      const company = hasCompany(p, this.state.players.values()) ? TOGETHER.boost : 1; // sitting together charges faster
+      t.energy = stepEnergy(t.energy, chargeRate(pose, dozing) * company, dt);
       const whole = Math.floor(t.energy);
       if (p.energy !== whole) p.energy = whole;
       const battery = batteryOf(t.energy);
       if (p.battery !== battery) p.battery = battery;
+    }
+  }
+
+  /** 짠! Someone near also raised a glass just now: both get a little charge, and the people around see it. */
+  private clink(client: Client) {
+    const me = this.state.players.get(client.sessionId);
+    if (!me) return;
+    const partners = this.clinks.cheer(client.sessionId, Date.now() / 1000, other => {
+      const o = this.state.players.get(other);
+      return !!o && isNear(me, o);
+    });
+    for (const id of partners) {
+      for (const who of [client.sessionId, id]) {
+        const t = this.tracks.get(who), p = this.state.players.get(who);
+        if (!t || !p) continue;
+        t.energy = stepEnergy(t.energy, CLINK.bonus, 1);
+        p.energy = Math.floor(t.energy); p.battery = batteryOf(t.energy);
+      }
+      this.toNearby(client, 'clink', { a: client.sessionId, b: id });
     }
   }
 
