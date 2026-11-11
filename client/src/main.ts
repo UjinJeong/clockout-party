@@ -12,7 +12,7 @@ import { showStart } from './ui/start';
 import { showLobby, parseCode } from './ui/lobby';
 import { createHud } from './ui/hud';
 import { $, toast } from './ui/dom';
-import { sound } from './audio/sound';
+import { sound, SOUND_LABEL } from './audio/sound';
 
 /** Demo builds (e.g. the shareable preview) skip the server entirely. */
 const DEMO_ONLY = import.meta.env.MODE === 'demo';
@@ -172,6 +172,17 @@ function describe(err: unknown): string {
 /** Sandboxed frames (claude.ai artifacts) may refuse URL changes; that must never stop the party. */
 function setUrl(url: string) {
   try { history.replaceState(null, '', url); } catch { /* not allowed here: fine */ }
+}
+
+// 🔊 from the very first screen: the same three-way switch as in the party
+{
+  const fab = $('sound-fab');
+  const show = () => { const l = SOUND_LABEL[sound.mode]; fab.textContent = l.icon; fab.title = `${l.text} (누르면 바뀌어요)`; fab.setAttribute('aria-label', l.text); };
+  show();
+  sound.onMode(show);
+  fab.addEventListener('click', () => { sound.unlock(); sound.cycle(); sound.play('tick'); toast(SOUND_LABEL[sound.mode].text, 1400); });
+  // inside the party the top bar has its own; hide this one there
+  new MutationObserver(() => { fab.hidden = !$('hud').hidden; }).observe($('hud'), { attributes: true, attributeFilter: ['hidden'] });
 }
 
 // Browsers only allow sound after a click or a key: wake it on the first one (and every one after, cheaply).

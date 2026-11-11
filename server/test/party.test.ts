@@ -3,7 +3,7 @@ process.env.ADMIN_PASSWORD = 'test-pass';
 import { mkdtempSync as __mk, writeFileSync as __wr } from 'node:fs';
 import { tmpdir as __tmp } from 'node:os';
 process.env.CLIENT_DIST = __mk(__tmp() + '/client-');
-__wr(process.env.CLIENT_DIST + '/index.html', '<title>액자 밖으로 오프닝 파티</title>');
+__wr(process.env.CLIENT_DIST + '/index.html', '<title>퇴근 파티</title>');
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { boot, type ColyseusTestServer } from '@colyseus/testing';
 import app from '../src/app';
@@ -377,7 +377,7 @@ describe('one server for everything', () => {
   it('serves the web page from the same address as the game', async () => {
     const res = await fetch('http://localhost:2568/');
     expect(res.status).toBe(200);
-    expect(await res.text()).toContain('액자 밖으로');
+    expect(await res.text()).toContain('퇴근 파티');
   });
   it('still answers the game routes', async () => {
     expect((await fetch('http://localhost:2568/health')).status).toBe(200);

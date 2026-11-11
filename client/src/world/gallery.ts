@@ -108,8 +108,8 @@ export function buildGallery(scene: THREE.Scene, renderer: THREE.WebGLRenderer):
   // ---- lobby: title wall, window, wine bar ----
   {
     const title = textPlate([
-      { text: '액자 밖으로', font: '700 120px "Gowun Batang", serif', color: '#f1e2bd', y: 150 },
-      { text: '정유진 개인전 오프닝 파티', font: '500 44px "IBM Plex Sans KR", sans-serif', color: '#d8bf8f', y: 260 },
+      { text: '퇴근 파티', font: '700 120px "Gowun Batang", serif', color: '#f1e2bd', y: 150 },
+      { text: '오늘도 수고했어요 · 천천히 둘러보세요', font: '500 44px "IBM Plex Sans KR", sans-serif', color: '#d8bf8f', y: 260 },
     ], 1024, 340);
     add(new THREE.PlaneGeometry(4.6, 1.53), new THREE.MeshBasicMaterial({ map: title, transparent: true }), 0.08, 2.75, -2.2, Math.PI / 2);
   }

@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
-  <title>액자 밖으로 오프닝 파티</title>
-  <meta name="description" content="정유진 개인전 「액자 밖으로」 웹 오프닝 파티. 동물 캐릭터로 들어와 근처 사람과 이야기해요." />
+  <title>퇴근 파티</title>
+  <meta name="description" content="퇴근하고 들르는 파티. 동물 캐릭터로 들어와 전시장, 홈파티, 풀파티에서 쉬고 충전해요." />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A5%82%3C/text%3E%3C/svg%3E" />
   <meta name="theme-color" content="#1e1519" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -18,9 +18,9 @@
   <!-- 1. Invitation: name + character -->
   <section id="start" class="screen" hidden>
     <div class="invite">
-      <p class="invite-from">정유진 개인전</p>
-      <h1 class="invite-title">액자 밖으로</h1>
-      <p class="invite-line">오프닝 파티에 초대합니다</p>
+      <p class="invite-from">오늘도 수고한 당신에게</p>
+      <h1 class="invite-title">퇴근 파티</h1>
+      <p class="invite-line">전시장 파티에 초대합니다</p>
       <p class="invite-note">퇴근하고 힘 빠진 채로 오셔도 돼요.<br />말 안 해도 괜찮은 파티예요.</p>
       <form id="start-form" class="invite-form" autocomplete="off">
         <label class="field">
@@ -93,7 +93,7 @@
   <section id="hud" hidden>
     <div class="hud-top">
       <div class="label-plate" id="room-plate">
-        <p class="lp-title"><span id="party-title">오프닝 파티</span><em id="party-private" hidden>친구만</em></p>
+        <p class="lp-title"><span id="party-title">퇴근 파티</span><em id="party-private" hidden>친구만</em></p>
         <p class="lp-where">지금 있는 곳 <b id="where">로비</b></p>
         <p class="lp-who" id="who">1명</p>
       </div>
@@ -152,6 +152,9 @@
     </div>
   </section>
 
+
+  <!-- sound, from the very first screen (the party has its own copy in the top bar) -->
+  <button id="sound-fab" class="btn small sound-fab" type="button" aria-label="소리">🔊</button>
 
   <div id="loading" class="loading"><span>전시장 불을 켜는 중</span></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>

@@ -19,7 +19,7 @@ describe('validate', () => {
     expect(sanitizeChat('x'.repeat(300))!.length).toBe(120);
   });
   it('title falls back to a default', () => {
-    expect(sanitizeTitle(undefined)).toBe('오프닝 파티');
+    expect(sanitizeTitle(undefined)).toBe('퇴근 파티');
     expect(sanitizeTitle('  금요일 밤  ')).toBe('금요일 밤');
   });
   it('look falls back to defaults', () => {

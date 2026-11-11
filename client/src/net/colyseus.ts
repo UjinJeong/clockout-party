@@ -78,7 +78,7 @@ class ColyseusConnection implements PartyConnection {
 
   get selfId() { return this.room.sessionId; }
   get roomId() { return this.room.roomId; }
-  get title() { return (this.room.state as { title?: string }).title || '오프닝 파티'; }
+  get title() { return (this.room.state as { title?: string }).title || '퇴근 파티'; }
   get isPrivate() { return (this.room.state as { isPrivate?: boolean }).isPrivate ?? false; }
   get theme(): Theme { const t = (this.room.state as { theme?: string }).theme; return isTheme(t) ? t : 'gallery'; }
 

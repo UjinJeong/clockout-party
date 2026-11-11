@@ -351,3 +351,8 @@ html.touch .joystick { display: block; }
 .tag.near .hours, .tag.self .hours { opacity: 1; }
 .tag .hours.empty { background: rgba(24, 18, 20, .45); color: #e8d8b8; font-style: italic; }
 .tag.self .plate, .tag.self .hours { pointer-events: auto; cursor: pointer; }
+
+/* 🔊 on the invitation and the lobby */
+.sound-fab { position: fixed; z-index: 40; top: max(12px, env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); min-width: 40px; padding-left: 0; padding-right: 0; font-size: 17px; line-height: 1;
+  background: var(--glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.sound-fab[hidden] { display: none; }

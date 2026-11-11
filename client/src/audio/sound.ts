@@ -93,7 +93,12 @@ export class Sound {
     this.mode = m;
     save('party.sound', m);
     this.applyMode();
+    for (const f of this.watchers) f(m);
   }
+
+  private watchers = new Set<(m: SoundMode) => void>();
+  /** Be told when 🔊 changes (every sound button on the page shows the same thing). */
+  onMode(f: (m: SoundMode) => void) { this.watchers.add(f); return () => { this.watchers.delete(f); }; }
 
   /** 🔊 → 🔉 → 🔇 → 🔊 */
   cycle(): SoundMode {

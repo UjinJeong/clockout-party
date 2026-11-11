@@ -113,7 +113,7 @@ export function showStart(opts: StartOptions = {}): Promise<{ name: string; look
   const placeRow = $('place-row'), placeBox = $('pick-place');
   placeRow.hidden = !opts.places;
   const inviteLine = screen.querySelector<HTMLElement>('.invite-line');
-  const INVITE: Record<Theme, string> = { gallery: '오프닝 파티에 초대합니다', home: '홈파티에 초대합니다', pool: '풀파티에 초대합니다' };
+  const INVITE: Record<Theme, string> = { gallery: '전시장 파티에 초대합니다', home: '홈파티에 초대합니다', pool: '풀파티에 초대합니다' };
   const renderPlaces = () => {
     if (inviteLine) inviteLine.textContent = INVITE[theme];
     placeBox.innerHTML = THEMES.map(t => `<button type="button" role="radio" data-place="${t}" aria-checked="${theme === t}">`

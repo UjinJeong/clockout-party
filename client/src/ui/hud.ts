@@ -74,6 +74,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
     soundBtn.setAttribute('aria-label', l.text);
   };
   showSound();
+  cleanups.push(sound.onMode(showSound));
   on(soundBtn, 'click', () => { sound.unlock(); sound.cycle(); showSound(); sound.play('tick'); toast(SOUND_LABEL[sound.mode].text, 1400); });
 
   // ---- camera view: close behind you, or the overview ----
