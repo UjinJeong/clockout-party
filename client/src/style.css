@@ -239,11 +239,11 @@ html.touch .joystick { display: block; }
   .dress-pick { width: 100%; }
   .invite { padding: 26px 22px 22px; }
   .dock { flex-wrap: wrap; }
-  .chat { order: -1; flex-basis: 100%; }
-  .emotes { flex: 1; justify-content: space-between; }
+  .chat { flex: 1 1 0; min-width: 0; }                       /* row 1: battery + chat */
+  .emotes { flex: 1 1 calc(100% - 64px); justify-content: space-between; } /* row 2: reactions + mic */
   .art-chip { bottom: calc(118px + var(--safe-b)); }
   .joystick { bottom: calc(132px + var(--safe-b)); }
-  .toast { bottom: calc(132px + var(--safe-b)); }
+  .toast { bottom: calc(var(--dock-h, 110px) + 84px + var(--safe-b)); }
   .label-plate { min-width: 0; max-width: 56vw; padding: 8px 10px; }
   .lp-title { font-size: 15px; }
   .hud-actions .btn { padding: 6px 9px; font-size: 12.5px; }
@@ -252,8 +252,7 @@ html.touch .joystick { display: block; }
   .hud-actions .btn { text-align: center; }
   .hud-actions .sound-btn { min-width: 34px; }
   .clock { display: none; }
-  .demo-banner { top: auto; bottom: calc(126px + var(--safe-b)); white-space: normal; text-align: center; width: max-content; max-width: calc(100% - 28px); }
-  html.touch .demo-banner { bottom: calc(252px + var(--safe-b)); }
+  .demo-banner { top: calc(200px + var(--safe-t)); white-space: normal; text-align: center; width: max-content; max-width: calc(100% - 28px); }
   .battery .bl { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -392,3 +391,12 @@ html.touch .joystick { display: block; }
 .act-chip { bottom: calc(132px + var(--safe-b)); }
 .squirt-chip { bottom: calc(196px + var(--safe-b)); }
 @media (max-width: 720px) { .act-chip { bottom: calc(166px + var(--safe-b)); } .squirt-chip { bottom: calc(246px + var(--safe-b)); } }
+
+/* The action buttons live in one tray just above the dock. The dock's real height is measured
+   (--dock-h): on a phone it wraps to two or three rows, and fixed offsets hid the buttons behind it. */
+.chip-tray { position: absolute; left: 10px; right: 10px; bottom: calc(var(--dock-h, 62px) + 26px + var(--safe-b)); z-index: 3;
+  display: flex; flex-wrap: wrap-reverse; justify-content: center; align-items: flex-end; gap: 8px; pointer-events: none; }
+.chip-tray > .art-chip { position: static; left: auto; right: auto; bottom: auto; transform: none; animation: none; pointer-events: auto; max-width: 100%; }
+html.touch .chip-tray { left: 146px; justify-content: flex-end; }   /* the joystick has the left corner */
+html.touch .joystick { bottom: calc(var(--dock-h, 96px) + 30px + var(--safe-b)); }
+@media (max-width: 720px) { .chip-tray > .art-chip { font-size: 13.5px; padding: 9px 12px; } }

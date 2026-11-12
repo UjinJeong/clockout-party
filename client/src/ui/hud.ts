@@ -244,6 +244,15 @@ export function createHud(conn: PartyConnection, controls: Controls) {
     if (saved?.look) save('party.me', { ...saved, look: { ...saved.look, hand } });
   });
 
+  // the tray of action buttons sits above the dock, whatever height the dock wraps to on this screen
+  const dockEl = $('dock');
+  const measure = () => document.documentElement.style.setProperty('--dock-h', `${dockEl.hidden ? 0 : dockEl.offsetHeight}px`);
+  const dockWatch = new ResizeObserver(measure);
+  dockWatch.observe(dockEl);
+  window.addEventListener('resize', measure);
+  cleanups.push(() => { dockWatch.disconnect(); window.removeEventListener('resize', measure); });
+  measure();
+
   // ---- things to do right here: the diving board, the water pistol, the TV ----
   const actChips = { dive: $('dive-chip'), squirt: $('squirt-chip'), tv: $('tv-chip') };
   for (const kind of ['dive', 'squirt', 'tv'] as const) on(actChips[kind], 'click', () => party?.act(kind));
@@ -361,7 +370,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
       leaving = true;
       sound.play('whoosh', { pitch: 0.6 });
       for (const id of ['mood-card', 'hours-card']) $(id).hidden = true;
-      $('dock').hidden = true;
+      $('dock').hidden = true; $('chip-tray').hidden = true;
       try { await party?.farewell(); } catch (err) { console.error(err); }
       const stats = party?.stats ?? { sent: 0, got: 0, clinks: 0 };
       $('bye-list').innerHTML = byeLines({ ms: Date.now() - joinedAt, from: firstEnergy, to: lastEnergy, ...stats }).map(l => `<li>${esc(l)}</li>`).join('');
@@ -379,7 +388,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
     dispose() {
       cleanups.forEach(f => f());
       living.close();
-      $('bye-card').hidden = true; $('dock').hidden = false; $('night-veil').hidden = true; $('event-chip').hidden = true;
+      $('bye-card').hidden = true; $('dock').hidden = false; $('chip-tray').hidden = false; $('night-veil').hidden = true; $('event-chip').hidden = true;
       hud.hidden = true; people.hidden = true; chip.hidden = true; drinkChip.hidden = true; for (const c of Object.values(actChips)) c.hidden = true; book.hidden = true; likeChip.hidden = true;
       $('help').hidden = true;
     },
