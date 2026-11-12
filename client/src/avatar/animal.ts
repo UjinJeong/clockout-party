@@ -373,11 +373,14 @@ function addOutfit(look: Look, body: THREE.Group, isPenguin: boolean, legs: THRE
     case 'tie': {
       // loosened after work: the knot pulled down and a little crooked
       const m = mat('#2f3e6e', { roughness: 0.6 });
-      const t = new THREE.Group(); t.position.set(0.015, 0, 0); t.rotation.z = 0.12; body.add(t);
-      const knot = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.06, 0.04), m); knot.position.set(0, 0.92, 0.27 + front);
-      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.27, 0.02), m); blade.position.set(0, 0.76, 0.37 + front); blade.rotation.x = -0.35;
-      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.087, 0.025, 0.022), mat('#c9a25e')); stripe.position.set(0, 0.8, 0.364 + front); stripe.rotation.x = -0.35;
-      t.add(knot, blade, stripe);
+      // hangs from the middle of the collar and lies on the tummy; the tilt pivots at the knot, so it stays centred
+      const t = new THREE.Group(); t.position.set(0, 0.93, front); t.rotation.z = 0.07; body.add(t);
+      const knot = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.06, 0.045), m); knot.position.set(0, 0, 0.275);
+      const upper = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.15, 0.02), m); upper.position.set(0, -0.085, 0.335); upper.rotation.x = -0.62;
+      const lower = new THREE.Mesh(new THREE.BoxGeometry(0.095, 0.15, 0.02), m); lower.position.set(0, -0.215, 0.4); lower.rotation.x = -0.18;
+      const tip = new THREE.Mesh(new THREE.BoxGeometry(0.067, 0.067, 0.02), m); tip.position.set(0, -0.29, 0.412); tip.rotation.z = Math.PI / 4;
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.097, 0.025, 0.022), mat('#c9a25e')); stripe.position.set(0, -0.19, 0.396); stripe.rotation.x = -0.18;
+      t.add(knot, upper, lower, tip, stripe);
       break;
     }
     case 'scarf': {
