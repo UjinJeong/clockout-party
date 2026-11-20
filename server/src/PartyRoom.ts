@@ -1,6 +1,6 @@
 import { Room, type Client } from '@colyseus/core';
 import {
-  ACT_EVERY, isAct, Board, CLINK, Clinks, TOGETHER, hasCompany, isNear, DOZE_AFTER, ENERGY, FIREWORK_COOLDOWN, nearStage, sanitizeHours, MAX_PLAYERS, MAX_SPEED, MOOD_ENERGY, batteryOf, chargeRate, finite, isEmote, isMood, isTheme, mapFor,
+  ACT_EVERY, isAct, spawnSpot, Board, CLINK, Clinks, TOGETHER, hasCompany, isNear, DOZE_AFTER, ENERGY, FIREWORK_COOLDOWN, nearStage, sanitizeHours, MAX_PLAYERS, MAX_SPEED, MOOD_ENERGY, batteryOf, chargeRate, finite, isEmote, isMood, isTheme, mapFor,
   moveWithCollision, nearbyIds, nearestWalkable, stepEnergy, type WorldMap, parseLook, sanitizeChat, sanitizeName, sanitizeTitle, validateVoice,
 } from '@party/shared';
 import { PartyState, Player } from './schema';
@@ -153,9 +153,8 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
   onJoin(client: Client, options: Record<string, unknown> = {}) {
     const look = parseLook(options.look);
     const name = sanitizeName(options.name) ?? `손님${++this.guestNo}`;
-    // Spread newcomers out a little so they don't stack on one spot.
-    const s = this.map.spawn;
-    const spot = nearestWalkable({ x: s.x + (Math.random() - 0.5) * 3, z: s.z + (Math.random() - 0.5) * 1.5 }, this.map);
+    // Step out of the lift near the entrance, but not on top of anyone already standing there.
+    const spot = spawnSpot(this.map, this.state.players.values());
     this.state.players.set(client.sessionId, new Player({
       name, kind: look.kind, color: look.color, hat: look.hat, hand: look.hand, outfit: look.outfit,
       x: spot.x, z: spot.z, dir: 0, moving: false,

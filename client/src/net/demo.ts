@@ -1,8 +1,8 @@
 import {
   customColor, localOffset,
-  ACT_EVERY, Board, CLINK, Clinks, TOGETHER, hasCompany, DOZE_AFTER, EMOTES, FIREWORK_COOLDOWN, nearStage, ENERGY, KINDS, MOOD_ENERGY, MOVE_HZ, HANDS, HATS, OUTFITS, WALK_SPEED, batteryOf, chargeRate, isNear, mapFor,
+  ACT_EVERY, separate, tieAngle, Board, CLINK, Clinks, TOGETHER, hasCompany, DOZE_AFTER, EMOTES, FIREWORK_COOLDOWN, nearStage, ENERGY, KINDS, MOOD_ENERGY, MOVE_HZ, HANDS, HATS, OUTFITS, WALK_SPEED, batteryOf, chargeRate, isNear, mapFor,
   findPath, moveWithCollision, nearestWalkable, stepEnergy,
-  type Act, type Emote, type Look, type Mood, type Seat, type Theme, type WorldMap,
+  type Act, type Emote, type Look, type Vec2, type Mood, type Seat, type Theme, type WorldMap,
 } from '@party/shared';
 import { Emitter, type NetPlayer, type PartyConnection, type PartyEvents } from './types';
 
@@ -168,6 +168,19 @@ export class DemoConnection implements PartyConnection {
     }
   }
 
+  /** Everyone standing on the floor near this guest (not seated), for keeping a little distance. */
+  private around(who: { id: string }): Vec2[] {
+    const out: Vec2[] = [];
+    for (const o of [this.me, ...this.bots]) if (o.id !== who.id && o.seat < 0) out.push(o);
+    return out;
+  }
+  /** A standing bot gives way when someone crowds it. True while it is still shuffling. */
+  private stepAside(b: Vec2 & { id: string; x: number; z: number; wait: number }, dt: number): boolean {
+    const q = separate(b, this.around(b), this.map, dt, null, tieAngle(b.id));
+    if (q === (b as Vec2)) return false;
+    b.x = q.x; b.z = q.z; b.wait -= dt;
+    return true;
+  }
   private clinks = new Clinks();
   /** The demo's guest book starts with a few lines from the bots, and they like a painting or two. */
   private board = (() => {
@@ -285,8 +298,14 @@ export class DemoConnection implements PartyConnection {
           const s = Math.min(d, WALK_SPEED * 0.75 * dt);
           const p = moveWithCollision(b, { x: b.x + (dx / d) * s, z: b.z + (dz / d) * s }, this.map);
           if (Math.hypot(p.x - b.x, p.z - b.z) < s * 0.2) { b.target = null; b.route = []; b.wantSeat = null; b.moving = false; b.wait = 1; }
-          else { b.dir = Math.atan2(dx, dz); b.x = p.x; b.z = p.z; b.moving = true; b.idle = 0; }
+          else {
+            b.dir = Math.atan2(dx, dz); b.moving = true; b.idle = 0;
+            const q = d < 0.9 ? p : separate(p, this.around(b), this.map, dt, { x: dx / d, z: dz / d }, tieAngle(b.id)); // slip round whoever is in the way (not on the last step to a seat)
+            b.x = q.x; b.z = q.z;
+          }
         }
+      } else if (!b.target && b.seat < 0 && this.stepAside(b, dt)) {
+        // standing about: someone came too close, so shuffle over
       } else if ((b.wait -= dt) <= 0) {
         // drained guests look for somewhere to sit; the rest wander between favourite spots
         const seats = this.map.seats.filter(s => this.free(s));

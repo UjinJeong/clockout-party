@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {
-  DIVE_TIME, ENERGY, POOL, SQUIRT_REACH, hasCompany, nextDrink, MOOD_ICON, MOOD_LABEL, MOVE_HZ, NEAR_RADIUS, WALK_SPEED, clockedOut, findPath, parseHours, fromWorld, inWater, isNear, nearStage, onDanceFloor, toWorld, moveWithCollision, nearSeat, roomAt,
+  DIVE_TIME, ENERGY, POOL, separate, tieAngle, SQUIRT_REACH, hasCompany, nextDrink, MOOD_ICON, MOOD_LABEL, MOVE_HZ, NEAR_RADIUS, WALK_SPEED, clockedOut, findPath, parseHours, fromWorld, inWater, isNear, nearStage, onDanceFloor, toWorld, moveWithCollision, nearSeat, roomAt,
   type Act, type Battery, type Hand, type Emote, type MapRoom, type Mood, type Seat, type Vec2,
 } from '@party/shared';
 import { addAntenna, addCrown, buildAnimal, type AnimalRig } from '../avatar/animal';
@@ -516,6 +516,7 @@ export class Party {
       me.pos.set(next.x, next.z);
       me.dir = turn(me.dir, Math.atan2(dx, dz), dt * 12);
     }
+    this.makeRoom(me, dt, moving ? { x: dx, z: dz } : null);
     me.net.x = me.pos.x; me.net.z = me.pos.y; me.net.dir = me.dir; me.net.moving = moving;
 
     // send at MOVE_HZ while moving, plus one final "stopped". Not while seated: the
@@ -605,6 +606,25 @@ export class Party {
     me.net.seat = -1; me.net.x = seat.stand.x; me.net.z = seat.stand.z;
     this.conn.stand();
     sound.play('stand');
+  }
+
+  /**
+   * Don't stand inside other guests: ease my own guest aside (everyone's client does the
+   * same for theirs, so two people each give half). Seated, arriving, leaving and diving
+   * guests are left alone, and so are you for the last step onto a seat or up to a painting.
+   */
+  private makeRoom(me: Guest, dt: number, heading: Vec2 | null) {
+    if (me.net.seat >= 0 || me.arrive || me.leave || me.dive) return;
+    const goal = this.path.length ? this.path[this.path.length - 1] : this.controls.target;
+    if ((this.walkTo || this.sitAfterWalk) && goal && Math.hypot(goal.x - me.pos.x, goal.z - me.pos.y) < 0.9) return;
+    const others: Vec2[] = [];
+    for (const [id, g] of this.guests) {
+      if (id === this.conn.selfId || g.net.seat >= 0 || g.gone || g.leave || g.arrive || g.dive) continue;
+      others.push({ x: g.pos.x, z: g.pos.y });
+    }
+    const at = { x: me.pos.x, z: me.pos.y };
+    const next = separate(at, others, this.world.map, dt, heading, tieAngle(this.conn.selfId));
+    if (next !== at) me.pos.set(next.x, next.z);
   }
 
   private actsKey = '';
