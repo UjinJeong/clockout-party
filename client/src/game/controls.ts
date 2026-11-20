@@ -13,10 +13,10 @@ export class Controls {
   constructor(private joystickEl: HTMLElement) {
     addEventListener('keydown', e => {
       if (isTyping(e)) return;
-      const k = norm(e.key);
+      const k = walkKey(e);
       if (k) { this.keys.add(k); this.target = null; e.preventDefault(); }
     });
-    addEventListener('keyup', e => { const k = norm(e.key); if (k) this.keys.delete(k); });
+    addEventListener('keyup', e => { const k = walkKey(e); if (k) this.keys.delete(k); });
     addEventListener('blur', () => this.keys.clear());
     this.setupJoystick();
   }
@@ -60,12 +60,22 @@ export class Controls {
   }
 }
 
-function norm(k: string): 'up' | 'down' | 'left' | 'right' | null {
-  switch (k) {
-    case 'ArrowUp': case 'w': case 'W': return 'up';
-    case 'ArrowDown': case 's': case 'S': return 'down';
-    case 'ArrowLeft': case 'a': case 'A': return 'left';
-    case 'ArrowRight': case 'd': case 'D': return 'right';
+/**
+ * Which way a key walks. Read from the key's place on the keyboard (`code`), not the
+ * letter it types: with Korean input on, W A S D type ㅈ ㅁ ㄴ ㅇ, and the letters never arrive.
+ */
+export function walkKey(e: { code?: string; key?: string }): 'up' | 'down' | 'left' | 'right' | null {
+  switch (e.code) {
+    case 'ArrowUp': case 'KeyW': return 'up';
+    case 'ArrowDown': case 'KeyS': return 'down';
+    case 'ArrowLeft': case 'KeyA': return 'left';
+    case 'ArrowRight': case 'KeyD': return 'right';
+  }
+  switch (e.key) { // keyboards and browsers that give no code
+    case 'ArrowUp': case 'w': case 'W': case 'ㅈ': return 'up';
+    case 'ArrowDown': case 's': case 'S': case 'ㄴ': return 'down';
+    case 'ArrowLeft': case 'a': case 'A': case 'ㅁ': return 'left';
+    case 'ArrowRight': case 'd': case 'D': case 'ㅇ': return 'right';
     default: return null;
   }
 }

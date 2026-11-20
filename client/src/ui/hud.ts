@@ -45,7 +45,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
     const help = $('help');
     help.textContent = matchMedia('(pointer: coarse)').matches
       ? '바닥을 누르거나 조이스틱으로 걸어요. 빛나는 원 안의 사람에게만 말이 들려요.'
-      : '방향키나 바닥 클릭으로 걸어요. 발밑의 빛나는 원 안에 있는 사람에게만 말이 들려요.';
+      : '방향키(또는 W A S D)나 바닥 클릭으로 걸어요. 발밑의 빛나는 원 안에 있는 사람에게만 말이 들려요.';
     help.hidden = false;
     const hide = () => { help.hidden = true; save('party.helped', 1); };
     setTimeout(hide, 9000);
@@ -89,7 +89,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
   };
   viewBtn.textContent = '멀리 보기';
   on(viewBtn, 'click', toggleView);
-  on(window, 'keydown', e => { if ((e.key === 'v' || e.key === 'V') && !isTyping(e) && !living.isOpen()) toggleView(); });
+  on(window, 'keydown', e => { if ((e.code === 'KeyV' || e.key === 'v' || e.key === 'V') && !isTyping(e) && !living.isOpen()) toggleView(); });
 
   // ---- chat ----
   const input = $('chat-input') as HTMLInputElement;
