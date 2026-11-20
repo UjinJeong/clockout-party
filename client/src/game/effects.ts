@@ -68,3 +68,76 @@ export class Sparkles {
 
   dispose() { this.points.removeFromParent(); this.geo.dispose(); }
 }
+
+/**
+ * Water you can see in daylight: small solid drops that fly in an arc and fall.
+ * (The glowing sparkles are drawn by adding light, so over a sunny pool they vanish.)
+ */
+export class Droplets {
+  private static MAX = 160;
+  private mesh: THREE.InstancedMesh;
+  private pos = new Float32Array(Droplets.MAX * 3);
+  private vel = new Float32Array(Droplets.MAX * 3);
+  private life = new Float32Array(Droplets.MAX);
+  private size = new Float32Array(Droplets.MAX);
+  private next = 0;
+  private live = 0;
+  private m = new THREE.Matrix4();
+
+  constructor(private scene: THREE.Scene) {
+    this.mesh = new THREE.InstancedMesh(
+      new THREE.SphereGeometry(1, 6, 5),
+      new THREE.MeshBasicMaterial({ color: 0x3fb0ff, transparent: true, opacity: 0.95 }), // a clear blue: pale drops disappear against sunny tiles
+      Droplets.MAX,
+    );
+    this.mesh.frustumCulled = false;
+    this.mesh.count = Droplets.MAX;
+    for (let i = 0; i < Droplets.MAX; i++) this.mesh.setMatrixAt(i, this.m.makeScale(0, 0, 0));
+    scene.add(this.mesh);
+  }
+
+  private add(x: number, y: number, z: number, vx: number, vy: number, vz: number, size: number, life: number) {
+    const i = this.next; this.next = (this.next + 1) % Droplets.MAX;
+    this.pos.set([x, y, z], i * 3); this.vel.set([vx, vy, vz], i * 3);
+    this.size[i] = size; this.life[i] = life;
+    this.live = Math.max(this.live, life);
+  }
+
+  /** A jet from `at` along `dir` (unit vector on the floor): a tight stream that arcs and falls. */
+  jet(at: THREE.Vector3, dir: { x: number; z: number }, count = 36, speed = 6) {
+    for (let k = 0; k < count; k++) {
+      const v = speed * (0.75 + Math.random() * 0.35), wob = (Math.random() - 0.5) * 0.7, back = k / count * 0.5;
+      this.add(at.x - dir.x * back, at.y, at.z - dir.z * back, dir.x * v - dir.z * wob, 1.1 + Math.random() * 0.9, dir.z * v + dir.x * wob, 0.04 + Math.random() * 0.03, 0.55 + Math.random() * 0.35);
+    }
+  }
+
+  /** A splash: drops thrown up and outwards in a ring. */
+  splash(at: THREE.Vector3, count = 44, power = 3.4) {
+    for (let k = 0; k < count; k++) {
+      const a = Math.random() * Math.PI * 2, out = 0.6 + Math.random() * 1.4;
+      this.add(at.x, at.y, at.z, Math.cos(a) * out, power * (0.6 + Math.random() * 0.6), Math.sin(a) * out, 0.045 + Math.random() * 0.04, 0.6 + Math.random() * 0.4);
+    }
+  }
+
+  tick(dt: number) {
+    if (this.live <= 0) return;
+    this.live -= dt;
+    for (let i = 0; i < Droplets.MAX; i++) {
+      if (this.life[i] <= 0) continue;
+      this.life[i] -= dt;
+      const j = i * 3;
+      this.vel[j + 1] -= 9.8 * dt;
+      this.pos[j] += this.vel[j] * dt; this.pos[j + 1] += this.vel[j + 1] * dt; this.pos[j + 2] += this.vel[j + 2] * dt;
+      const s = this.life[i] <= 0 || this.pos[j + 1] < 0 ? 0 : this.size[i] * Math.min(1, this.life[i] * 6);
+      if (s === 0) this.life[i] = 0;
+      this.m.makeScale(s, s, s).setPosition(this.pos[j], this.pos[j + 1], this.pos[j + 2]);
+      this.mesh.setMatrixAt(i, this.m);
+    }
+    this.mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  dispose() {
+    this.scene.remove(this.mesh);
+    this.mesh.geometry.dispose(); (this.mesh.material as THREE.Material).dispose();
+  }
+}

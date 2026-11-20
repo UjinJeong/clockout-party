@@ -11,7 +11,7 @@ import type { Painting } from '../world/gallery';
 import type { World } from '../world/world';
 import { Tag } from '../ui/bubbles';
 import type { Controls } from './controls';
-import { Sparkles } from './effects';
+import { Droplets, Sparkles } from './effects';
 import { cameraPose } from './camera';
 import { canvasTexture } from '../world/textures';
 import { ARRIVAL, Elevator } from './elevator';
@@ -128,6 +128,7 @@ export class Party {
   private listT = 0;
   private disposed = false;
   private sparkles: Sparkles;
+  private droplets: Droplets;
 
   constructor(
     private scene: THREE.Scene,
@@ -149,6 +150,7 @@ export class Party {
     this.targetMark.rotation.x = -Math.PI / 2; this.targetMark.position.y = 0.02; this.targetMark.visible = false;
     scene.add(this.targetMark);
     this.sparkles = new Sparkles(scene);
+    this.droplets = new Droplets(scene);
     // dev builds only: let test scripts look inside (never in the built page)
     if (import.meta.env.DEV) (window as unknown as { __party?: Party }).__party = this;
     // invisible boxes over each seat, so tapping a sofa or a lounger sits you down
@@ -442,6 +444,7 @@ export class Party {
     }
 
     this.sparkles.tick(dt);
+    this.droplets.tick(dt);
     // work-hours statuses move with the clock ("퇴근까지 40분" → "39분")
     if ((this.hoursT -= dt) <= 0) {
       this.hoursT = 1;
@@ -653,7 +656,7 @@ export class Party {
     g.anim.play('squirt');
     const dir = { x: Math.sin(g.dir), z: Math.cos(g.dir) };
     const w = toWorld(this.world.map, { x: g.pos.x, z: g.pos.y });
-    this.sparkles.spray(new THREE.Vector3(w.x + dir.x * 0.4, w.y + 0.95, w.z + dir.z * 0.4), dir, ['#bfe9ff', '#7fd0ff', '#ffffff'], 46);
+    this.droplets.jet(new THREE.Vector3(w.x + dir.x * 0.45, w.y + 0.95, w.z + dir.z * 0.45), dir);
     sound.play('step-water', { ...where, pitch: 1.5, volume: 0.8 });
     for (const [id, o] of this.guests) {
       if (id === from || o.gone) continue;
@@ -662,7 +665,7 @@ export class Party {
       setTimeout(() => {
         if (this.disposed || !this.guests.has(id)) return;
         o.anim.play('wow');
-        this.sparkles.burst(o.rig.head.getWorldPosition(new THREE.Vector3()), ['#bfe9ff', '#ffffff'], 22);
+        this.droplets.splash(o.rig.head.getWorldPosition(new THREE.Vector3()), 18, 1.8);
         sound.play('bubble', { at: { x: o.pos.x, z: o.pos.y }, pitch: 1.3 });
         if (id === this.conn.selfId) this.hooks.squirted(g.net.name);
       }, 260 + d * 60);
@@ -675,7 +678,8 @@ export class Party {
     const before = d.t; d.t += dt;
     if (before < DIVE_TIME * 0.93 && d.t >= DIVE_TIME * 0.93) {
       const at = g.rig.root.position.clone(); at.y = 0.15;
-      this.sparkles.burst(at, ['#bfe9ff', '#7fd0ff', '#ffffff', '#e8f8ff'], 110);
+      this.droplets.splash(at, 70, 4);
+      this.sparkles.burst(at, ['#bfe9ff', '#7fd0ff', '#ffffff', '#e8f8ff'], 60);
       sound.play('step-water', { at: { x: g.pos.x, z: g.pos.y }, volume: 1 });
       sound.play('boom', { at: { x: g.pos.x, z: g.pos.y }, pitch: 1.6, volume: 0.25 });
     }
@@ -951,6 +955,7 @@ export class Party {
     this.ring.removeFromParent(); this.targetMark.removeFromParent();
     for (const h of this.seatHits) { h.removeFromParent(); h.geometry.dispose(); }
     this.sparkles.dispose();
+    this.droplets.dispose();
     sound.dozing(false);
   }
 }
