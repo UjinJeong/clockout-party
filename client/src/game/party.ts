@@ -62,6 +62,12 @@ const STEP_EVERY = Math.PI / 9;
 const FLOATIE_COLORS = ['#ff7aa2', '#ffd166', '#6fd3c7', '#ff9f68'];
 const floatieGeo = new THREE.TorusGeometry(0.46, 0.14, 10, 22);
 
+/** What to say when someone comes in: only people who arrive after you (not you, not bots). */
+export function joinNotice(p: { id: string; name: string; bot?: boolean }, selfId: string, settled: boolean): string | null {
+  if (p.id === selfId || !settled || p.bot) return null;
+  return `🛗 ${p.name}님이 들어왔어요`;
+}
+
 export interface PartyHooks {
   room(room: MapRoom): void;
   painting(p: Painting | null): void;
@@ -81,6 +87,8 @@ export interface PartyHooks {
   company(): void;
   /** Someone got you with the water pistol. */
   squirted(by: string): void;
+  /** 🛗 a person (not a bot) came into the party after you: show who. */
+  joined?(text: string): void;
   /** 짠! You clinked glasses with this guest (a little charge for both). */
   clinked(name: string): void;
   /** You've stepped out of the lift and are at the party. */
@@ -250,6 +258,8 @@ export class Party {
     if (isSelf && g0.arrive) { sound.setListener(p.x, p.z); sound.play('lift'); } // hum, ding, doors — in time with ARRIVAL
     g0.tag.setMood(p.mood ? MOOD_ICON[p.mood] : '', p.mood ? MOOD_LABEL[p.mood] : '');
     if (isSelf) { this.camTarget.set(w0.x, w0.y, w0.z); this.snapCamera(); }
+    const notice = joinNotice(p, this.conn.selfId, this.settled);
+    if (notice) this.hooks.joined?.(notice);
     this.listDirty = true;
   }
 

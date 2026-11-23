@@ -477,6 +477,8 @@ KINDS.butterflies=(imgs)=>{const B=BF.flies.map((b,k)=>{const m=BFM[k];const hom
 /* gold koi: each fish is lifted off the painting and moves on its own.
    I has two koi that swim head-first out of the frame and come back in from the other side;
    II and III circle where they were painted, then now and then swim a wide loop out over the wall and return. */
+/** Share of each fish (from the tail end) that swings; the rest of the body holds still. */
+const KOI_TAIL=.45;
 const KOI={10:{fish:[{src:'a/k10_fishA.png',box:[149,48,400,1030],mode:'swim'},{src:'a/k10_fishB.png',box:[75,259,584,1039],mode:'swim'}]},
   12:{fish:[{src:'a/k12_fish.png',box:[249,0,1016,1386],c:[.5636,.5027],mode:'circle',dir:-1}]},
   13:{fish:[{src:'a/k13_fish.png',box:[220,76,980,1274],c:[.5345,.5132],mode:'circle',dir:-1}]}};
@@ -502,7 +504,8 @@ KINDS.koi=(imgs)=>{const a=S.art,AW=a.w,AH=a.h,M=40;const dust=KINDS.gold();
     if(off.width!==ow||off.height!==oh){off.width=ow;off.height=oh;}oc.clearRect(0,0,ow,oh);
     const N=Math.min(160,Math.max(60,Math.round(bh*k/6))),rh=bh/N;
     for(let j=0;j<N;j++){const yN=j/N;let sh;
-      if(f.mode==='swim'){const amp=(4+20*Math.pow(1-yN,1.4))*(f.st==='home'?1:1.3);sh=amp*Math.sin(f.t*3.1+yN*5.6+f.ph);}
+      // head at the bottom stays still; only the tail end (top) swings, more toward the fin tip
+      if(f.mode==='swim'){const amp=yN<KOI_TAIL?24*Math.pow(1-yN/KOI_TAIL,1.5)*(f.st==='home'?1:1.3):0;sh=amp*Math.sin(f.t*3.1+yN*5.6+f.ph);}
       else{const amp=yN<.42?26*Math.pow(1-yN/.42,1.5):0;sh=amp*Math.sin(f.t*4.2+yN*7);}
       oc.drawImage(f.img,0,j*rh,bw,rh+1,(M+sh)*k,j*rh*k,bw*k,(rh+1)*k);}
     const lp=S.hover>.5?S.mouse.u:.5+.6*Math.sin(f.t*.35+f.ph);const gx=lp*ow;const g=oc.createLinearGradient(gx-ow*.12,0,gx+ow*.12,oh);
@@ -511,7 +514,7 @@ KINDS.koi=(imgs)=>{const a=S.art,AW=a.w,AH=a.h,M=40;const dust=KINDS.gold();
     ctx.save();
     const pk=f.st==='home'?.55:.9,x=toX((bx-M+f.ox)/AW)-S.par[0]*pk*S.fr.w,y=toY((by+f.oy)/AH)-S.par[1]*pk*S.fr.h;
     if(f.mode==='circle'){const cx=toX(f.c[0]+f.ox/AW)-S.par[0]*pk*S.fr.w,cy=toY(f.c[1]+f.oy/AH)-S.par[1]*pk*S.fr.h;ctx.translate(cx,cy);ctx.rotate(f.ang);ctx.translate(-cx,-cy);}
-    else{const cx=x+ow/S.dpr/2,cy=y+oh/S.dpr/2;ctx.translate(cx,cy+Math.sin(f.t*.55+f.ph)*S.fr.h*.01);ctx.rotate(Math.sin(f.t*.42+f.ph)*.025+(f.st!=='home'?f.ox/AW*.6:0));ctx.translate(-cx,-cy);}
+    else if(f.st!=='home'){const cx=x+ow/S.dpr/2,cy=y+oh/S.dpr/2;ctx.translate(cx,cy);ctx.rotate(f.ox/AW*.6);ctx.translate(-cx,-cy);} // steer only while swimming away
     const away=f.st!=='home';if(away||a.i===13){ctx.shadowColor=a.i===13&&!away?'rgba(40,50,20,.28)':'rgba(0,0,0,.45)';ctx.shadowBlur=away?18:10;ctx.shadowOffsetX=5;ctx.shadowOffsetY=away?14:8;}
     ctx.drawImage(off,x,y,ow/S.dpr,oh/S.dpr);ctx.restore();});
    dust.draw();}};};

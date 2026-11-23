@@ -393,6 +393,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
     },
     acts: (a: { dive: boolean; squirt: boolean; tv: boolean }) => { actChips.dive.hidden = !a.dive; actChips.squirt.hidden = !a.squirt; actChips.tv.hidden = !a.tv; },
     squirted: (by: string) => toast(`💦 ${by}님의 물총에 맞았어요!`, 2400),
+    joined: (text: string) => { toast(text, 3000); sound.play('ding', { pitch: 1.2, volume: 0.5 }); },
     clinked: (name: string) => toast(`🥂 ${name}님과 짠! 충전 +3`, 2600),
     company: () => toast('💞 나란히 앉으면 충전이 더 빨라요', 3200),
     editHours: () => openHours(),
