@@ -67,6 +67,7 @@ export class Sound {
 
   /** Call from a click/tap: creates or wakes the audio (browsers only allow it after a gesture). */
   unlock() {
+    playThroughSilentSwitch(this.mode !== 'off');
     if (!this.ctx) {
       const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!AC) return;
@@ -81,8 +82,8 @@ export class Sound {
       this.sfxBus = c.createGain(); this.sfxBus.connect(this.master);
       this.applyMode();
       document.addEventListener('visibilitychange', () => {
-        if (document.hidden) void c.suspend().catch(() => {});
-        else if (this.mode !== 'off') void c.resume().catch(() => {});
+        if (document.hidden) { void c.suspend().catch(() => {}); keepAlive?.pause(); }
+        else if (this.mode !== 'off') { void c.resume().catch(() => {}); playThroughSilentSwitch(true); }
       });
       if (this.want) this.startMusic();
     }
@@ -111,6 +112,7 @@ export class Sound {
     const t = this.ctx.currentTime;
     this.musicBus.gain.setTargetAtTime(this.mode === 'all' ? MUSIC_LEVEL : 0, t, 0.15);
     this.sfxBus.gain.setTargetAtTime(this.mode === 'off' ? 0 : SFX_LEVEL, t, 0.05);
+    playThroughSilentSwitch(this.mode !== 'off');
     if (this.mode === 'off') void this.ctx.suspend().catch(() => {});
     else if (!document.hidden) void this.ctx.resume().catch(() => {});
     if (this.mode === 'all' && this.want && !this.music) this.startMusic();
@@ -196,3 +198,44 @@ export class Sound {
 
 /** The one sound system for the page. */
 export const sound = new Sound();
+
+/**
+ * iPhone: web audio is "ambient" by default, so the ring/silent switch mutes it — even though
+ * videos (Reels, YouTube) still play, and turning the volume up does nothing. Asking for
+ * "playback" makes the party sound like a video does. (Like a video, it pauses other music apps.)
+ *  - iOS 17+: navigator.audioSession
+ *  - older iOS: a silent looping <audio> puts the page in playback mode, and web audio follows
+ */
+let keepAlive: HTMLAudioElement | null = null;
+const IOS = typeof navigator !== 'undefined' && (/iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
+export function playThroughSilentSwitch(on: boolean) {
+  const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
+  if (session) {
+    try { session.type = on ? 'playback' : 'auto'; } catch { /* older engines reject the value */ }
+    return;
+  }
+  if (!IOS) return;
+  if (!on) { keepAlive?.pause(); return; }
+  if (!keepAlive) {
+    keepAlive = document.createElement('audio');
+    keepAlive.src = silentWav();
+    keepAlive.loop = true;
+    keepAlive.setAttribute('playsinline', '');
+    keepAlive.setAttribute('x-webkit-airplay', 'deny');
+    keepAlive.preload = 'auto';
+  }
+  if (keepAlive.paused && !document.hidden) void keepAlive.play().catch(() => {});
+}
+
+/** Half a second of silence as a tiny WAV (8 kHz, 8-bit mono). */
+function silentWav(): string {
+  const n = 4000, b = new Uint8Array(44 + n), v = new DataView(b.buffer);
+  const tag = (o: number, t: string) => { for (let i = 0; i < 4; i++) b[o + i] = t.charCodeAt(i); };
+  tag(0, 'RIFF'); v.setUint32(4, 36 + n, true); tag(8, 'WAVE'); tag(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true);
+  tag(36, 'data'); v.setUint32(40, n, true); b.fill(128, 44);
+  let bin = ''; for (const x of b) bin += String.fromCharCode(x);
+  return 'data:audio/wav;base64,' + btoa(bin);
+}
