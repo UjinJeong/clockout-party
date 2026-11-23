@@ -1,5 +1,5 @@
 export interface LivingViewer {
-  /** Open the living painting for an artwork id (the `i` in artworks.json). */
+  /** Open the living painting for an artwork id (the `i` in gallery.json). */
   open(artId: number): void;
   close(): void;
   isOpen(): boolean;

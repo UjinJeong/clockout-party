@@ -1,11 +1,13 @@
-import type { RoomId } from '@party/shared';
-import ARTWORKS from './artworks.json';
+import type { GalleryItem, RoomId } from '@party/shared';
+import GALLERY from './gallery.json';
 
-/** The paintings of 「액자 밖으로」 by 정유진, with the docent's notes from the exhibition. */
-export interface Artwork {
-  i: number; room: RoomId; title: string; w: number; h: number; desc: string; doc: string;
-}
-export const ART = ARTWORKS as Artwork[];
+/**
+ * The paintings and their words, from gallery.json (edited on the manager page).
+ * Taken-down ones are left out here; order is hanging order.
+ */
+export type Artwork = GalleryItem & { room: RoomId };
+export const ALL_ART = GALLERY as Artwork[];
+export const ART = ALL_ART.filter(a => !a.hidden);
 
 /**
  * Paintings hang at sizes that follow their images: a 1800-pixel-wide picture
@@ -35,7 +37,8 @@ export const RAIL_TOP = 1.06;
 export const hangY = (h: number) => Math.max(EYE, h / 2 + RAIL_TOP + 0.2);
 
 const pad = (n: number) => String(n).padStart(2, '0');
-export const wallSrc = (a: Artwork) => `art/wall/${pad(a.i)}.jpg`;
+/** The wall-sized picture: a replacement from the manager page, or the original. */
+export const wallSrc = (a: Artwork) => a.wall ?? `art/wall/${pad(a.i)}.jpg`;
 
 export const ROOM_INFO: Record<RoomId, { name: string; color: string; note: string }> = {
   lobby: { name: '로비', color: '#3d2c24', note: '와인 한 잔 받아 들고 천천히 둘러보세요.' },

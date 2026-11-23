@@ -9,6 +9,7 @@ import { VIEWER_HTML } from './markup';
 import './viewer.css';
 import { QUESTIONS, playAnswer } from './docent';
 import { ANSWERS } from './answers';
+import GALLERY from '../world/gallery.json';
 import { artMotion, setArtMotion } from '../ui/artMotion';
 
 
@@ -29,7 +30,7 @@ const ROOMS = [
 ];
 const D = (o)=>Object.assign({flow:0,flowScale:3,flowSpeed:.6,flowDir:[0,0],sway:0,swaySpeed:1.2,swayFreq:6,swayDir:[1,0],swayTop:1,
   shimmer:0,pulse:0,breath:0,breathC:[.5,.5],para:0,look:null,ripple:0,ripMask:0,glow:0,stream:0,gustK:.0,rain:0},o);
-const ART = [
+const HAND = [
  {i:17,room:'garden',title:'민들레와 발',w:1800,h:1343,img:'a/dl_bald.jpg',kind:'dandelion',
   desc:'거대한 발 아래 핀 민들레. 솜털 공에서 새 홀씨가 하나씩 돋아나 바람을 타고 액자 밖으로 날아갑니다.',
   how:'그림을 꾹 누르고 있으면 그쪽에서 바람이 불어 홀씨가 한꺼번에 날아올라요. 길게 누를수록 세게 붑니다.',
@@ -110,7 +111,17 @@ const ART = [
   how:'커서를 얼음 가까이 대면 더 빨리 녹아요.',hint:'가까이 대면 녹아요',
   fx:D({flow:.003,flowScale:6,flowSpeed:.7,shimmer:.45,ripple:.004,ripMask:1})},
 ];
-ART.forEach((a,k)=>{a.k=k;a.img=a.img||`a/a${String(a.i).padStart(2,'0')}.jpg`;a.thumb=`a/t${String(a.i).padStart(2,'0')}.jpg`;a.mask=`a/m${String(a.i).padStart(2,'0')}.png`;});
+/* The catalogue: order, words and any replacement picture come from gallery.json (the manager page);
+   each original painting keeps its hand-made motion from HAND. A replaced or new picture gets a gentle
+   shimmer only, with a flat mask and depth (its own motion would have to be made by hand). */
+const FLAT_MASK='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4XmNoaGgAAAMEAYGyFkehAAAAAElFTkSuQmCC';
+const FLAT_DEPTH='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4XmPw9fUFAAHSAOindOlcAAAAAElFTkSuQmCC';
+const pad2=n=>String(n).padStart(2,'0');
+const ART=GALLERY.filter(g=>!g.hidden).map(g=>{const hand=HAND.find(h=>h.i===g.i);
+  if(g.image||!hand)return {i:g.i,room:g.room,title:g.title,w:g.w,h:g.h,desc:g.desc,how:g.how||'그림을 천천히 들여다보세요. 빛이 은은하게 스쳐 가요.',hint:g.hint||'천천히 보기',
+    kind:'plain',img:g.image,thumb:g.thumb||g.image,mask:FLAT_MASK,depth:FLAT_DEPTH,doc:g.doc,fx:D({shimmer:.12})};
+  return {...hand,title:g.title,desc:g.desc,how:g.how||hand.how,hint:g.hint||hand.hint,doc:g.doc};});
+ART.forEach((a,k)=>{a.k=k;a.img=a.img||`a/a${pad2(a.i)}.jpg`;a.thumb=a.thumb||`a/t${pad2(a.i)}.jpg`;a.mask=a.mask||`a/m${pad2(a.i)}.png`;a.depth=a.depth||`a/d${pad2(a.i)}.png`;});
 
 /* ---------- viewer DOM ---------- */
 const $=id=>document.getElementById(id);
@@ -562,7 +573,7 @@ async function openViewer(k){
   layout();
   const extra=a.kind==='koi'?KOI[a.i].fish.map(f=>f.src):a.kind==='dandelion'?['a/dl_puff.png',...DL.seeds.map((_,i)=>`a/dl_seed${i}.png`)]:a.kind==='butterflies'?BF.flies.map((_,i)=>`a/b2_fly${i}.png`):[];
   try{
-    const [img,mask,dimg,...ex]=await Promise.all([loadImg(a.img),loadImg(a.mask),loadImg(`a/d${String(a.i).padStart(2,'0')}.png`),...extra.map(loadImg)]);
+    const [img,mask,dimg,...ex]=await Promise.all([loadImg(a.img),loadImg(a.mask),loadImg(a.depth),...extra.map(loadImg)]);
     if(tok!==loadToken)return;
     if(glOK){upload(texImg,0,img);upload(texMask,1,mask);upload(texDepth,2,dimg);}
     sampler=makeSampler(img);
@@ -733,7 +744,7 @@ function ask(n){const a=S.art;if(!a)return;const text=(ANSWERS[a.i]||[])[n];if(!
   playAnswer($('ask-a'),text,askCtl.signal).catch(()=>{});}
 $('ask-chips').innerHTML=QUESTIONS.map((c,n)=>`<button type="button" class="chip" data-n="${n}" aria-pressed="false">${c}</button>`).join('');
 $('ask-chips').addEventListener('click',e=>{const b=e.target.closest('.chip');if(b)ask(+b.dataset.n);});
-function viewerDocent(a){$('v-doc').textContent=DOC[a.i]||'';askCtl&&askCtl.abort();askCtl=null;$('ask-a').hidden=true;$('ask').hidden=false;
+function viewerDocent(a){$('v-doc').textContent=a.doc||DOC[a.i]||'';askCtl&&askCtl.abort();askCtl=null;$('ask-a').hidden=true;$('ask').hidden=false;
   $('ask-chips').querySelectorAll('.chip').forEach(b=>b.setAttribute('aria-pressed','false'));}
 
   made = {

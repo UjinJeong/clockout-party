@@ -14,3 +14,7 @@ services:
         value: "22"
       - key: ADMIN_PASSWORD
         generateValue: true
+      # 🖼️ the manager page's 전시장 tab saves to this repository. A fine-grained token with
+      # "Contents: Read and write" on this repository only; entered in the Render dashboard.
+      - key: GITHUB_TOKEN
+        sync: false

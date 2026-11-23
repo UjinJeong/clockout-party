@@ -8,3 +8,4 @@ export * from './fireworks';
 export * from './hours';
 export * from './board';
 export * from './crowd';
+export * from './gallery';

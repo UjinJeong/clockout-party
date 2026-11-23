@@ -1,11 +1,20 @@
-import type { Application, NextFunction, Request, Response } from 'express';
+import express, { type Application, type NextFunction, type Request, type Response } from 'express';
 import { matchMaker } from '@colyseus/core';
 import { monitor } from '@colyseus/monitor';
 import { ROOM_NAME } from '@party/shared';
 import { stats } from './stats';
 import { PartyRoom } from './PartyRoom';
+import { createGalleryStore, type GalleryStore } from './galleryStore';
+
+/** The gallery is saved to this project's GitHub repository (see galleryStore). */
+let gallery: GalleryStore | null = null;
+/** Made on first use, so the settings in the environment at that moment are the ones used. */
+const store = () => (gallery ??= createGalleryStore({ token: process.env.GITHUB_TOKEN, repo: process.env.GITHUB_REPO, branch: process.env.GITHUB_BRANCH, api: process.env.GITHUB_API_URL }));
+/** Tests swap in a store that talks to a pretend GitHub. */
+export function useGalleryStore(s: GalleryStore) { gallery = s; }
 import { ADMIN_PAGE } from './adminPage';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 /**
  * The manager page at /admin: who is in, where from, which parties are open,
@@ -32,6 +41,7 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
 
 export function mountAdmin(app: Application) {
   app.get('/admin', requireAdmin, (_req, res) => { res.type('html').send(ADMIN_PAGE); });
+  app.get('/admin/gallery.js', requireAdmin, (_req, res) => { res.type('js').set('Cache-Control', 'no-store').sendFile(fileURLToPath(new URL('./adminGallery.js', import.meta.url))); });
   app.get('/admin/api/stats', requireAdmin, async (_req, res) => {
     const rooms = await matchMaker.query({ name: ROOM_NAME });
     res.set('Cache-Control', 'no-store').json({
@@ -40,6 +50,16 @@ export function mountAdmin(app: Application) {
         .map(r => ({ roomId: r.roomId, title: r.metadata?.title ?? '파티', theme: r.metadata?.theme ?? 'gallery', private: !!r.private, clients: r.clients, maxClients: r.maxClients, people: PartyRoom.open.get(r.roomId)?.roster() ?? [] }))
         .sort((a, b) => b.clients - a.clients),
     });
+  });
+  // 🖼️ the gallery: every painting and its words; save = one commit to GitHub, then Render redeploys
+  app.get('/admin/api/gallery', requireAdmin, async (_req, res) => {
+    try { res.set('Cache-Control', 'no-store').json(await store().load()); }
+    catch (e) { res.status(502).json({ error: (e as Error).message || '전시장 정보를 불러오지 못했어요.' }); }
+  });
+  app.put('/admin/api/gallery', requireAdmin, express.json({ limit: '16mb' }), async (req, res) => {
+    const b = (req.body ?? {}) as { items?: unknown; pictures?: unknown; version?: unknown; summary?: unknown };
+    const r = await store().save(b.items, b.pictures, b.version, typeof b.summary === 'string' ? b.summary : '');
+    if (r.ok) res.json(r); else res.status(r.status).json({ error: r.error });
   });
   // close a party, or walk one person out of it
   app.post('/admin/api/rooms/:roomId/close', requireAdmin, (req, res) => {

@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { QUESTIONS, typingSteps } from '../src/living/docent';
 import { ANSWERS } from '../src/living/answers';
-import ART from '../src/world/artworks.json';
+import ART from '../src/world/gallery.json';
 
 describe('fixed docent answers', () => {
   it('has the four questions', () => expect(QUESTIONS).toHaveLength(4));
@@ -37,4 +37,12 @@ describe('typing rhythm', () => {
     expect(after(',')).toBeGreaterThan(Math.max(...mid));
   });
   it('is the same every time for the same text', () => expect(typingSteps(text)).toEqual(steps));
+});
+
+import { slotsFor } from '../src/world/art';
+import { GALLERY_SLOTS, GALLERY_ROOMS } from '@party/shared';
+describe('wall space', () => {
+  it('the manager page\'s limits match the walls', () => {
+    for (const r of GALLERY_ROOMS) expect(slotsFor(r).length).toBe(GALLERY_SLOTS[r]);
+  });
 });

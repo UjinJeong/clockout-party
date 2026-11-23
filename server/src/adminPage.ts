@@ -6,7 +6,7 @@ export const ADMIN_PAGE = `<!doctype html>
 <style>
 :root{--night:#1e1519;--plate:#f1e7d3;--plate-2:#e5d7bc;--ink:#2a2024;--ink-2:#6d5f57;--gilt:#c9a25e;--wine:#8a2f3c;--sage:#5f7c69;
   --serif:"Gowun Batang",serif;--sans:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;color-scheme:light}
-*{box-sizing:border-box}body{margin:0;background:var(--plate-2);color:var(--ink);font:15px/1.55 var(--sans)}
+[hidden]{display:none!important}*{box-sizing:border-box}body{margin:0;background:var(--plate-2);color:var(--ink);font:15px/1.55 var(--sans)}
 header{background:var(--night);color:var(--plate);padding:18px max(18px,env(safe-area-inset-left)) 16px;display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
 header h1{margin:0;font:700 24px/1.2 var(--serif)}header p{margin:0;font-size:13px;color:#c9b9a3}
 main{max-width:1100px;margin:0 auto;padding:18px max(16px,env(safe-area-inset-left)) 40px;display:grid;gap:16px}
@@ -39,9 +39,33 @@ button.danger{background:#a33a2c;color:#fff;border:0;border-radius:3px;padding:5
 button.mini{background:none;border:1px solid #cdbd9e;border-radius:3px;padding:1px 6px;font:inherit;font-size:11px;cursor:pointer;color:#7a6a55}
 button[data-armed="1"]{background:#e2552f;color:#fff;border-color:#e2552f}
 .who{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:4px;font-size:12.5px;color:#6d5f4f}
+nav.tabs{display:flex;gap:6px}nav.tabs button{background:none;border:1px solid #5a4a44;color:#c9b9a3;border-radius:3px;padding:5px 12px;font:inherit;font-size:13.5px;cursor:pointer}
+nav.tabs button[aria-selected="true"]{background:var(--plate);color:var(--ink);border-color:var(--plate)}
+#tab-gallery{padding-bottom:90px}
+.groom h2 small{font:500 13px var(--sans);color:var(--ink-2);margin-left:6px}
+.gcard{display:grid;grid-template-columns:72px 1fr auto;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid #e3d6bd}
+.gcard.off{opacity:.55}.gcard img{width:72px;height:56px;object-fit:cover;background:#d9ccb2;border-radius:2px}
+.gtext{min-width:0}.gtext .badge{margin-left:4px}.gtext .gdesc{display:block;font-size:13px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gbtns{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}.gbtns .mini{font-size:12.5px;padding:3px 8px}.gbtns .edit{background:var(--ink);color:var(--plate);border-color:var(--ink)}
+.badge.gold{background:var(--gilt);color:var(--ink)}.badge.plain{background:#d6c7aa;color:var(--ink)}
+.geditor{display:grid;grid-template-columns:220px 1fr;gap:16px;padding:12px;margin:6px 0 10px;background:#faf4e8;border:1px solid #e3d6bd}
+.gpic{display:flex;flex-direction:column;gap:8px}.gpic img{width:100%;max-height:220px;object-fit:contain;background:#efe5d2}.gpic small{color:var(--ink-2)}
+.btnlike{display:inline-block;text-align:center;background:var(--wine);color:#fff;border-radius:3px;padding:6px 10px;font-size:13px;cursor:pointer}
+.gfields{display:grid;gap:8px}.gfields label{display:grid;gap:3px;font-size:13px}.gfields label span{color:var(--ink-2)}
+.gfields input,.gfields textarea,.gfields select{font:inherit;font-size:14px;padding:6px 8px;border:1px solid #cdbd9e;border-radius:2px;background:#fff;width:100%}
+.gfields .two{display:grid;grid-template-columns:2fr 1fr;gap:8px}.gfields details{border-top:1px dashed #d6c7aa;padding-top:6px}.gfields summary{cursor:pointer;font-size:13.5px}
+button.add{margin-top:10px;background:none;border:1px dashed #b9a682;color:var(--ink);border-radius:3px;padding:7px 12px;font:inherit;font-size:13.5px;cursor:pointer}button.add:disabled{opacity:.45;cursor:default}
+.danger-lite{color:#a33a2c;border-color:#d9a79f}
+.gbar{position:fixed;left:0;right:0;bottom:0;background:var(--night);color:var(--plate);display:flex;gap:10px;align-items:center;justify-content:flex-end;padding:10px max(16px,env(safe-area-inset-left));flex-wrap:wrap;z-index:5}
+.gbar #gcount{margin-right:auto;font-size:14px}.gbar #gmsg{font-size:13px}.gbar #gmsg.ok{color:#bfe3c4}.gbar #gmsg.bad{color:#ffb4a8}.gbar a{color:#ffd98a}
+.gbar button{font:inherit;font-size:14px;border-radius:3px;padding:7px 14px;cursor:pointer;border:1px solid #6b5a52}
+.gbar .save{background:var(--gilt);color:var(--ink);border-color:var(--gilt);font-weight:600}.gbar .ghost{background:none;color:var(--plate)}.gbar button:disabled{opacity:.4;cursor:default}
+@media (max-width:760px){.geditor{grid-template-columns:1fr}.gcard{grid-template-columns:56px 1fr}.gbtns{grid-column:1/-1;justify-content:flex-start}.gfields .two{grid-template-columns:1fr}}
 </style></head><body>
-<header><h1>파티 관리</h1><p id="updated">불러오는 중</p></header>
-<main>
+<header><h1>파티 관리</h1><nav class="tabs"><button type="button" data-tab="stats" aria-selected="true">📊 현황</button><button type="button" data-tab="gallery" aria-selected="false">🖼️ 전시장</button></nav><p id="updated">불러오는 중</p></header>
+<main id="tab-gallery" hidden><div id="gallery"></div></main>
+<div id="gbar" class="gbar" hidden><span id="gcount"></span><span id="gmsg"></span><button type="button" id="gundo" class="ghost">모두 되돌리기</button><button type="button" id="gsave" class="save">저장하기</button></div>
+<main id="tab-stats">
   <div id="error" class="err" hidden></div>
   <div class="row">
     <div class="stat live"><b id="online">0</b><span>지금 접속 중</span></div>
@@ -94,4 +118,11 @@ document.addEventListener('click',async e=>{
   b.textContent=r&&r.ok?'처리했어요':'실패했어요';setTimeout(load,1200);
 });
 load();setInterval(load,5000);
-</script></body></html>`;
+// tabs: 현황 / 전시장 (the address remembers which: /admin#gallery)
+function tab(name){for(const b of document.querySelectorAll('.tabs button'))b.setAttribute('aria-selected',String(b.dataset.tab===name));
+  $('tab-stats').hidden=name!=='stats';$('tab-gallery').hidden=name!=='gallery';$('gbar').hidden=name!=='gallery'||$('gbar').dataset.ready!=='1';
+  if(name==='gallery'&&window.showGallery)window.showGallery();history.replaceState(null,'',name==='gallery'?'#gallery':'#');}
+document.querySelector('.tabs').addEventListener('click',e=>{const b=e.target.closest('button[data-tab]');if(b)tab(b.dataset.tab);});
+</script>
+<script src="/admin/gallery.js"></script>
+<script>new MutationObserver(()=>{$('gbar').dataset.ready='1';}).observe($('gallery'),{childList:true});tab(location.hash==='#gallery'?'gallery':'stats');</script></body></html>`;

@@ -1,4 +1,5 @@
 process.env.ADMIN_PASSWORD = 'test-pass';
+process.env.GITHUB_TOKEN = ''; // never talk to the real GitHub from tests
 // a tiny stand-in for the built web client, so the server can be checked serving it
 import { mkdtempSync as __mk, writeFileSync as __wr } from 'node:fs';
 import { tmpdir as __tmp } from 'node:os';
@@ -641,4 +642,17 @@ describe('manager page: rooms', () => {
     expect((await ok.json()).ok).toBe(true);
     expect(await code).toBe(LEAVE_CODE.closed);
   }, DISMISS_DELAY + 5000);
+});
+
+describe('manager page: gallery', () => {
+  const auth = 'Basic ' + Buffer.from('admin:test-pass').toString('base64');
+  it('shows the gallery behind the password; saving needs a GitHub token', async () => {
+    expect((await fetch('http://localhost:2568/admin/api/gallery')).status).toBe(401);
+    const g = await (await fetch('http://localhost:2568/admin/api/gallery', { headers: { authorization: auth } })).json();
+    expect(g.error ?? '').toBe('');
+    expect(g.items.length).toBeGreaterThan(10);
+    expect(g.canSave).toBe(false);
+    const put = await fetch('http://localhost:2568/admin/api/gallery', { method: 'PUT', headers: { authorization: auth, 'content-type': 'application/json' }, body: JSON.stringify({ items: g.items, version: g.version }) });
+    expect(put.status).toBe(503);
+  });
 });
