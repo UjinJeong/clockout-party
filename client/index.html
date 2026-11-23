@@ -113,7 +113,7 @@
     <p id="help" class="help" hidden></p>
 
     <aside id="book" class="people book" hidden>
-      <h3>📝 방명록</h3>
+      <header class="panel-head"><h3>📝 방명록</h3><button type="button" class="panel-close" data-close="book" aria-label="방명록 닫기">✕</button></header>
       <ul id="book-list"></ul>
       <form id="book-form" class="book-form" autocomplete="off">
         <input id="book-input" maxlength="60" placeholder="한 줄 남기기 (예: 오늘도 살았다)" aria-label="방명록에 한 줄 남기기" enterkeyhint="send" />
@@ -121,7 +121,7 @@
       </form>
     </aside>
     <aside id="people" class="people" hidden>
-      <h3>파티에 온 사람들</h3>
+      <header class="panel-head"><h3>파티에 온 사람들</h3><button type="button" class="panel-close" data-close="people" aria-label="사람들 닫기">✕</button></header>
       <ul id="people-list"></ul>
     </aside>
 

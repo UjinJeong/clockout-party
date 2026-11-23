@@ -156,7 +156,7 @@ legend { font-size: 13px; color: var(--ink-2); font-weight: 500; margin-bottom: 
 .demo-banner { position: absolute; left: 50%; transform: translateX(-50%); top: calc(14px + var(--safe-t)); margin: 0; font-size: 13px; background: var(--glass); border: 1px solid var(--gilt-soft); padding: 6px 12px; border-radius: 3px; white-space: nowrap; }
 .help { position: absolute; left: 50%; transform: translateX(-50%); top: calc(96px + var(--safe-t)); margin: 0; max-width: min(460px, calc(100% - 28px)); text-align: center; font-size: 14px; background: var(--glass); padding: 10px 16px; border-radius: 3px; border: 1px solid var(--gilt-soft); }
 
-.people { position: absolute; right: 14px; top: calc(66px + var(--safe-t)); width: min(280px, calc(100% - 28px)); max-height: 55vh; overflow: auto; background: var(--plate); color: var(--ink); padding: 14px; box-shadow: 0 12px 30px rgba(0, 0, 0, .4); }
+.people { position: absolute; right: 14px; top: calc(var(--top-h, 66px) + 8px); width: min(280px, calc(100% - 28px)); max-height: calc(100% - var(--top-h, 66px) - var(--dock-h, 62px) - 60px); overflow: auto; background: var(--plate); color: var(--ink); padding: 14px; box-shadow: 0 12px 30px rgba(0, 0, 0, .4); }
 .people h3 { margin: 0 0 8px; font: 700 16px/1.3 var(--serif); }
 .people ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
 .people li { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid #e0d2b6; font-size: 14px; }
@@ -400,3 +400,9 @@ html.touch .joystick { display: block; }
 html.touch .chip-tray { left: 146px; justify-content: flex-end; }   /* the joystick has the left corner */
 html.touch .joystick { bottom: calc(var(--dock-h, 96px) + 30px + var(--safe-b)); }
 @media (max-width: 720px) { .chip-tray > .art-chip { font-size: 13.5px; padding: 9px 12px; } }
+
+/* panel title row with its own close button */
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.panel-head h3 { margin: 0; }
+.panel-close { appearance: none; border: 0; background: none; color: var(--ink-2); font-size: 18px; line-height: 1; padding: 6px 8px; margin: -6px -8px -6px 0; cursor: pointer; border-radius: 3px; }
+.panel-close:hover { background: #eadfc9; color: var(--ink); }

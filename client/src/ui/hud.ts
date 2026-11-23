@@ -213,12 +213,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
     likes: (art, n) => { likes.set(art, n); drawLike(); },
   });
   conn.askBoard();
-  on(bookBtn, 'click', () => {
-    book.hidden = !book.hidden;
-    bookBtn.setAttribute('aria-expanded', String(!book.hidden));
-    sound.play('tick');
-    if (!book.hidden) { $('people').hidden = true; drawBook(); }
-  });
+  on(bookBtn, 'click', () => { sound.play('tick'); if (showPanel(book.hidden ? 'book' : null) === 'book') drawBook(); });
   cleanups.push(onSubmit($('book-form') as HTMLFormElement, () => {
     const text = bookInput.value.trim();
     if (!text) return;
@@ -244,6 +239,26 @@ export function createHud(conn: PartyConnection, controls: Controls) {
     if (saved?.look) save('party.me', { ...saved, look: { ...saved.look, hand } });
   });
 
+  // ---- the two side panels (사람들, 방명록): one at a time, each with its own ✕ ----
+  // On a phone the top buttons wrap to three rows; the panel used to open at a fixed 66px and
+  // cover its own button, so it could not be closed. It now opens below the buttons, whatever their height.
+  const panels = { people: $('people'), book: $('book') } as const;
+  const panelBtn = { people: $('people-btn'), book: $('book-btn') } as const;
+  function showPanel(which: keyof typeof panels | null) {
+    for (const k of Object.keys(panels) as (keyof typeof panels)[]) {
+      panels[k].hidden = k !== which;
+      panelBtn[k].setAttribute('aria-expanded', String(k === which));
+    }
+    return which;
+  }
+  for (const b of document.querySelectorAll<HTMLButtonElement>('.panel-close')) on(b, 'click', () => { sound.play('tick'); showPanel(null); });
+  const topEl = document.querySelector<HTMLElement>('.hud-top')!;
+  const measureTop = () => document.documentElement.style.setProperty('--top-h', `${topEl.offsetHeight}px`);
+  const topWatch = new ResizeObserver(measureTop);
+  topWatch.observe(topEl);
+  cleanups.push(() => topWatch.disconnect());
+  measureTop();
+
   // the tray of action buttons sits above the dock, whatever height the dock wraps to on this screen
   const dockEl = $('dock');
   const measure = () => document.documentElement.style.setProperty('--dock-h', `${dockEl.hidden ? 0 : dockEl.offsetHeight}px`);
@@ -259,10 +274,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
 
   // ---- people panel ----
   const peopleBtn = $('people-btn'), people = $('people'), plist = $('people-list');
-  on(peopleBtn, 'click', () => {
-    people.hidden = !people.hidden;
-    peopleBtn.setAttribute('aria-expanded', String(!people.hidden));
-  });
+  on(peopleBtn, 'click', () => { showPanel(people.hidden ? 'people' : null); });
   on(plist, 'click', e => {
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-mute]');
     if (!b || !party) return;
