@@ -1,5 +1,5 @@
 import { Client, Callbacks, type Room } from '@colyseus/sdk';
-import { sanitizeHours, ROOM_NAME, isMood, isTheme, parseLook, type Act, type Battery, type BoardSnapshot, type Note, type Emote, type Look, type Mood, type Theme } from '@party/shared';
+import { leaveReason, sanitizeHours, ROOM_NAME, isMood, isTheme, parseLook, type Act, type Battery, type BoardSnapshot, type Note, type Emote, type Look, type Mood, type Theme } from '@party/shared';
 import { Emitter, type NetPlayer, type PartyConnection, type PartyEvents } from './types';
 
 /**
@@ -31,19 +31,39 @@ export async function connectParty(req: JoinRequest, name: string, look: Look, h
   const client = new Client(serverUrl());
   // The time zone paints the visitor's sky and tells the manager page roughly where they are.
   const tz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return undefined; } })();
+  // 👑 the room you make is yours: a key kept on this device makes you its host, also when you come back
   const room = req.mode === 'create'
-    ? await client.create(ROOM_NAME, { title: req.title, private: req.private, theme: req.theme, name, look, tz, hours })
-    : await client.joinById(req.roomId, { name, look, tz, hours });
+    ? await client.create(ROOM_NAME, { title: req.title, private: req.private, theme: req.theme, name, look, tz, hours, ownerKey: newKey() })
+    : await client.joinById(req.roomId, { name, look, tz, hours, ownerKey: ownedRooms()[req.roomId] });
+  if (req.mode === 'create') keepOwner(room.roomId, pendingKey);
   const conn = new ColyseusConnection(room);
   // Wait for the first full state so the room title and the guest list are ready.
   await new Promise<void>(res => { room.onStateChange.once(() => res()); setTimeout(res, 3000); });
   return conn;
 }
 
+/** Rooms this device made, roomId → host key (the latest few). */
+const OWNED = 'party.owned';
+let pendingKey = '';
+function newKey() {
+  const b = new Uint8Array(18); crypto.getRandomValues(b);
+  pendingKey = btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return pendingKey;
+}
+function ownedRooms(): Record<string, string> {
+  try { const v = JSON.parse(localStorage.getItem(OWNED) || '{}'); return v && typeof v === 'object' ? v : {}; } catch { return {}; }
+}
+function keepOwner(roomId: string, key: string) {
+  try {
+    const all = Object.entries(ownedRooms()).filter(([id]) => id !== roomId).slice(-19);
+    localStorage.setItem(OWNED, JSON.stringify(Object.fromEntries([...all, [roomId, key]])));
+  } catch { /* private mode: host only for this visit */ }
+}
+
 interface ServerPlayer {
   name: string; kind: string; color: number; hat: string; hand: string; outfit: string;
   x: number; z: number; dir: number; moving: boolean; battery: string;
-  energy: number; seat: number; dozing: boolean; mood: string; hours?: string;
+  energy: number; seat: number; dozing: boolean; mood: string; hours?: string; away?: boolean;
 }
 
 class ColyseusConnection implements PartyConnection {
@@ -57,7 +77,7 @@ class ColyseusConnection implements PartyConnection {
     const toNet = (id: string, p: ServerPlayer): NetPlayer => ({
       id, name: p.name, look: parseLook({ kind: p.kind, color: p.color, hat: p.hat, hand: p.hand, outfit: p.outfit }),
       x: p.x, z: p.z, dir: p.dir, moving: p.moving, battery: p.battery as Battery,
-      energy: p.energy ?? 0, seat: p.seat ?? -1, dozing: !!p.dozing, mood: isMood(p.mood) ? p.mood : '', hours: sanitizeHours(p.hours),
+      energy: p.energy ?? 0, seat: p.seat ?? -1, dozing: !!p.dozing, mood: isMood(p.mood) ? p.mood : '', hours: sanitizeHours(p.hours), away: !!p.away,
     });
     cb.onAdd('players', (p: ServerPlayer, id: string) => {
       const np = toNet(id, p);
@@ -79,10 +99,25 @@ class ColyseusConnection implements PartyConnection {
     room.onMessage('bye', (m: { from: string }) => this.ev.emit('bye', m.from));
     room.onMessage('firework', (m: { from: string; seed: number }) => this.ev.emit('firework', m.from, m.seed));
     room.onMessage('snap', (m: { x: number; z: number }) => this.ev.emit('snap', m.x, m.z));
-    room.onLeave((code: number) => this.ev.emit('closed', code === 1000 ? 'left' : 'lost'));
+    room.onMessage('dismissed', (m: { reason: string }) => this.ev.emit('dismissed', m.reason));
+    cb.listen('owner', (v: string) => { this.owner = v || ''; this.ev.emit('owner', this.owner); });
+    cb.listen('title', (v: string) => this.ev.emit('title', v || '퇴근 파티'));
+    // 💤 tell the others when this tab is out of sight (phone locked, another tab)
+    const away = () => { try { room.send('away', { on: document.hidden }); } catch { /* closing */ } };
+    document.addEventListener('visibilitychange', away);
+    room.onLeave((code: number) => {
+      document.removeEventListener('visibilitychange', away);
+      this.ev.emit('closed', leaveReason(code) ?? (code === 1000 ? 'left' : 'lost'));
+    });
   }
 
+  private owner = '';
   get selfId() { return this.room.sessionId; }
+  get hostId() { return this.owner; }
+  get isHost() { return this.owner !== '' && this.owner === this.room.sessionId; }
+  rename(title: string) { this.room.send('rename', { title }); }
+  kick(id: string) { this.room.send('kick', { id }); }
+  closeRoom() { this.room.send('closeRoom', {}); }
   get roomId() { return this.room.roomId; }
   get title() { return (this.room.state as { title?: string }).title || '퇴근 파티'; }
   get isPrivate() { return (this.room.state as { isPrivate?: boolean }).isPrivate ?? false; }

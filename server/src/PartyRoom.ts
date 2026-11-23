@@ -1,6 +1,6 @@
 import { Room, type Client } from '@colyseus/core';
 import {
-  ACT_EVERY, isAct, spawnSpot, Board, CLINK, Clinks, TOGETHER, hasCompany, isNear, DOZE_AFTER, ENERGY, FIREWORK_COOLDOWN, nearStage, sanitizeHours, MAX_PLAYERS, MAX_SPEED, MOOD_ENERGY, batteryOf, chargeRate, finite, isEmote, isMood, isTheme, mapFor,
+  DISMISS_DELAY, IDLE_KICK, LEAVE_CODE, isOwnerKey, type LeaveReason, ACT_EVERY, isAct, spawnSpot, Board, CLINK, Clinks, TOGETHER, hasCompany, isNear, DOZE_AFTER, ENERGY, FIREWORK_COOLDOWN, nearStage, sanitizeHours, MAX_PLAYERS, MAX_SPEED, MOOD_ENERGY, batteryOf, chargeRate, finite, isEmote, isMood, isTheme, mapFor,
   moveWithCollision, nearbyIds, nearestWalkable, stepEnergy, type WorldMap, parseLook, sanitizeChat, sanitizeName, sanitizeTitle, validateVoice,
 } from '@party/shared';
 import { PartyState, Player } from './schema';
@@ -26,6 +26,8 @@ interface Track {
  * emote or voice note. Voice notes are relayed and never stored.
  */
 export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata }> {
+  /** Every open party on this server, so the manager page can close one or walk someone out. */
+  static readonly open = new Map<string, PartyRoom>();
   maxClients = MAX_PLAYERS;
   patchRate = 50;
   maxMessagesPerSecond = 40;
@@ -38,6 +40,12 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
   private saidBye = new Set<string>();
   private clinks = new Clinks();
   private board = new Board();
+  /** Proof of being the host; whoever made the room holds it on their device. Never sent out. */
+  private ownerKey = '';
+  private ownerOf = new Map<string, boolean>();
+  /** People already on their way out (so nobody is dismissed twice). */
+  private leaving = new Set<string>();
+  private closing = false;
 
   messages = {
     move: (client: Client, m: unknown) => this.onMove(client, m),
@@ -95,6 +103,26 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
       p.kind = look.kind; p.color = look.color; p.hat = look.hat; p.hand = look.hand; p.outfit = look.outfit;
       this.active(client.sessionId);
     },
+    /** 💤 looking away (phone locked, another tab) or back */
+    away: (client: Client, m: unknown) => {
+      const p = this.state.players.get(client.sessionId);
+      if (p) p.away = (m as { on?: unknown } | null)?.on === true;
+    },
+    /** 👑 host only: rename the party */
+    rename: (client: Client, m: unknown) => {
+      if (!this.isHost(client)) return;
+      const title = sanitizeTitle((m as { title?: unknown } | null)?.title);
+      this.state.title = title;
+      void this.setMetadata({ ...this.metadata, title });
+    },
+    /** 👑 host only: ask someone to leave */
+    kick: (client: Client, m: unknown) => {
+      const id = (m as { id?: unknown } | null)?.id;
+      if (!this.isHost(client) || typeof id !== 'string' || id === client.sessionId) return;
+      this.dismiss(id, 'kicked');
+    },
+    /** 👑 host only: close the party for everyone */
+    closeRoom: (client: Client) => { if (this.isHost(client)) this.closeAll(); },
     /** what earlier guests left (asked for once the client is ready to show it) */
     board: (client: Client) => { client.send('board', this.board.snapshot()); },
     /** 📝 a line in the guest book, for everyone here and whoever comes next */
@@ -143,6 +171,8 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
     this.state.title = title;
     this.state.theme = theme;
     this.state.isPrivate = isPrivate;
+    if (isOwnerKey(options.ownerKey)) this.ownerKey = options.ownerKey;
+    PartyRoom.open.set(this.roomId, this);
     this.clock.setInterval(() => this.advance(0.5), 500);
     await this.setMatchmaking({
       metadata: { title, theme, private: isPrivate },
@@ -158,16 +188,56 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
     this.state.players.set(client.sessionId, new Player({
       name, kind: look.kind, color: look.color, hat: look.hat, hand: look.hand, outfit: look.outfit,
       x: spot.x, z: spot.z, dir: 0, moving: false,
-      energy: ENERGY.start, battery: batteryOf(ENERGY.start), seat: -1, dozing: false, mood: '', hours: sanitizeHours(options.hours),
+      energy: ENERGY.start, battery: batteryOf(ENERGY.start), seat: -1, dozing: false, mood: '', hours: sanitizeHours(options.hours), away: false,
     }));
     this.tracks.set(client.sessionId, { at: Date.now(), voiceAt: 0, energy: ENERGY.start, idle: 0, moodSet: false });
+    // the one who made the room is its host, also when they come back to it
+    if (this.ownerKey && options.ownerKey === this.ownerKey) { this.ownerOf.set(client.sessionId, true); this.state.owner = client.sessionId; }
     stats.join({ id: client.sessionId, name, roomId: this.roomId, roomTitle: this.state.title, isPrivate: this.state.isPrivate, tz: options.tz });
   }
 
   onLeave(client: Client) {
     this.state.players.delete(client.sessionId);
     this.tracks.delete(client.sessionId);
+    this.leaving.delete(client.sessionId);
+    this.ownerOf.delete(client.sessionId);
+    this.clinks.forget(client.sessionId);
+    if (this.state.owner === client.sessionId) this.state.owner = '';
     stats.leave(client.sessionId);
+  }
+
+  onDispose() { PartyRoom.open.delete(this.roomId); }
+
+  private isHost(client: Client) { return !this.closing && this.ownerOf.get(client.sessionId) === true; }
+
+  /**
+   * Walk someone out: everyone (them included) sees their lift come, then the connection
+   * closes with a code that tells them why (too long without doing anything, or asked to leave).
+   */
+  dismiss(id: string, reason: LeaveReason) {
+    const client = this.clients.find(c => c.sessionId === id);
+    if (!client || this.leaving.has(id)) return false;
+    this.leaving.add(id);
+    this.saidBye.add(id);
+    this.standUp(id);
+    client.send('dismissed', { reason });
+    this.broadcast('bye', { from: id });
+    this.clock.setTimeout(() => client.leave(LEAVE_CODE[reason]), DISMISS_DELAY);
+    return true;
+  }
+
+  /** Close the party: nobody new gets in, everyone is told, and the room goes away. */
+  closeAll() {
+    if (this.closing) return;
+    this.closing = true;
+    void this.lock();
+    this.broadcast('dismissed', { reason: 'closed' });
+    this.clock.setTimeout(() => { for (const c of [...this.clients]) c.leave(LEAVE_CODE.closed); }, DISMISS_DELAY);
+  }
+
+  /** For the manager page: who is here. */
+  roster() {
+    return [...this.state.players.entries()].map(([id, p]) => ({ id, name: p.name, away: p.away, host: this.state.owner === id }));
   }
 
   private onMove(client: Client, m: unknown) {
@@ -236,6 +306,7 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
       const t = this.tracks.get(id);
       if (!t) continue;
       t.idle += dt;
+      if (t.idle >= IDLE_KICK) { this.dismiss(id, 'idle'); continue; } // a tab left open: walk them out
       const dozing = t.idle >= DOZE_AFTER;
       if (p.dozing !== dozing) p.dozing = dozing;
       const seat = p.seat >= 0 ? this.map.seats.find(s => s.id === p.seat) : undefined;

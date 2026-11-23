@@ -274,14 +274,48 @@ export function createHud(conn: PartyConnection, controls: Controls) {
 
   // ---- people panel ----
   const peopleBtn = $('people-btn'), people = $('people'), plist = $('people-list');
+  let lastList = '', armedKick = '';
+  const leavingIds = new Set<string>();
   on(peopleBtn, 'click', () => { showPanel(people.hidden ? 'people' : null); });
   on(plist, 'click', e => {
+    const k = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-kick]');
+    if (k) {
+      // ask once, right on the button (no pop-ups)
+      const id = k.dataset.kick!;
+      if (armedKick !== id) { armedKick = id; k.classList.add('armed'); k.textContent = '정말요?'; setTimeout(() => { if (armedKick === id) armedKick = ''; }, 3000); return; }
+      armedKick = ''; leavingIds.add(id);
+      conn.kick(id); k.disabled = true; k.textContent = '내보내는 중';
+      toast('엘리베이터로 배웅하고 있어요.');
+      return;
+    }
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-mute]');
     if (!b || !party) return;
     const on = b.getAttribute('aria-pressed') !== 'true';
     party.mute(b.dataset.mute!, on);
     toast(on ? '이 사람의 말과 음성이 이제 안 보여요.' : '다시 보이게 했어요.');
   });
+
+  // ---- 👑 the host's tools: rename, close the party ----
+  const hostTools = $('host-tools'), renameInput = $('rename-input') as HTMLInputElement, closeBtn = $('close-room');
+  const showHost = () => { hostTools.hidden = !conn.isHost; if (!hostTools.hidden && document.activeElement !== renameInput) renameInput.value = $('party-title').textContent ?? ''; };
+  cleanups.push(onSubmit($('rename-form') as HTMLFormElement, () => {
+    const t = renameInput.value.trim();
+    if (!t || !conn.isHost) return;
+    conn.rename(t); renameInput.blur(); sound.play('tick'); toast('파티 이름을 바꿨어요.');
+  }));
+  on(closeBtn, 'click', () => {
+    if (!closeBtn.classList.contains('armed')) {
+      closeBtn.classList.add('armed'); closeBtn.textContent = '정말 닫을까요? 모두 로비로 돌아가요';
+      setTimeout(() => { closeBtn.classList.remove('armed'); closeBtn.textContent = '방 닫기'; }, 4000);
+      return;
+    }
+    conn.closeRoom();
+  });
+  conn.on({
+    owner: () => showHost(),
+    title: t => { $('party-title').textContent = t; showHost(); },
+  });
+  showHost();
 
   // ---- invite ----
   on($('invite-btn'), 'click', async () => {
@@ -363,18 +397,28 @@ export function createHud(conn: PartyConnection, controls: Controls) {
     company: () => toast('💞 나란히 앉으면 충전이 더 빨라요', 3200),
     editHours: () => openHours(),
     stage: (near: boolean) => { fwChip.hidden = !near; if (near) showFw(); },
-    guests: (list: { id: string; name: string; battery: Battery; mood: Mood | ''; near: boolean; self: boolean; muted: boolean; bot?: boolean }[]) => {
+    guests: (list: { id: string; name: string; battery: Battery; mood: Mood | ''; near: boolean; self: boolean; muted: boolean; bot?: boolean; away?: boolean; host?: boolean }[]) => {
       const near = list.filter(g => g.near).length;
       $('who').textContent = near ? `${list.length}명 있어요, 근처에 ${near}명` : `${list.length}명 있어요`;
       if (people.hidden) return;
-      plist.innerHTML = list.sort((a, b) => Number(b.self) - Number(a.self) || Number(b.near) - Number(a.near))
+      const html = list.sort((a, b) => Number(b.self) - Number(a.self) || Number(b.near) - Number(a.near))
         .map(g => `<li><span>${g.battery === 'low' ? '🪫' : '🔋'}</span>
-          <span>${esc(g.name)}${g.mood ? ` ${MOOD_ICON[g.mood]}` : ''}${g.bot ? '<span class="botmark">🤖 봇</span>' : ''}${g.self ? '<span class="me">나</span>' : g.near ? '<span class="near">근처</span>' : ''}</span>
-          ${g.self ? '<span></span>' : `<button type="button" data-mute="${esc(g.id)}" aria-pressed="${g.muted}">${g.muted ? '다시 보기' : '안 보기'}</button>`}</li>`).join('');
+          <span>${esc(g.name)}${g.mood ? ` ${MOOD_ICON[g.mood]}` : ''}${g.host ? '<span class="hostmark">👑 방장</span>' : ''}${g.bot ? '<span class="botmark">🤖 봇</span>' : ''}${g.away ? '<span class="awaymark">💤 자리 비움</span>' : ''}${g.self ? '<span class="me">나</span>' : g.near ? '<span class="near">근처</span>' : ''}</span>
+          ${g.self ? '<span></span>' : `<span><button type="button" data-mute="${esc(g.id)}" aria-pressed="${g.muted}">${g.muted ? '다시 보기' : '안 보기'}</button>${conn.isHost ? `<button type="button" class="kick${armedKick === g.id ? ' armed' : ''}" data-kick="${esc(g.id)}"${leavingIds.has(g.id) ? ' disabled' : ''}>${leavingIds.has(g.id) ? '내보내는 중' : armedKick === g.id ? '정말요?' : '내보내기'}</button>` : ''}</span>`}</li>`).join('');
+      // only touch the list when it really changed: rebuilding it every frame swallowed taps on its buttons
+      if (html !== lastList) { plist.innerHTML = html; lastList = html; }
     },
   };
 
-  const closed = new Promise<'left' | 'lost'>(resolve => {
+  const closed = new Promise<string>(resolve => {
+    // walked out by the party (too long idle, asked to leave) or the party is closing
+    conn.on({
+      dismissed: r => {
+        for (const id of ['mood-card', 'hours-card', 'people', 'book']) $(id).hidden = true;
+        $('dock').hidden = true; $('chip-tray').hidden = true;
+        toast(r === 'idle' ? '30분 동안 아무 조작이 없어서 엘리베이터를 불렀어요.' : r === 'kicked' ? '방장이 파티에서 배웅했어요.' : '방장이 파티를 닫고 있어요. 곧 로비로 돌아가요.', 4500);
+      },
+    });
     // 🚪 going home: the lift comes, you wave, the doors close — then a small record of the visit
     let leaving = false;
     on($('leave-btn'), 'click', async () => {
@@ -390,7 +434,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
       sound.play('charged', { volume: 0.5 });
       on($('bye-done'), 'click', () => { $('bye-card').hidden = true; conn.leave(); resolve('left'); });
     });
-    conn.on({ closed: r => resolve(r === 'left' ? 'left' : 'lost') });
+    conn.on({ closed: r => resolve(r) });
   });
 
   return {

@@ -406,3 +406,15 @@ html.touch .joystick { bottom: calc(var(--dock-h, 96px) + 30px + var(--safe-b));
 .panel-head h3 { margin: 0; }
 .panel-close { appearance: none; border: 0; background: none; color: var(--ink-2); font-size: 18px; line-height: 1; padding: 6px 8px; margin: -6px -8px -6px 0; cursor: pointer; border-radius: 3px; }
 .panel-close:hover { background: #eadfc9; color: var(--ink); }
+
+/* 💤 away, and the host's tools in the people panel */
+.tag.away { opacity: .5; }
+.tag .plate .awaynote { margin-left: 5px; font-size: 10.5px; color: var(--ink-2); }
+.people .awaymark, .people .hostmark { font-size: 10.5px; color: var(--ink-2); margin-left: 4px; }
+.people .hostmark { color: #9a6b12; }
+.host-tools { border: 1px solid #e2d3b4; background: #f7efdf; padding: 9px 10px; margin: 0 0 10px; border-radius: 2px; }
+.host-title { margin: 0 0 6px; font-size: 12.5px; font-weight: 600; color: #7a5a1c; }
+.host-tools .book-form { margin-top: 0; }
+.danger-btn { margin-top: 8px; width: 100%; background: #fff; color: #a33a2c; border-color: #d9a79f; }
+.danger-btn.armed { background: #a33a2c; color: #fff; border-color: #a33a2c; }
+.people li .kick { margin-left: 4px; color: #a33a2c; }

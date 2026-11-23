@@ -35,6 +35,10 @@ td{padding:7px 6px;border-bottom:1px solid #e3d6bd;font-variant-numeric:tabular-
 a{color:var(--wine)}
 .err{background:#f6d9d9;border-left:3px solid var(--wine);padding:10px 14px}
 @media (max-width:760px){.row{grid-template-columns:1fr 1fr}.cols{grid-template-columns:1fr}.bar{grid-template-columns:96px 1fr 30px}}
+button.danger{background:#a33a2c;color:#fff;border:0;border-radius:3px;padding:5px 10px;font:inherit;font-size:12.5px;cursor:pointer}
+button.mini{background:none;border:1px solid #cdbd9e;border-radius:3px;padding:1px 6px;font:inherit;font-size:11px;cursor:pointer;color:#7a6a55}
+button[data-armed="1"]{background:#e2552f;color:#fff;border-color:#e2552f}
+.who{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:4px;font-size:12.5px;color:#6d5f4f}
 </style></head><body>
 <header><h1>파티 관리</h1><p id="updated">불러오는 중</p></header>
 <main>
@@ -49,7 +53,7 @@ a{color:var(--wine)}
     <section><h2>지금 어디서 들어와 있나요</h2><div id="regions" class="bars"></div></section>
     <section><h2>최근 7일 방문</h2><div id="week" class="week"></div></section>
   </div>
-  <section><h2>열려 있는 파티</h2><table><thead><tr><th>파티 이름</th><th>종류</th><th>인원</th><th>초대 코드</th></tr></thead><tbody id="rooms"></tbody></table></section>
+  <section><h2>열려 있는 파티</h2><table><thead><tr><th>파티 이름</th><th>종류</th><th>인원</th><th>초대 코드</th><th></th></tr></thead><tbody id="rooms"></tbody></table></section>
   <section><h2>지금 파티에 있는 사람</h2><table><thead><tr><th>이름표</th><th>파티</th><th>지역</th><th>머문 시간</th></tr></thead><tbody id="people"></tbody></table></section>
   <section><h2>최근에 나간 사람</h2><table><thead><tr><th>이름표</th><th>파티</th><th>지역</th><th>머문 시간</th><th>나간 시각</th></tr></thead><tbody id="recent"></tbody></table></section>
   <p class="note">지역은 방문자의 IP가 아니라 기기의 시간대 설정으로 알아낸 대략적인 곳이에요. 날짜는 <span id="tz"></span> 기준이에요. 방과 연결을 더 자세히 보려면 <a href="/admin/monitor/">Colyseus 모니터</a>를 여세요.</p>
@@ -71,11 +75,23 @@ async function load(){
     $('regions').innerHTML=s.byRegion.length?s.byRegion.map(x=>'<div class="bar"><span>'+esc(x.country===x.city?x.country:x.country+' '+x.city)+'</span><i style="width:'+(x.online/max*100)+'%"></i><b>'+x.online+'</b></div>').join(''):'<p class="empty">지금 들어와 있는 사람이 없어요.</p>';
     const wmax=Math.max(1,...s.week.map(d=>d.visits));
     $('week').innerHTML=s.week.map(d=>'<div><b>'+d.visits+'</b><i style="height:'+(d.visits/wmax*90)+'px"></i><span>'+d.day+'</span></div>').join('');
-    $('rooms').innerHTML=s.rooms.length?s.rooms.map(x=>row([({gallery:'🖼️ ',home:'🏠 ',pool:'🏖️ '}[x.theme]||'')+esc(x.title),x.private?'<span class="badge">친구만</span>':'<span class="badge open">누구나</span>',x.clients+' / '+x.maxClients,'<code>'+esc(x.roomId)+'</code>'])).join(''):empty(4,'열린 파티가 없어요.');
+    $('rooms').innerHTML=s.rooms.length?s.rooms.map(x=>row([({gallery:'🖼️ ',home:'🏠 ',pool:'🏖️ '}[x.theme]||'')+esc(x.title)
+      +(x.people.length?'<div class="who">'+x.people.map(p=>'<span>'+(p.host?'👑 ':'')+esc(p.name)+(p.away?' 💤':'')+' <button class="mini" data-kick="'+esc(x.roomId)+'/'+esc(p.id)+'" title="이 사람을 파티에서 내보내요">내보내기</button></span>').join('')+'</div>':''),
+      x.private?'<span class="badge">친구만</span>':'<span class="badge open">누구나</span>',x.clients+' / '+x.maxClients,'<code>'+esc(x.roomId)+'</code>',
+      '<button class="danger" data-close="'+esc(x.roomId)+'">방 닫기</button>'])).join(''):empty(5,'열린 파티가 없어요.');
     $('people').innerHTML=s.people.length?s.people.map(p=>row([esc(p.name),esc(p.room)+(p.private?' <span class="badge">친구만</span>':''),esc(p.region),mins(p.minutes)])).join(''):empty(4,'지금 파티에 있는 사람이 없어요.');
     $('recent').innerHTML=s.recent.length?s.recent.map(p=>row([esc(p.name),esc(p.room),esc(p.region),mins(p.minutes),new Date(p.leftAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'})])).join(''):empty(5,'아직 기록이 없어요.');
     $('updated').textContent='5초마다 새로고침 · 마지막 '+new Date().toLocaleTimeString('ko-KR');
   }catch(e){$('error').textContent=e.message||'불러오지 못했어요.';$('error').hidden=false;}
 }
+// close a party / walk someone out (asks once, right on the button: no pop-ups)
+document.addEventListener('click',async e=>{
+  const b=e.target.closest('button[data-close],button[data-kick]');if(!b)return;
+  if(b.dataset.armed!=='1'){b.dataset.armed='1';b.dataset.label=b.textContent;b.textContent=b.dataset.close?'정말 닫을까요?':'정말요?';setTimeout(()=>{if(b.isConnected){b.dataset.armed='';b.textContent=b.dataset.label;}},3000);return;}
+  b.disabled=true;
+  const url=b.dataset.close?'/admin/api/rooms/'+encodeURIComponent(b.dataset.close)+'/close':'/admin/api/rooms/'+b.dataset.kick.split('/').map(encodeURIComponent).join('/kick/');
+  const r=await fetch(url,{method:'POST'}).catch(()=>null);
+  b.textContent=r&&r.ok?'처리했어요':'실패했어요';setTimeout(load,1200);
+});
 load();setInterval(load,5000);
 </script></body></html>`;

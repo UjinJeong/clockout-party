@@ -65,7 +65,7 @@ const floatieGeo = new THREE.TorusGeometry(0.46, 0.14, 10, 22);
 export interface PartyHooks {
   room(room: MapRoom): void;
   painting(p: Painting | null): void;
-  guests(list: { id: string; name: string; battery: Battery; mood: Mood | ''; near: boolean; self: boolean; muted: boolean; bot?: boolean }[]): void;
+  guests(list: { id: string; name: string; battery: Battery; mood: Mood | ''; near: boolean; self: boolean; muted: boolean; bot?: boolean; away?: boolean; host?: boolean }[]): void;
   arrived(p: Painting): void;
   /** A free seat you could sit on right now (or the one you're on). */
   seat(s: { seat: Seat; seated: boolean } | null): void;
@@ -234,6 +234,7 @@ export class Party {
     const tag = new Tag(this.tagLayer, p.name, isSelf, !!p.bot);
     tag.setBattery(p.battery);
     tag.setHours(p.hours);
+    tag.setAway(!!p.away);
     if (isSelf) tag.onEdit = () => this.hooks.editHours();
     this.guests.set(p.id, {
       net: { ...p }, rig, anim: new Animator(rig), tag, pos: new THREE.Vector2(p.x, p.z), dir: p.dir,
@@ -273,6 +274,7 @@ export class Party {
       g.net = { ...p };
     }
     g.tag.setName(p.name);
+    g.tag.setAway(!!p.away);
     g.tag.setBattery(p.battery);
     g.tag.setHours(p.hours);
     g.tag.setMood(p.mood ? MOOD_ICON[p.mood] : '', p.mood ? MOOD_LABEL[p.mood] : '');
@@ -939,6 +941,7 @@ export class Party {
     const me = this.self();
     this.hooks.guests([...this.guests.values()].map(g => ({
       id: g.net.id, name: g.net.name, battery: g.net.battery, mood: g.net.mood, bot: !!g.net.bot, self: g.net.id === this.conn.selfId,
+      away: !!g.net.away, host: g.net.id === this.conn.hostId,
       near: !!me && g.net.id !== me.net.id && isNear(me.net, g.net), muted: this.muted.has(g.net.id),
     })));
   }

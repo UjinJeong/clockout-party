@@ -13,6 +13,8 @@ export interface NetPlayer {
   mood: Mood | '';
   /** Work hours over their head, '0900-1800+540' (see shared/hours), '' when not shared. */
   hours: string;
+  /** Not looking at the party right now (phone locked, another tab). */
+  away?: boolean;
   /** A pretend guest played by the computer (shown with a 🤖 badge and a little antenna). */
   bot?: boolean;
 }
@@ -37,6 +39,13 @@ export interface PartyEvents {
   clink(a: string, b: string): void;
   /** 🚪 someone is going home: their lift comes, they wave, the doors close. */
   bye(from: string): void;
+  /** The party is walking you out ('idle' · 'kicked') or closing ('closed'): your lift is coming. */
+  dismissed(reason: string): void;
+  /** 👑 who the host is now ('' when they are not here). */
+  owner(id: string): void;
+  /** The host renamed the party. */
+  title(t: string): void;
+  /** The connection ended: 'left' · 'lost' · 'idle' · 'kicked' · 'closed'. */
   closed(reason: string): void;
 }
 
@@ -76,6 +85,13 @@ export interface PartyConnection {
   writeNote(text: string): void;
   /** ❤️ a painting (again to take it back). */
   like(art: string): void;
+  /** 👑 the host's session id ('' when no host is here), and whether that is you. */
+  readonly hostId: string;
+  readonly isHost: boolean;
+  /** 👑 host only: rename the party, ask someone to leave, close it for everyone. */
+  rename(title: string): void;
+  kick(id: string): void;
+  closeRoom(): void;
   /** Say you're going home (everyone sees you take the lift). Call leave() once the doors have shut. */
   bye(): void;
   leave(): void;

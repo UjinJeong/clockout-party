@@ -51,6 +51,12 @@ export class LiveRoomConnection implements PartyConnection {
   readonly isPrivate = false;
   readonly demo = true;
   readonly voiceOk = false;
+  /** A room everyone who opens the page shares: nobody owns it. */
+  readonly hostId = '';
+  readonly isHost = false;
+  rename() { /* nobody's room */ }
+  kick() { /* nobody's room */ }
+  closeRoom() { /* nobody's room */ }
   get note() { return `이 페이지를 연 사람들과 같은 ${THEME_LABEL[this.theme]}에 있어요. 🤖 표시는 봇 손님이에요.`; }
   private ev = new Emitter();
   private bots: DemoConnection;

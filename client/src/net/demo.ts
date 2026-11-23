@@ -1,6 +1,6 @@
 import {
   customColor, localOffset,
-  ACT_EVERY, separate, tieAngle, Board, CLINK, Clinks, TOGETHER, hasCompany, DOZE_AFTER, EMOTES, FIREWORK_COOLDOWN, nearStage, ENERGY, KINDS, MOOD_ENERGY, MOVE_HZ, HANDS, HATS, OUTFITS, WALK_SPEED, batteryOf, chargeRate, isNear, mapFor,
+  DISMISS_DELAY, sanitizeTitle, ACT_EVERY, separate, tieAngle, Board, CLINK, Clinks, TOGETHER, hasCompany, DOZE_AFTER, EMOTES, FIREWORK_COOLDOWN, nearStage, ENERGY, KINDS, MOOD_ENERGY, MOVE_HZ, HANDS, HATS, OUTFITS, WALK_SPEED, batteryOf, chargeRate, isNear, mapFor,
   findPath, moveWithCollision, nearestWalkable, stepEnergy,
   type Act, type Emote, type Look, type Vec2, type Mood, type Seat, type Theme, type WorldMap,
 } from '@party/shared';
@@ -66,7 +66,10 @@ interface Bot extends NetPlayer, Sim {
 export class DemoConnection implements PartyConnection {
   readonly selfId = 'me';
   readonly roomId = 'demo';
-  readonly title = '혼자 체험하기';
+  title = '혼자 체험하기';
+  /** In the solo demo you made the party, so you are its host. */
+  readonly hostId: string = 'me';
+  readonly isHost: boolean = true;
   readonly isPrivate = false;
   readonly demo = true;
   readonly voiceOk = true;
@@ -231,6 +234,22 @@ export class DemoConnection implements PartyConnection {
   }
   firework() { this.fireworkSeed(); }
   /** Going home: the guests near you wave you off. */
+  rename(title: string) { this.title = sanitizeTitle(title); this.ev.emit('title', this.title); }
+  /** Ask a bot to leave: it takes the lift like anyone else, then it's gone. */
+  kick(id: string) {
+    const i = this.bots.findIndex(b => b.id === id);
+    if (i < 0) return;
+    this.ev.emit('bye', id);
+    window.setTimeout(() => {
+      const j = this.bots.findIndex(b => b.id === id);
+      if (j >= 0) { this.bots.splice(j, 1); this.ev.emit('remove', id); }
+    }, DISMISS_DELAY);
+  }
+  closeRoom() {
+    this.ev.emit('dismissed', 'closed');
+    window.setTimeout(() => { window.clearInterval(this.timer); this.ev.emit('closed', 'closed'); }, DISMISS_DELAY);
+  }
+
   bye() {
     this.ev.emit('bye', 'me');
     for (const b of this.bots) if (isNear(b, this.me) && !b.dozing) window.setTimeout(() => this.say(b.id, 'wave'), 900 + Math.random() * 1200);

@@ -40,6 +40,15 @@ export class Tag {
     }
   }
 
+  /** 💤 not looking at the party right now: faded, with a note. */
+  setAway(on: boolean) {
+    if (this.el.classList.contains('away') === on) return;
+    this.el.classList.toggle('away', on);
+    let note = this.plate.querySelector<HTMLElement>('.awaynote');
+    if (on && !note) { note = document.createElement('span'); note.className = 'awaynote'; note.textContent = '💤 자리 비움'; this.plate.append(note); }
+    if (!on) note?.remove();
+  }
+
   setName(n: string) { if (this.nameEl.textContent !== n) this.nameEl.textContent = n; }
 
   setBattery(b: Battery) {

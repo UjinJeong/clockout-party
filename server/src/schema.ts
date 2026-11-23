@@ -24,6 +24,8 @@ export const Player = schema({
   mood: t.string(),
   /** Work hours shown over your head, '0900-1800+540' (see shared/hours), '' when not shared. */
   hours: t.string(),
+  /** Not looking at the party right now (phone locked, another tab). */
+  away: t.boolean(),
 }, 'Player');
 export type Player = SchemaType<typeof Player>;
 
@@ -32,6 +34,8 @@ export const PartyState = schema({
   /** Which place the party is in: gallery, home or pool. Decides the map and the 3D world. */
   theme: t.string(),
   isPrivate: t.boolean(),
+  /** Session id of the host (the one who made the room, while they are here), or ''. */
+  owner: t.string(),
   players: t.map(Player),
 }, 'PartyState');
 export type PartyState = SchemaType<typeof PartyState>;

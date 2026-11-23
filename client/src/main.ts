@@ -157,7 +157,13 @@ async function run() {
     try { hud?.dispose(); } catch (err) { console.error(err); }
     $('hud').hidden = true; // even if the HUD broke halfway through being built
     setUrl(location.pathname);
-    if (how === 'lost') lobbyError = '파티 연결이 끊겼어요. 다시 들어가 보세요.';
+    const why: Record<string, string> = {
+      lost: '파티 연결이 끊겼어요. 다시 들어가 보세요.',
+      idle: '30분 동안 아무 조작이 없어서 파티에서 나왔어요. 다시 들어가도 돼요.',
+      kicked: '방장이 파티에서 배웅했어요.',
+      closed: '방장이 파티를 닫았어요.',
+    };
+    if (why[how]) lobbyError = why[how];
     if (DEMO_ONLY) { me = await showStart(startOpts); }
   }
 }

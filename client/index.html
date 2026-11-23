@@ -122,6 +122,14 @@
     </aside>
     <aside id="people" class="people" hidden>
       <header class="panel-head"><h3>파티에 온 사람들</h3><button type="button" class="panel-close" data-close="people" aria-label="사람들 닫기">✕</button></header>
+      <div id="host-tools" class="host-tools" hidden>
+        <p class="host-title">👑 내가 만든 방이에요</p>
+        <form id="rename-form" class="book-form" autocomplete="off">
+          <input id="rename-input" maxlength="24" aria-label="파티 이름" placeholder="파티 이름" />
+          <button class="btn small primary" type="submit">이름 바꾸기</button>
+        </form>
+        <button type="button" id="close-room" class="btn small danger-btn">방 닫기</button>
+      </div>
       <ul id="people-list"></ul>
     </aside>
 

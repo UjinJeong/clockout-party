@@ -3,6 +3,7 @@ import { matchMaker } from '@colyseus/core';
 import { monitor } from '@colyseus/monitor';
 import { ROOM_NAME } from '@party/shared';
 import { stats } from './stats';
+import { PartyRoom } from './PartyRoom';
 import { ADMIN_PAGE } from './adminPage';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 
@@ -36,9 +37,20 @@ export function mountAdmin(app: Application) {
     res.set('Cache-Control', 'no-store').json({
       ...stats.snapshot(),
       rooms: rooms
-        .map(r => ({ roomId: r.roomId, title: r.metadata?.title ?? '파티', theme: r.metadata?.theme ?? 'gallery', private: !!r.private, clients: r.clients, maxClients: r.maxClients }))
+        .map(r => ({ roomId: r.roomId, title: r.metadata?.title ?? '파티', theme: r.metadata?.theme ?? 'gallery', private: !!r.private, clients: r.clients, maxClients: r.maxClients, people: PartyRoom.open.get(r.roomId)?.roster() ?? [] }))
         .sort((a, b) => b.clients - a.clients),
     });
+  });
+  // close a party, or walk one person out of it
+  app.post('/admin/api/rooms/:roomId/close', requireAdmin, (req, res) => {
+    const room = PartyRoom.open.get(String(req.params.roomId));
+    if (!room) { res.status(404).json({ ok: false }); return; }
+    room.closeAll();
+    res.json({ ok: true });
+  });
+  app.post('/admin/api/rooms/:roomId/kick/:id', requireAdmin, (req, res) => {
+    const room = PartyRoom.open.get(String(req.params.roomId));
+    res.status(room ? 200 : 404).json({ ok: !!room && room.dismiss(String(req.params.id), 'kicked') });
   });
   // Colyseus' own live monitor (rooms, connections, kicking a client) for deeper checks.
   app.use('/admin/monitor', requireAdmin, monitor() as unknown as (req: Request, res: Response, next: NextFunction) => void);

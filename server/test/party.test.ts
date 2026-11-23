@@ -537,3 +537,108 @@ describe('little acts: dive, squirt, TV', () => {
     expect(got).toEqual([{ from: a.sessionId, kind: 'dive' }]);
   });
 });
+
+import { DISMISS_DELAY, IDLE_KICK, LEAVE_CODE } from '@party/shared';
+
+const KEY = 'host-key-0123456789abcdef';
+const leftWith = (c: { onLeave: (cb: (code: number) => void) => void }) => new Promise<number>(r => c.onLeave(code => r(code)));
+
+describe('leaving without pressing 나가기', () => {
+  it('30 minutes without doing anything: everyone sees the lift, then the tab is let go with a reason', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', {});
+    const sleepy = await colyseus.connectTo(room, { name: '자리비움' });
+    const other = await colyseus.connectTo(room, { name: '남은사람' });
+    const seen: any[] = [], told: any[] = [];
+    other.onMessage('bye', (m: any) => seen.push(m.from));
+    sleepy.onMessage('bye', () => {});
+    sleepy.onMessage('dismissed', (m: any) => told.push(m.reason));
+    const code = leftWith(sleepy);
+    room.advance(IDLE_KICK - 60);
+    other.send('chat', { text: '저는 있어요' }); // the other one keeps doing things
+    await wait(50);
+    room.advance(61);
+    await wait(80);
+    expect(told).toEqual(['idle']);
+    expect(seen).toEqual([sleepy.sessionId]);
+    expect(await code).toBe(LEAVE_CODE.idle);
+    await wait(50);
+    expect([...room.state.players.keys()]).toEqual([other.sessionId]);
+  }, DISMISS_DELAY + 8000);
+
+  it('💤 looking away is shown to others, and is not "doing something"', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', {});
+    const a = await colyseus.connectTo(room, { name: '폰잠금' });
+    a.send('away', { on: true });
+    await wait(80);
+    expect(room.state.players.get(a.sessionId)!.away).toBe(true);
+    a.send('away', { on: false });
+    await wait(80);
+    expect(room.state.players.get(a.sessionId)!.away).toBe(false);
+  });
+});
+
+describe('👑 the host', () => {
+  it('whoever made the room (and only them) can rename it, also after coming back', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', { title: '처음 이름', ownerKey: KEY });
+    const host = await colyseus.connectTo(room, { name: '방장', ownerKey: KEY });
+    const guest = await colyseus.connectTo(room, { name: '손님', ownerKey: 'not-the-key-0123456789' });
+    await wait(80);
+    expect(room.state.owner).toBe(host.sessionId);
+    guest.send('rename', { title: '손님이 바꿈' });
+    await wait(60);
+    expect(room.state.title).toBe('처음 이름');
+    host.send('rename', { title: '  금요일 파티 ' });
+    await wait(60);
+    expect(room.state.title).toBe('금요일 파티');
+    await host.leave();
+    await wait(80);
+    expect(room.state.owner).toBe('');
+    const back = await colyseus.connectTo(room, { name: '방장', ownerKey: KEY });
+    await wait(80);
+    expect(room.state.owner).toBe(back.sessionId);
+  });
+
+  it('the host can walk a guest out; a guest cannot', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', { ownerKey: KEY });
+    const host = await colyseus.connectTo(room, { name: '방장', ownerKey: KEY });
+    const guest = await colyseus.connectTo(room, { name: '손님' });
+    for (const c of [host, guest]) { c.onMessage('bye', () => {}); c.onMessage('dismissed', () => {}); }
+    guest.send('kick', { id: host.sessionId });
+    await wait(80);
+    expect(room.state.players.has(host.sessionId)).toBe(true);
+    const code = leftWith(guest);
+    host.send('kick', { id: guest.sessionId });
+    expect(await code).toBe(LEAVE_CODE.kicked);
+  }, DISMISS_DELAY + 5000);
+
+  it('closing the party sends everyone home and lets nobody new in', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', { ownerKey: KEY });
+    const host = await colyseus.connectTo(room, { name: '방장', ownerKey: KEY });
+    const guest = await colyseus.connectTo(room, { name: '손님' });
+    for (const c of [host, guest]) c.onMessage('dismissed', () => {});
+    const codes = Promise.all([leftWith(host), leftWith(guest)]);
+    host.send('closeRoom', {});
+    await wait(80);
+    expect(room.locked).toBe(true);
+    expect(await codes).toEqual([LEAVE_CODE.closed, LEAVE_CODE.closed]);
+  }, DISMISS_DELAY + 5000);
+});
+
+describe('manager page: rooms', () => {
+  const auth = 'Basic ' + Buffer.from('admin:test-pass').toString('base64');
+  it('lists who is in each room and can close one', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', { title: '관리 테스트' });
+    const a = await colyseus.connectTo(room, { name: '손님A' });
+    a.onMessage('dismissed', () => {});
+    await wait(80);
+    const s = await (await fetch('http://localhost:2568/admin/api/stats', { headers: { authorization: auth } })).json();
+    const r = s.rooms.find((x: any) => x.roomId === room.roomId);
+    expect(r.people.map((p: any) => p.name)).toEqual(['손님A']);
+    const no = await fetch(`http://localhost:2568/admin/api/rooms/${room.roomId}/close`, { method: 'POST' });
+    expect(no.status).toBe(401);
+    const code = leftWith(a);
+    const ok = await fetch(`http://localhost:2568/admin/api/rooms/${room.roomId}/close`, { method: 'POST', headers: { authorization: auth } });
+    expect((await ok.json()).ok).toBe(true);
+    expect(await code).toBe(LEAVE_CODE.closed);
+  }, DISMISS_DELAY + 5000);
+});

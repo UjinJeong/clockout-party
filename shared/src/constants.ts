@@ -112,3 +112,19 @@ export const ACT_EVERY = 1.2;
 /** A dive: how long it takes, and how far the water pistol reaches. */
 export const DIVE_TIME = 1.2;
 export const SQUIRT_REACH = 3.2;
+
+/**
+ * Leaving the party without pressing 나가기.
+ *  - No input at all for IDLE_KICK seconds (a tab left open, a phone left locked): the party walks you out.
+ *  - The host (or the manager page) can ask someone to leave, or close the whole party.
+ * Everyone sees the leaver take the lift first; then the connection closes with one of these codes.
+ */
+export const IDLE_KICK = 30 * 60;
+export const LEAVE_CODE = { idle: 4100, kicked: 4101, closed: 4102 } as const;
+export type LeaveReason = keyof typeof LEAVE_CODE;
+export const leaveReason = (code: number): LeaveReason | null =>
+  (Object.keys(LEAVE_CODE) as LeaveReason[]).find(k => LEAVE_CODE[k] === code) ?? null;
+/** How long the lift takes before the door actually shuts on them (ms). */
+export const DISMISS_DELAY = 4500;
+/** The key that makes you the host of a room you made (kept on that device). */
+export const isOwnerKey = (v: unknown): v is string => typeof v === 'string' && /^[A-Za-z0-9_-]{16,64}$/.test(v);
