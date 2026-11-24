@@ -1,10 +1,17 @@
 import express, { type Application, type NextFunction, type Request, type Response } from 'express';
 import { matchMaker } from '@colyseus/core';
 import { monitor } from '@colyseus/monitor';
-import { ROOM_NAME } from '@party/shared';
+import { HALL_COLORS, HALL_LIMITS, HALL_MAX, HALL_MOTIONS, MAX_HALLS, ROOM_NAME } from '@party/shared';
 import { stats } from './stats';
 import { PartyRoom } from './PartyRoom';
 import { createGalleryStore, type GalleryStore } from './galleryStore';
+
+/** What the manager page's halls section can offer (the same rules the server checks). */
+const HALL_OPTIONS = {
+  colors: HALL_COLORS,
+  motions: Object.fromEntries(Object.entries(HALL_MOTIONS).map(([k, m]) => [k, m.label])),
+  hallMax: HALL_MAX, maxHalls: MAX_HALLS, nameMax: HALL_LIMITS.name, noteMax: HALL_LIMITS.note,
+};
 
 /** The gallery is saved to this project's GitHub repository (see galleryStore). */
 let gallery: GalleryStore | null = null;
@@ -53,7 +60,7 @@ export function mountAdmin(app: Application) {
   });
   // 🖼️ the gallery: every painting and its words; save = one commit to GitHub, then Render redeploys
   app.get('/admin/api/gallery', requireAdmin, async (_req, res) => {
-    try { res.set('Cache-Control', 'no-store').json(await store().load()); }
+    try { res.set('Cache-Control', 'no-store').json({ ...(await store().load()), options: HALL_OPTIONS }); }
     catch (e) { res.status(502).json({ error: (e as Error).message || '전시장 정보를 불러오지 못했어요.' }); }
   });
   app.put('/admin/api/gallery', requireAdmin, express.json({ limit: '16mb' }), async (req, res) => {

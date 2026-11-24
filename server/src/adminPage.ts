@@ -51,16 +51,22 @@ nav.tabs button[aria-selected="true"]{background:var(--plate);color:var(--ink);b
 .geditor{display:grid;grid-template-columns:220px 1fr;gap:16px;padding:12px;margin:6px 0 10px;background:#faf4e8;border:1px solid #e3d6bd}
 .gpic{display:flex;flex-direction:column;gap:8px}.gpic img{width:100%;max-height:220px;object-fit:contain;background:#efe5d2}.gpic small{color:var(--ink-2)}
 .btnlike{display:inline-block;text-align:center;background:var(--wine);color:#fff;border-radius:3px;padding:6px 10px;font-size:13px;cursor:pointer}
-.gfields{display:grid;gap:8px}.gfields label{display:grid;gap:3px;font-size:13px}.gfields label span{color:var(--ink-2)}
+.gfields{display:grid;gap:8px}.gfields label,.gfields .lab{display:grid;gap:3px;font-size:13px}.gfields label span,.gfields .lab>span:first-child{color:var(--ink-2)}
 .gfields input,.gfields textarea,.gfields select{font:inherit;font-size:14px;padding:6px 8px;border:1px solid #cdbd9e;border-radius:2px;background:#fff;width:100%}
 .gfields .two{display:grid;grid-template-columns:2fr 1fr;gap:8px}.gfields details{border-top:1px dashed #d6c7aa;padding-top:6px}.gfields summary{cursor:pointer;font-size:13.5px}
 button.add{margin-top:10px;background:none;border:1px dashed #b9a682;color:var(--ink);border-radius:3px;padding:7px 12px;font:inherit;font-size:13.5px;cursor:pointer}button.add:disabled{opacity:.45;cursor:default}
 .danger-lite{color:#a33a2c;border-color:#d9a79f}
+.ghalls{background:#f3ead8;border:1px solid #e3d6bd;padding:4px 14px 14px;margin-bottom:18px}.ghalls h2 small{font:500 13px var(--sans);color:var(--ink-2);margin-left:6px}
+.ghall{display:grid;grid-template-columns:28px 1fr auto;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid #e3d6bd}
+.ghall .sw{width:28px;height:28px;border-radius:3px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.25)}
+.hedit{grid-template-columns:1fr}.swatches{display:flex;gap:6px;flex-wrap:wrap}
+.swatch{width:30px;height:30px;border-radius:50%;border:2px solid transparent;cursor:pointer;box-shadow:inset 0 0 0 1px rgba(0,0,0,.25)}.swatch.on{border-color:var(--ink);outline:2px solid var(--gilt)}
+.gbtns .mini:disabled{opacity:.4;cursor:default}
 .gbar{position:fixed;left:0;right:0;bottom:0;background:var(--night);color:var(--plate);display:flex;gap:10px;align-items:center;justify-content:flex-end;padding:10px max(16px,env(safe-area-inset-left));flex-wrap:wrap;z-index:5}
 .gbar #gcount{margin-right:auto;font-size:14px}.gbar #gmsg{font-size:13px}.gbar #gmsg.ok{color:#bfe3c4}.gbar #gmsg.bad{color:#ffb4a8}.gbar a{color:#ffd98a}
 .gbar button{font:inherit;font-size:14px;border-radius:3px;padding:7px 14px;cursor:pointer;border:1px solid #6b5a52}
 .gbar .save{background:var(--gilt);color:var(--ink);border-color:var(--gilt);font-weight:600}.gbar .ghost{background:none;color:var(--plate)}.gbar button:disabled{opacity:.4;cursor:default}
-@media (max-width:760px){.geditor{grid-template-columns:1fr}.gcard{grid-template-columns:56px 1fr}.gbtns{grid-column:1/-1;justify-content:flex-start}.gfields .two{grid-template-columns:1fr}}
+@media (max-width:760px){.geditor{grid-template-columns:1fr}.gcard{grid-template-columns:56px 1fr}.ghall{grid-template-columns:28px 1fr}.gbtns{grid-column:1/-1;justify-content:flex-start}.gfields .two{grid-template-columns:1fr}}
 </style></head><body>
 <header><h1>파티 관리</h1><nav class="tabs"><button type="button" data-tab="stats" aria-selected="true">📊 현황</button><button type="button" data-tab="gallery" aria-selected="false">🖼️ 전시장</button></nav><p id="updated">불러오는 중</p></header>
 <main id="tab-gallery" hidden><div id="gallery"></div></main>

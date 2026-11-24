@@ -652,6 +652,10 @@ describe('manager page: gallery', () => {
     expect(g.error ?? '').toBe('');
     expect(g.gallery.items.length).toBeGreaterThan(10);
     expect(g.gallery.halls.length).toBeGreaterThan(0);
+    // what the halls section offers: wall colours, ways the paintings move, limits
+    expect(Object.keys(g.options.colors)).toHaveLength(8);
+    expect(g.options.motions.wind).toContain('바람');
+    expect(g.options).toMatchObject({ hallMax: 8, maxHalls: 12, nameMax: 12, noteMax: 80 });
     expect(g.canSave).toBe(false);
     const put = await fetch('http://localhost:2568/admin/api/gallery', { method: 'PUT', headers: { authorization: auth, 'content-type': 'application/json' }, body: JSON.stringify({ gallery: g.gallery, version: g.version }) });
     expect(put.status).toBe(503);

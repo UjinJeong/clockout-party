@@ -12,6 +12,7 @@ function fakeGitHub(start = today) {
   const blobs = new Map<string, Buffer>();
   let head = 'c0', n = 0;
   const calls: string[] = [];
+  const messages: string[] = [];
   const blobSha = (b: Buffer) => 'b' + b.length + '-' + b.toString('base64').slice(-6);
   const fakeFetch: typeof globalThis.fetch = (async (url: string, init: RequestInit = {}) => {
     const path = url.replace('https://api.github.com/repos/me/party', '').replace(/\?.*$/, '');
@@ -24,11 +25,11 @@ function fakeGitHub(start = today) {
     if (path.startsWith('/git/commits/')) return ok({ tree: { sha: 't-' + head } });
     if (path === '/git/blobs') { const b = Buffer.from(body.content, body.encoding === 'base64' ? 'base64' : 'utf8'); const s = 'blob' + ++n; blobs.set(s, b); return ok({ sha: s }); }
     if (path === '/git/trees') { for (const e of body.tree) files.set(e.path, blobs.get(e.sha)!); return ok({ sha: 'tree' + ++n }); }
-    if (path === '/git/commits') return ok({ sha: 'commit' + ++n, html_url: 'https://github.com/me/party/commit/x', message: body.message });
+    if (path === '/git/commits') { messages.push(body.message); return ok({ sha: 'commit' + ++n, html_url: 'https://github.com/me/party/commit/x', message: body.message }); }
     if (path === '/git/refs/heads/main') { head = body.sha; return ok({}); }
     return new Response('{}', { status: 404 });
   }) as typeof globalThis.fetch;
-  return { fetch: fakeFetch, files, calls, head: () => head };
+  return { fetch: fakeFetch, files, calls, messages, head: () => head };
 }
 
 describe('saving the gallery to GitHub', () => {
@@ -86,6 +87,7 @@ describe('saving the gallery to GitHub', () => {
     const saved = JSON.parse(gh.files.get(GALLERY_JSON)!.toString());
     expect(saved.halls).toHaveLength(5);
     expect(saved.items[0].room).toBe('hsea001');
+    expect(gh.messages[0]).toContain('새 관 "바다관"');
     expect(gh.calls.filter(c => c === 'POST /git/commits')).toHaveLength(1);
   });
   it('a wrong token says so in plain words', async () => {
