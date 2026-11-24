@@ -650,9 +650,10 @@ describe('manager page: gallery', () => {
     expect((await fetch('http://localhost:2568/admin/api/gallery')).status).toBe(401);
     const g = await (await fetch('http://localhost:2568/admin/api/gallery', { headers: { authorization: auth } })).json();
     expect(g.error ?? '').toBe('');
-    expect(g.items.length).toBeGreaterThan(10);
+    expect(g.gallery.items.length).toBeGreaterThan(10);
+    expect(g.gallery.halls.length).toBeGreaterThan(0);
     expect(g.canSave).toBe(false);
-    const put = await fetch('http://localhost:2568/admin/api/gallery', { method: 'PUT', headers: { authorization: auth, 'content-type': 'application/json' }, body: JSON.stringify({ items: g.items, version: g.version }) });
+    const put = await fetch('http://localhost:2568/admin/api/gallery', { method: 'PUT', headers: { authorization: auth, 'content-type': 'application/json' }, body: JSON.stringify({ gallery: g.gallery, version: g.version }) });
     expect(put.status).toBe(503);
   });
 });

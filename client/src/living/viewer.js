@@ -9,7 +9,7 @@ import { VIEWER_HTML } from './markup';
 import './viewer.css';
 import { QUESTIONS, playAnswer } from './docent';
 import { ANSWERS } from './answers';
-import GALLERY from '../world/gallery.json';
+import { GALLERY } from '@party/shared';
 import { artMotion, setArtMotion } from '../ui/artMotion';
 
 
@@ -22,12 +22,8 @@ export function createLivingViewer(opts = {}) {
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* ---------- catalogue ---------- */
-const ROOMS = [
-  {id:'garden', name:'정원관', note:'바람과 숨결이 지나가는 방. 꽃과 나비, 씨앗이 액자 밖으로 날아갑니다.'},
-  {id:'face', name:'얼굴관', note:'정면을 바라보는 얼굴들. 시선과 숨, 빛이 관람객에게 반응합니다.'},
-  {id:'toy', name:'장난감관', note:'유리구와 가챠, 곰 인형 더미. 흔들고 누르면 쏟아집니다.'},
-  {id:'pond', name:'연못관', note:'먹과 금박, 얼음 속 물고기들. 물결이 일고 빛이 스칩니다.'},
-];
+/* the halls (name and one-line intro) come from the gallery file, like the paintings */
+const ROOMS = GALLERY.halls;
 const D = (o)=>Object.assign({flow:0,flowScale:3,flowSpeed:.6,flowDir:[0,0],sway:0,swaySpeed:1.2,swayFreq:6,swayDir:[1,0],swayTop:1,
   shimmer:0,pulse:0,breath:0,breathC:[.5,.5],para:0,look:null,ripple:0,ripMask:0,glow:0,stream:0,gustK:.0,rain:0},o);
 const HAND = [
@@ -117,7 +113,7 @@ const HAND = [
 const FLAT_MASK='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4XmNoaGgAAAMEAYGyFkehAAAAAElFTkSuQmCC';
 const FLAT_DEPTH='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4XmPw9fUFAAHSAOindOlcAAAAAElFTkSuQmCC';
 const pad2=n=>String(n).padStart(2,'0');
-const ART=GALLERY.filter(g=>!g.hidden).map(g=>{const hand=HAND.find(h=>h.i===g.i);
+const ART=GALLERY.items.filter(g=>!g.hidden).map(g=>{const hand=HAND.find(h=>h.i===g.i);
   if(g.image||!hand)return {i:g.i,room:g.room,title:g.title,w:g.w,h:g.h,desc:g.desc,how:g.how||'그림을 천천히 들여다보세요. 빛이 은은하게 스쳐 가요.',hint:g.hint||'천천히 보기',
     kind:'plain',img:g.image,thumb:g.thumb||g.image,mask:FLAT_MASK,depth:FLAT_DEPTH,doc:g.doc,fx:D({shimmer:.12})};
   return {...hand,title:g.title,desc:g.desc,how:g.how||hand.how,hint:g.hint||hand.hint,doc:g.doc};});
@@ -565,7 +561,7 @@ async function openViewer(k){
   if(viewer.hidden&&opts.onOpen)opts.onOpen();
   const a=ART[(k+ART.length)%ART.length];S.art=a;const tok=++loadToken;
   viewer.hidden=false;document.body.style.overflow='hidden';
-  $('v-room').textContent=ROOMS.find(r=>r.id===a.room).name;$('v-title').textContent=a.title;$('v-desc').textContent=a.desc;$('v-how').textContent=a.how;
+  $('v-room').textContent=(ROOMS.find(r=>r.id===a.room)?.name??'');$('v-title').textContent=a.title;$('v-desc').textContent=a.desc;$('v-how').textContent=a.how;
   $('v-count').textContent=`${String(a.k+1).padStart(2,'0')} / ${ART.length}`;$('v-no').textContent='No. '+String(a.k+1).padStart(2,'0');$('mm-img').src=a.thumb;S.hd=false;S.zt=1;stage.classList.remove('zoomed');$('zhint').style.opacity=1;clearTimeout(S.hintT);S.hintT=setTimeout(()=>{$('zhint').style.opacity=0;},3500);
   const ctl=$('v-ctl');ctl.innerHTML='';$('v-note').hidden=true;
     viewerDocent(a);

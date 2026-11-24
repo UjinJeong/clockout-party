@@ -57,8 +57,8 @@ export function mountAdmin(app: Application) {
     catch (e) { res.status(502).json({ error: (e as Error).message || '전시장 정보를 불러오지 못했어요.' }); }
   });
   app.put('/admin/api/gallery', requireAdmin, express.json({ limit: '16mb' }), async (req, res) => {
-    const b = (req.body ?? {}) as { items?: unknown; pictures?: unknown; version?: unknown; summary?: unknown };
-    const r = await store().save(b.items, b.pictures, b.version, typeof b.summary === 'string' ? b.summary : '');
+    const b = (req.body ?? {}) as { gallery?: unknown; pictures?: unknown; version?: unknown; summary?: unknown };
+    const r = await store().save(b.gallery, b.pictures, b.version, typeof b.summary === 'string' ? b.summary : '');
     if (r.ok) res.json(r); else res.status(r.status).json({ error: r.error });
   });
   // close a party, or walk one person out of it

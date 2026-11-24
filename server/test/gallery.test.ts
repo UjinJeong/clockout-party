@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { createGalleryStore, GALLERY_JSON } from '../src/galleryStore';
 
-const today = JSON.parse(readFileSync(new URL('../../client/src/world/gallery.json', import.meta.url), 'utf8'));
+const today = JSON.parse(readFileSync(new URL('../../shared/src/gallery.json', import.meta.url), 'utf8'));
+const items0 = today.items;
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]).toString('base64');
 
 /** A pretend GitHub that keeps one branch in memory. */
@@ -36,15 +37,17 @@ describe('saving the gallery to GitHub', () => {
     const store = createGalleryStore({ token: 'good-token', repo: 'me/party', fetch: gh.fetch });
     const now = await store.load();
     expect(now.source).toBe('github');
-    expect(now.items).toHaveLength(today.length);
-    const items = structuredClone(now.items);
+    expect(now.gallery.items).toHaveLength(items0.length);
+    expect(now.gallery.halls.map(h => h.id)).toEqual(['garden', 'face', 'toy', 'pond']);
+    const items = structuredClone(now.gallery.items);
     items[0].title = '바뀐 제목';
     Object.assign(items[0], { image: 'gallery/17-new.jpg', wall: 'gallery/17-new-wall.jpg', thumb: 'gallery/17-new-t.jpg' });
     const pics = ['gallery/17-new.jpg', 'gallery/17-new-wall.jpg', 'gallery/17-new-t.jpg'].map(path => ({ path, data: JPEG }));
-    const r = await store.save(items, pics, now.version, '민들레와 발 그림 교체');
+    const r = await store.save({ halls: now.gallery.halls, items }, pics, now.version, '민들레와 발 그림 교체');
     expect(r.ok).toBe(true);
     expect(gh.head()).not.toBe('c0');
-    expect(JSON.parse(gh.files.get(GALLERY_JSON)!.toString())[0].title).toBe('바뀐 제목');
+    expect(GALLERY_JSON).toBe('shared/src/gallery.json');
+    expect(JSON.parse(gh.files.get(GALLERY_JSON)!.toString()).items[0].title).toBe('바뀐 제목');
     expect(gh.files.has('client/public/gallery/17-new.jpg')).toBe(true);
     expect(gh.calls.filter(c => c === 'POST /git/commits')).toHaveLength(1);
   });
@@ -58,12 +61,32 @@ describe('saving the gallery to GitHub', () => {
   it('checks before touching GitHub: bad words, stray files, not-a-picture', async () => {
     const gh = fakeGitHub();
     const store = createGalleryStore({ token: 'good-token', repo: 'me/party', fetch: gh.fetch });
-    expect(await store.save([{ ...today[0], title: '' }, ...today.slice(1)], [], '')).toMatchObject({ ok: false, status: 400 });
+    expect(await store.save({ ...today, items: [{ ...items0[0], title: '' }, ...items0.slice(1)] }, [], '')).toMatchObject({ ok: false, status: 400 });
     expect(await store.save(today, [{ path: 'gallery/unused.jpg', data: JPEG }], '')).toMatchObject({ ok: false, status: 400 });
-    const items = [{ ...today[0], image: 'gallery/a.jpg', wall: 'gallery/a-w.jpg', thumb: 'gallery/a-t.jpg' }, ...today.slice(1)];
+    const items = { ...today, items: [{ ...items0[0], image: 'gallery/a.jpg', wall: 'gallery/a-w.jpg', thumb: 'gallery/a-t.jpg' }, ...items0.slice(1)] };
     const text = Buffer.from('<script>').toString('base64');
     expect(await store.save(items, [{ path: 'gallery/a.jpg', data: text }], '')).toMatchObject({ ok: false, status: 400 });
     expect(gh.calls).toEqual([]);
+  });
+  it('reads an older file (a bare list of paintings) as the four original halls', async () => {
+    const gh = fakeGitHub(items0);
+    const store = createGalleryStore({ token: 'good-token', repo: 'me/party', fetch: gh.fetch });
+    const now = await store.load();
+    expect(now.gallery.halls).toHaveLength(4);
+    expect(now.gallery.items).toHaveLength(items0.length);
+  });
+  it('a new hall and a painting moved into it are saved together', async () => {
+    const gh = fakeGitHub();
+    const store = createGalleryStore({ token: 'good-token', repo: 'me/party', fetch: gh.fetch });
+    const now = await store.load();
+    const g = structuredClone(now.gallery);
+    g.halls.push({ id: 'hsea001', name: '바다관', color: 'slate', motion: 'water', note: '파도 소리' });
+    g.items[0].room = 'hsea001';
+    expect(await store.save(g, [], now.version, '새 관 "바다관"')).toMatchObject({ ok: true });
+    const saved = JSON.parse(gh.files.get(GALLERY_JSON)!.toString());
+    expect(saved.halls).toHaveLength(5);
+    expect(saved.items[0].room).toBe('hsea001');
+    expect(gh.calls.filter(c => c === 'POST /git/commits')).toHaveLength(1);
   });
   it('a wrong token says so in plain words', async () => {
     const gh = fakeGitHub();
@@ -75,7 +98,7 @@ describe('saving the gallery to GitHub', () => {
     const store = createGalleryStore({});
     const now = await store.load();
     expect(now).toMatchObject({ source: 'disk', canSave: false });
-    expect(now.items).toHaveLength(today.length);
+    expect(now.gallery.items).toHaveLength(items0.length);
     expect(await store.save(today, [], now.version)).toMatchObject({ ok: false, status: 503 });
   });
 });

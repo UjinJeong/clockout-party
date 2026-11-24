@@ -2,21 +2,23 @@
 // Saving sends the whole list (and any new pictures) to the server, which commits it to GitHub;
 // Render then redeploys, so the site shows it a few minutes later.
 (() => {
-  const ROOMS = [['garden', '정원관', 5], ['face', '얼굴관', 4], ['toy', '장난감관', 3], ['pond', '연못관', 7]];
+  const HALL_MAX = 8;          // paintings one hall can show (shared HALL_MAX)
   const QUESTIONS = ['먼저 어디를 보면 좋을까요?', '색은 어떻게 쓰였나요?', '아이에게 설명해 주세요', '이 그림이 움직인다면?'];
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const pad = n => String(n).padStart(2, '0');
   const box = $('gallery');
 
-  let base = [], items = [], version = '', canSave = false, repo = '', branch = 'main';
+  let base = [], items = [], baseHalls = [], halls = [], version = '', canSave = false, repo = '', branch = 'main';
   const pics = new Map();     // path → { data (base64), url (preview) }
   let open = null;            // the id being edited
   let loaded = false, busy = false;
 
-  const changed = () => JSON.stringify(items) !== JSON.stringify(base);
+  const changed = () => JSON.stringify(items) !== JSON.stringify(base) || JSON.stringify(halls) !== JSON.stringify(baseHalls);
+  /** [id, name, most paintings] for each hall, in building order */
+  const rooms = () => halls.map(h => [h.id, h.name, HALL_MAX]);
   const shown = room => items.filter(x => x.room === room && !x.hidden).length;
-  const slots = room => ROOMS.find(r => r[0] === room)[2];
+  const slots = () => HALL_MAX;
   const thumbOf = it => {
     if (it.thumb && pics.has(it.thumb)) return pics.get(it.thumb).url;
     if (it.thumb) return '/' + it.thumb;
@@ -31,7 +33,7 @@
       const r = await fetch('/admin/api/gallery', { cache: 'no-store' });
       const g = await r.json();
       if (!r.ok) throw new Error(g.error || '불러오지 못했어요.');
-      base = g.items; items = structuredClone(g.items); version = g.version; canSave = g.canSave; repo = g.repo; branch = g.branch;
+      base = g.gallery.items; items = structuredClone(base); baseHalls = g.gallery.halls; halls = structuredClone(baseHalls); version = g.version; canSave = g.canSave; repo = g.repo; branch = g.branch;
       pics.clear(); open = null; loaded = true;
       render();
     } catch (e) { box.innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
@@ -41,7 +43,7 @@
     const parts = [];
     if (!canSave) parts.push('<div class="err">지금은 <b>보기만</b> 할 수 있어요. 저장하려면 Render의 환경 변수에 <code>GITHUB_TOKEN</code>을 넣어 주세요.</div>');
     parts.push('<p class="note">저장하면 GitHub에 기록되고, 2~5분 뒤 사이트에 반영돼요. 새로 올린 그림은 빛이 은은하게 스치는 기본 움직임만 있어요 (원래 그림의 움직임은 그 그림에 맞춰 만든 것이라서요).</p>');
-    for (const [room, name, max] of ROOMS) {
+    for (const [room, name, max] of rooms()) {
       const list = items.filter(x => x.room === room);
       parts.push('<section class="groom"><h2>' + name + ' <small>걸린 그림 ' + shown(room) + ' / ' + max + '</small></h2>');
       parts.push(list.map(card).join('') || '<p class="empty">이 전시실에는 그림이 없어요.</p>');
@@ -85,7 +87,7 @@
       + '</div>'
       + '<div class="gfields">'
       + f('title', '제목', 0, 40)
-      + '<label><span>전시실</span><select data-f="room">' + ROOMS.map(r => '<option value="' + r[0] + '"' + (r[0] === it.room ? ' selected' : '') + '>' + r[1] + '</option>').join('') + '</select></label>'
+      + '<label><span>전시실</span><select data-f="room">' + rooms().map(r => '<option value="' + r[0] + '"' + (r[0] === it.room ? ' selected' : '') + '>' + r[1] + '</option>').join('') + '</select></label>'
       + f('desc', '그림 옆 짧은 설명', 2, 300)
       + f('doc', '도슨트 해설', 4, 800)
       + '<div class="two">' + f('how', '해 보기 (살아난 그림에서 할 수 있는 것)', 0, 200) + f('hint', '짧은 힌트', 0, 30) + '</div>'
@@ -180,7 +182,7 @@
     }
     if (t.dataset.f === 'room') {
       const it = byId(t.closest('.geditor').dataset.for);
-      if (!it.hidden && shown(t.value) >= slots(t.value)) { alert(ROOMS.find(r => r[0] === t.value)[1] + '은 벽이 꽉 찼어요. 먼저 그림을 하나 내려 주세요.'); render(); return; }
+      if (!it.hidden && shown(t.value) >= slots(t.value)) { alert(rooms().find(r => r[0] === t.value)[1] + '은 벽이 꽉 찼어요. 먼저 그림을 하나 내려 주세요.'); render(); return; }
       it.room = t.value; items = items.filter(x => x !== it).concat(it); render();
     }
   });
@@ -195,7 +197,7 @@
 
   $('gundo').addEventListener('click', () => {
     if ($('gundo').dataset.armed !== '1') { $('gundo').dataset.armed = '1'; $('gundo').textContent = '정말 모두 되돌릴까요?'; setTimeout(() => { $('gundo').dataset.armed = ''; $('gundo').textContent = '모두 되돌리기'; }, 3000); return; }
-    items = structuredClone(base); pics.clear(); open = null; $('gundo').dataset.armed = ''; $('gundo').textContent = '모두 되돌리기'; render();
+    items = structuredClone(base); halls = structuredClone(baseHalls); pics.clear(); open = null; $('gundo').dataset.armed = ''; $('gundo').textContent = '모두 되돌리기'; render();
   });
   $('gsave').addEventListener('click', async () => {
     if (busy) return;
@@ -204,7 +206,7 @@
     const pictures = [...pics.entries()].filter(([p]) => used.has(p)).map(([path, v]) => ({ path, data: v.data }));
     busy = true; bar(); $('gmsg').textContent = '저장하는 중…'; $('gmsg').className = '';
     try {
-      const r = await fetch('/admin/api/gallery', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ items, pictures, version, summary: titles.join(', ') }) });
+      const r = await fetch('/admin/api/gallery', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ gallery: { halls, items }, pictures, version, summary: titles.join(', ') }) });
       const g = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(g.error || '저장하지 못했어요.');
       $('gmsg').innerHTML = '저장했어요. 2~5분 뒤 사이트에 반영돼요. <a href="' + esc(g.url) + '" target="_blank" rel="noopener">GitHub에서 보기</a>';

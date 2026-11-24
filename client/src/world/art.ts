@@ -1,12 +1,11 @@
-import type { GalleryItem, RoomId } from '@party/shared';
-import GALLERY from './gallery.json';
+import { GALLERY, HALL_COLORS, type GalleryItem, type RoomId } from '@party/shared';
 
 /**
- * The paintings and their words, from gallery.json (edited on the manager page).
+ * The paintings and their words, from the gallery file (edited on the manager page).
  * Taken-down ones are left out here; order is hanging order.
  */
 export type Artwork = GalleryItem & { room: RoomId };
-export const ALL_ART = GALLERY as Artwork[];
+export const ALL_ART = GALLERY.items as Artwork[];
 export const ART = ALL_ART.filter(a => !a.hidden);
 
 /**
@@ -40,12 +39,10 @@ const pad = (n: number) => String(n).padStart(2, '0');
 /** The wall-sized picture: a replacement from the manager page, or the original. */
 export const wallSrc = (a: Artwork) => a.wall ?? `art/wall/${pad(a.i)}.jpg`;
 
-export const ROOM_INFO: Record<RoomId, { name: string; color: string; note: string }> = {
+/** Name, wall colour and intro of each room: the lobby, then the halls from the gallery file. */
+export const ROOM_INFO: Record<string, { name: string; color: string; note: string }> = {
   lobby: { name: '로비', color: '#3d2c24', note: '와인 한 잔 받아 들고 천천히 둘러보세요.' },
-  garden: { name: '정원관', color: '#4a5a43', note: '바람과 숨결이 지나가는 방.' },
-  face: { name: '얼굴관', color: '#6b2727', note: '정면을 바라보는 얼굴들.' },
-  toy: { name: '장난감관', color: '#28324f', note: '유리구와 가챠, 곰 인형 더미.' },
-  pond: { name: '연못관', color: '#22434a', note: '먹과 금박, 얼음 속 물고기들.' },
+  ...Object.fromEntries(GALLERY.halls.map(h => [h.id, { name: h.name, color: HALL_COLORS[h.color], note: h.note }])),
 };
 
 /**
