@@ -1,10 +1,11 @@
-import { GALLERY, HALL_COLORS, type GalleryItem, type RoomId } from '@party/shared';
+import { GALLERY, GALLERY_LAYOUT, HALL_COLORS, type GalleryItem, type Slot } from '@party/shared';
+export type { Slot } from '@party/shared';
 
 /**
  * The paintings and their words, from the gallery file (edited on the manager page).
  * Taken-down ones are left out here; order is hanging order.
  */
-export type Artwork = GalleryItem & { room: RoomId };
+export type Artwork = GalleryItem;
 export const ALL_ART = GALLERY.items as Artwork[];
 export const ART = ALL_ART.filter(a => !a.hidden);
 
@@ -45,27 +46,5 @@ export const ROOM_INFO: Record<string, { name: string; color: string; note: stri
   ...Object.fromEntries(GALLERY.halls.map(h => [h.id, { name: h.name, color: HALL_COLORS[h.color], note: h.note }])),
 };
 
-/**
- * Where a painting hangs. `face` is the direction the painting looks toward
- * (unit vector on the floor); visitors stand in front of it to look.
- */
-export interface Slot { x: number; y: number; z: number; face: { x: number; z: number }; maxW: number; maxH: number }
-
-const BACK_Z = -5;
-const back = (x: number, maxW = 2.6): Slot => ({ x, y: 2.15, z: BACK_Z + 0.06, face: { x: 0, z: 1 }, maxW, maxH: 2.1 });
-/** A partition's back panel (z from -5 to -2), seen from the room to its right (+x) or left (-x). */
-const side = (wallX: number, toward: 1 | -1, z = -3.5, maxW = 2.2): Slot =>
-  ({ x: wallX + toward * 0.11, y: 2.1, z, face: { x: toward, z: 0 }, maxW, maxH: 2.0 });
-
-export function slotsFor(room: RoomId): Slot[] {
-  const r = ['lobby', 'garden', 'face', 'toy', 'pond'].indexOf(room);
-  const x0 = r * 12;
-  switch (room) {
-    case 'garden': return [back(x0 + 2.4), back(x0 + 6), back(x0 + 9.6), side(x0, 1), side(x0 + 12, -1)];
-    case 'face': return [back(x0 + 2.4), back(x0 + 6), back(x0 + 9.6), side(x0, 1)];
-    case 'toy': return [back(x0 + 2.4), back(x0 + 6), back(x0 + 9.6)];
-    case 'pond': return [back(x0 + 1.8, 2.3), back(x0 + 4.6, 2.3), back(x0 + 7.4, 2.3), back(x0 + 10.2, 2.3),
-      side(x0, 1), side(60, -1, -3.3), side(60, -1, 0, 2.0)];
-    default: return [];
-  }
-}
+/** Where a hall's paintings hang, in hanging order (from the shared layout). */
+export const slotsFor = (hallId: string): Slot[] => GALLERY_LAYOUT.spans.find(s => s.hall?.id === hallId)?.slots ?? [];

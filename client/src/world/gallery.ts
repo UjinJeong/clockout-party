@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { WorldParts } from './world';
-import { BAR, BENCHES, DOOR_HALF, PARTITIONS, ROOM_D, ROOM_IDS, ROOM_W, WORLD, type RoomId } from '@party/shared';
+import { BAR, DOOR_HALF, GALLERY_LAYOUT, ROOM_D, WORLD } from '@party/shared';
 import { livingCanvas, tickLivingWall } from './livingWall';
 import { ART, ROOM_INFO, hangY, slotsFor, wallSize, wallSrc, type Artwork, type Slot } from './art';
 import { fabric, parquet, runner, textPlate } from './textures';
@@ -13,7 +13,7 @@ const BACK_Z = WORLD.z0;
 
 export interface Painting { art: Artwork; slot: Slot; mesh: THREE.Mesh; stand: { x: number; z: number } }
 
-/** 「액자 밖으로」: five rooms of paintings, a wine bar and party lights. */
+/** 「액자 밖으로」: the lobby with its wine bar, then the halls from the gallery file, with party lights. */
 export function buildGallery(scene: THREE.Scene, renderer: THREE.WebGLRenderer): WorldParts {
   const maxAniso = renderer.capabilities.getMaxAnisotropy();
   const M = {
@@ -52,18 +52,19 @@ export function buildGallery(scene: THREE.Scene, renderer: THREE.WebGLRenderer):
   box(WORLD.x1 + 0.4, 0.3, 0.3, M.walnut, WORLD.x1 / 2, -0.12, WORLD.z1 + 0.15);
 
   // ---- walls ----
-  const wallMat = ROOM_IDS.map(id => new THREE.MeshStandardMaterial({ map: fabric(ROOM_INFO[id].color), roughness: 0.92 }));
-  ROOM_IDS.forEach((id, r) => {
-    const x0 = r * ROOM_W, cx = x0 + ROOM_W / 2;
+  const SPANS = GALLERY_LAYOUT.spans;
+  const roomOf = (s: (typeof SPANS)[number]) => ROOM_INFO[s.hall?.id ?? 'lobby'];
+  const wallMat = SPANS.map(s => new THREE.MeshStandardMaterial({ map: fabric(roomOf(s).color), roughness: 0.92 }));
+  SPANS.forEach((s, r) => {
+    const w = s.x1 - s.x0, cx = (s.x0 + s.x1) / 2;
     const mat = wallMat[r];
-    (mat.map as THREE.Texture).repeat.set(ROOM_W / 1.6, H / 1.6);
-    const wall = add(new THREE.PlaneGeometry(ROOM_W, H), mat, cx, H / 2, BACK_Z);
+    (mat.map as THREE.Texture).repeat.set(w / 1.6, H / 1.6);
+    const wall = add(new THREE.PlaneGeometry(w, H), mat, cx, H / 2, BACK_Z);
     wall.receiveShadow = false;
     // wainscot, rail and cornice along the back wall
-    box(ROOM_W, 1.0, 0.05, M.walnut, cx, 0.5, BACK_Z + 0.03);
-    box(ROOM_W, 0.06, 0.1, M.gold, cx, 1.02, BACK_Z + 0.05);
-    box(ROOM_W, 0.22, 0.2, M.cream, cx, H - 0.11, BACK_Z + 0.1);
-    void id;
+    box(w, 1.0, 0.05, M.walnut, cx, 0.5, BACK_Z + 0.03);
+    box(w, 0.06, 0.1, M.gold, cx, 1.02, BACK_Z + 0.05);
+    box(w, 0.22, 0.2, M.cream, cx, H - 0.11, BACK_Z + 0.1);
   });
 
   const lintels: { x: number; mats: THREE.MeshStandardMaterial[] }[] = [];
@@ -94,16 +95,25 @@ export function buildGallery(scene: THREE.Scene, renderer: THREE.WebGLRenderer):
     }
   };
   sideWall(0, -1, 0, false);
-  PARTITIONS.forEach((x, i) => sideWall(x, i, i + 1, true));
-  sideWall(WORLD.x1, ROOM_IDS.length - 1, -1, false);
+  GALLERY_LAYOUT.partitions.forEach((x, i) => sideWall(x, i, i + 1, true));
+  sideWall(WORLD.x1, SPANS.length - 1, -1, false);
 
   // ---- room names above each doorway / on the back wall ----
-  ROOM_IDS.forEach((id, r) => {
-    if (id === 'lobby') return;
-    const tex = textPlate([{ text: ROOM_INFO[id].name, font: '600 54px "Gowun Batang", serif', color: '#efe2c4', y: 64 }], 512, 128);
-    const m = add(new THREE.PlaneGeometry(2.4, 0.6), new THREE.MeshBasicMaterial({ map: tex, transparent: true }), r * ROOM_W + 6, 3.62, BACK_Z + 0.08);
+  for (const s of SPANS) {
+    if (!s.hall) continue;
+    const cx = (s.x0 + s.x1) / 2;
+    const tex = textPlate([{ text: s.hall.name, font: '600 54px "Gowun Batang", serif', color: '#efe2c4', y: 64 }], 512, 128);
+    const m = add(new THREE.PlaneGeometry(2.4, 0.6), new THREE.MeshBasicMaterial({ map: tex, transparent: true }), cx, 3.62, BACK_Z + 0.08);
     m.renderOrder = 1;
-  });
+    if (!s.slots.length) {
+      // a hall made before its paintings arrive
+      const soon = textPlate([
+        { text: '곧 그림이 걸릴 방이에요', font: '600 52px "Gowun Batang", serif', color: '#f3e6c6', y: 66 },
+        ...(s.hall.note ? [{ text: s.hall.note.slice(0, 30), font: '400 30px "IBM Plex Sans KR", sans-serif', color: '#e0cfaa', y: 122 }] : []),
+      ], 768, 150);
+      add(new THREE.PlaneGeometry(4.6, 0.9), new THREE.MeshBasicMaterial({ map: soon, transparent: true }), cx, 2.25, BACK_Z + 0.08).renderOrder = 1;
+    }
+  }
 
   // ---- lobby: title wall, window, wine bar ----
   {
@@ -147,7 +157,7 @@ export function buildGallery(scene: THREE.Scene, renderer: THREE.WebGLRenderer):
   }
 
   // ---- viewing benches (match shared obstacles) ----
-  for (const o of BENCHES) {
+  for (const o of GALLERY_LAYOUT.benches) {
     const w = o.x1 - o.x0, d = o.z1 - o.z0;
     box(w, 0.42, d, M.velvet, (o.x0 + o.x1) / 2, 0.21, (o.z0 + o.z1) / 2);
     for (const sx of [-1, 1]) for (const sz of [-1, 1])
@@ -157,7 +167,9 @@ export function buildGallery(scene: THREE.Scene, renderer: THREE.WebGLRenderer):
   // ---- paintings ----
   const paintings: Painting[] = [];
   const canvasMats: THREE.MeshBasicMaterial[] = [];
-  for (const id of ROOM_IDS) {
+  for (const span of SPANS) {
+    if (!span.hall) continue;
+    const id = span.hall.id;
     const slots = slotsFor(id);
     const works = ART.filter(a => a.room === id);
     works.forEach((art, k) => {
@@ -253,7 +265,6 @@ export function buildGallery(scene: THREE.Scene, renderer: THREE.WebGLRenderer):
   return { paintings, floor, setTime, loadArt, tick: (dt: number) => { decor.tick(dt); tickLivingWall(dt); }, fadeOccluders };
 }
 
-export const roomIndex = (id: RoomId) => ROOM_IDS.indexOf(id);
 
 /** A warm, dark backdrop: deep at the top, a faint glow just above the walls. */
 function backdrop(): THREE.Texture {

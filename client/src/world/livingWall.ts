@@ -1,13 +1,15 @@
 import * as THREE from 'three';
-import type { RoomId } from '@party/shared';
+import { GALLERY, HALL_MOTIONS } from '@party/shared';
 import { artMotion, onArtMotion } from '../ui/artMotion';
 
 /**
- * The paintings on the gallery walls breathe a little, each room in its own way:
- *   정원관 garden — wind: the top of the picture sways more than the bottom
- *   얼굴관 face   — breath: the whole picture slowly swells and settles
- *   장난감관 toy  — glint: a soft band of light slides across, like on glass
- *   연못관 pond   — water: ripples along the lower part
+ * The paintings on the gallery walls breathe a little, each hall in its own way
+ * (its `motion` in the gallery file, see shared HALL_MOTIONS):
+ *   wind   — the top of the picture sways more than the bottom
+ *   breath — the whole picture slowly swells and settles
+ *   glint  — a soft band of light slides across, like on glass
+ *   water  — ripples along the lower part
+ *   still  — hardly moves
  *
  * It is done in the painting's own shader (no extra textures or meshes), and is
  * kept subtle — something you notice after a moment rather than straight away.
@@ -19,13 +21,11 @@ export interface Motion { sway: number; breath: number; ripple: number; sheen: n
 /** The picture is shown slightly inset, so moving it never pulls in pixels from outside. */
 export const MARGIN = 0.012;
 
-export const MOTION: Record<RoomId, Motion> = {
-  lobby: { sway: 0, breath: 0, ripple: 0, sheen: 0.02 },
-  garden: { sway: 0.007, breath: 0, ripple: 0, sheen: 0.02 },
-  face: { sway: 0, breath: 0.016, ripple: 0, sheen: 0.02 },
-  toy: { sway: 0, breath: 0.006, ripple: 0, sheen: 0.09 },
-  pond: { sway: 0.002, breath: 0, ripple: 0.0045, sheen: 0.03 },
-};
+/** How the paintings in a hall move (the lobby and unknown places stay still). */
+export function motionFor(hallId: string): Motion {
+  const h = GALLERY.halls.find(x => x.id === hallId);
+  return HALL_MOTIONS[h?.motion ?? 'still'];
+}
 
 const smoothstep = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -80,10 +80,10 @@ const strength = { value: artMotion() === 'live' ? 1 : 0 };
 let goal = strength.value;
 onArtMotion(m => { goal = m === 'live' ? 1 : 0; });
 
-/** A painting canvas material for `room`; `seed` keeps neighbouring paintings out of step. */
-export function livingCanvas(room: RoomId, seed: number): THREE.MeshBasicMaterial {
+/** A painting canvas material for a hall; `seed` keeps neighbouring paintings out of step. */
+export function livingCanvas(hallId: string, seed: number): THREE.MeshBasicMaterial {
   const mat = new THREE.MeshBasicMaterial({ color: 0x3a3430 });
-  const m = MOTION[room];
+  const m = motionFor(hallId);
   const uniforms = {
     uLT: clock,
     uLStrength: strength,

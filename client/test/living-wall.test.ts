@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { MARGIN, MOTION, warpUv } from '../src/world/livingWall';
+import { MARGIN, warpUv } from '../src/world/livingWall';
+import { HALL_MOTIONS } from '@party/shared';
+const MOTION = { garden: HALL_MOTIONS.wind, face: HALL_MOTIONS.breath, toy: HALL_MOTIONS.glint, pond: HALL_MOTIONS.water, lobby: HALL_MOTIONS.still };
 
 const ROOMS = ['garden', 'face', 'toy', 'pond'] as const;
 

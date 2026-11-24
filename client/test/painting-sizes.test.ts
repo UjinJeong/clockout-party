@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ART, RAIL_TOP, hangY, slotsFor, wallSize } from '../src/world/art';
+import { GALLERY } from '@party/shared';
 
 describe('paintings sized by their own images', () => {
   it('keeps each painting’s own proportions', () => {
@@ -18,7 +19,7 @@ describe('paintings sized by their own images', () => {
   });
 
   it('fits the spot it hangs in, near eye level, with its frame clear above the wall rail', () => {
-    for (const room of ['garden', 'face', 'toy', 'pond'] as const) {
+    for (const room of GALLERY.halls.map(h => h.id)) {
       const slots = slotsFor(room);
       ART.filter(a => a.room === room).forEach((a, k) => {
         const slot = slots[k];

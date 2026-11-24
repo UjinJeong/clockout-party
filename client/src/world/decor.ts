@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { DOOR_HALF, PARTITIONS, PLANTS, ROOM_IDS, ROOM_W, TABLES, WORLD } from '@party/shared';
+import { DOOR_HALF, GALLERY_LAYOUT, WORLD } from '@party/shared';
 import { canvasTexture } from './textures';
 import type { Painting } from './gallery';
 
@@ -58,11 +58,11 @@ export function buildDecor(scene: THREE.Scene, paintings: Painting[]): Decor {
     }
     runs.push(run);
   };
-  for (let r = 0; r < ROOM_IDS.length; r++) {
-    strand(new THREE.Vector3(r * ROOM_W + 0.25, 4.12, WORLD.z0 + 0.16), new THREE.Vector3((r + 1) * ROOM_W - 0.25, 4.12, WORLD.z0 + 0.16), 0.3, 1.5, 0.14);
+  for (const s of GALLERY_LAYOUT.spans) {
+    strand(new THREE.Vector3(s.x0 + 0.25, 4.12, WORLD.z0 + 0.16), new THREE.Vector3(s.x1 - 0.25, 4.12, WORLD.z0 + 0.16), 0.3, 1.5, 0.14);
   }
   strand(new THREE.Vector3(0.2, 0.08, WORLD.z1 - 0.12), new THREE.Vector3(WORLD.x1 - 0.2, 0.08, WORLD.z1 - 0.12), 0.4, 0.8, 0);
-  for (const x of [0, ...PARTITIONS, WORLD.x1]) {
+  for (const x of [0, ...GALLERY_LAYOUT.partitions, WORLD.x1]) {
     const startZ = x === 0 || x === WORLD.x1 ? 1.6 : DOOR_HALF + 0.05;
     strand(new THREE.Vector3(x, 1.12, startZ), new THREE.Vector3(x, 1.12, WORLD.z1 - 0.1), 0.25, 1, 0.07);
   }
@@ -128,7 +128,7 @@ export function buildDecor(scene: THREE.Scene, paintings: Painting[]): Decor {
   const foot = new THREE.CylinderGeometry(0.22, 0.25, 0.03, 16);
   const candle = new THREE.CylinderGeometry(0.035, 0.035, 0.14, 10);
   const flameGeo = new THREE.ConeGeometry(0.022, 0.07, 8);
-  for (const tb of TABLES) {
+  for (const tb of GALLERY_LAYOUT.tables) {
     const add = (geo: THREE.BufferGeometry, mat: THREE.Material, y: number) => {
       const m = new THREE.Mesh(geo, mat); m.position.set(tb.x, y, tb.z); group.add(m); return m;
     };
@@ -147,7 +147,7 @@ export function buildDecor(scene: THREE.Scene, paintings: Painting[]): Decor {
   // ---- potted plants ----
   const potGeo = new THREE.CylinderGeometry(0.24, 0.18, 0.42, 12);
   const bush = new THREE.IcosahedronGeometry(0.3, 0);
-  for (const pl of PLANTS) {
+  for (const pl of GALLERY_LAYOUT.plants) {
     const pot = new THREE.Mesh(potGeo, M.pot); pot.position.set(pl.x, 0.21, pl.z); group.add(pot);
     const blobs: [number, number, number, number, THREE.Material][] = [
       [0, 0.72, 0, 1.0, M.leaf], [-0.12, 1.02, 0.05, 0.8, M.leaf2], [0.13, 0.95, -0.06, 0.75, M.leaf], [0.02, 1.28, 0, 0.6, M.leaf2],

@@ -41,9 +41,9 @@ describe('typing rhythm', () => {
 });
 
 import { slotsFor } from '../src/world/art';
-import { shownIn, type RoomId } from '@party/shared';
+import { shownIn } from '@party/shared';
 describe('wall space', () => {
   it('every shown painting has a spot on the wall', () => {
-    for (const h of GALLERY.halls) expect(shownIn(GALLERY, h.id)).toBeLessThanOrEqual(slotsFor(h.id as RoomId).length);
+    for (const h of GALLERY.halls) expect(shownIn(GALLERY, h.id)).toBeLessThanOrEqual(slotsFor(h.id).length);
   });
 });
