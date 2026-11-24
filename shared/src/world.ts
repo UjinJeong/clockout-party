@@ -1,5 +1,8 @@
 import { AVATAR_RADIUS } from './constants';
 import type { Seat } from './energy';
+import { partition, seat, square } from './mapParts';
+import { GALLERY_LAYOUT } from './galleryLayout';
+export { WALL_T } from './mapParts';
 
 /**
  * The party maps, shared so the server and clients agree on where you can walk.
@@ -57,63 +60,11 @@ export interface WorldMap {
   zones?: MapZone[];
 }
 
-let seatNo = 0;
-/** A seat facing `dir`, with its stand-up spot `out` metres in front of it (or at `stand`). */
-const seat = (x: number, z: number, y: number, dir: number, pose: 'sit' | 'lie', stand: Vec2): Seat =>
-  ({ id: seatNo++, x, z, y, dir, pose, stand });
-
-const square = (p: Furniture): Rect => ({ x0: p.x - p.r, x1: p.x + p.r, z0: p.z - p.r, z1: p.z + p.r });
-export const WALL_T = 0.1;
-/** A partition at x with a doorway |z| < doorHalf, from the back (-5) to the front (+5). */
-function partition(x: number, doorHalf: number, z0 = -5, z1 = 5): Rect[] {
-  return [
-    { x0: x - WALL_T / 2, x1: x + WALL_T / 2, z0, z1: -doorHalf },
-    { x0: x - WALL_T / 2, x1: x + WALL_T / 2, z0: doorHalf, z1 },
-  ];
-}
-
 // ───────────────────────── 🖼️ gallery: 「액자 밖으로」 ─────────────────────────
-export const ROOM_W = 12;
-export const ROOM_D = 10;
-export const ROOM_IDS = ['lobby', 'garden', 'face', 'toy', 'pond'] as const;
-export type RoomId = (typeof ROOM_IDS)[number];
-export const WORLD: Rect = { x0: 0, x1: ROOM_W * ROOM_IDS.length, z0: -ROOM_D / 2, z1: ROOM_D / 2 };
-export const PARTITIONS = [12, 24, 36, 48];
-export const DOOR_HALF = 2;
-const ROOM_NAME: Record<RoomId, string> = { lobby: '로비', garden: '정원관', face: '얼굴관', toy: '장난감관', pond: '연못관' };
-
-export const BAR: Rect = { x0: 3.2, x1: 8.8, z0: -3.9, z1: -3.1 }; // lobby wine bar
-export const BENCHES: Rect[] = [1, 2, 3, 4].map(i => ({ x0: i * ROOM_W + 4.6, x1: i * ROOM_W + 7.4, z0: 0.9, z1: 1.6 }));
-/** Standing tables (with a candle) and potted plants. */
-export const TABLES: Furniture[] = ROOM_IDS.flatMap((_, i) => [
-  { x: i * ROOM_W + 2.2, z: 2.9, r: 0.32 },
-  { x: i * ROOM_W + 9.8, z: 2.9, r: 0.32 },
-]);
-// Only in corners that have no painting hanging on the side wall.
-export const PLANTS: Furniture[] = [
-  { x: 0.7, z: -4.35, r: 0.3 }, { x: 11.3, z: -4.35, r: 0.3 },   // lobby
-  { x: 35.3, z: -4.35, r: 0.3 },                                // face room, right corner
-  { x: 36.7, z: -4.35, r: 0.3 }, { x: 47.3, z: -4.35, r: 0.3 },  // toy room
-];
-export const OBSTACLES: Rect[] = [BAR, ...BENCHES, ...TABLES.map(square), ...PLANTS.map(square)];
-export const SPAWN: Vec2 = { x: 6, z: 1.5 };
-
-export const GALLERY_MAP: WorldMap = {
-  theme: 'gallery',
-  bounds: WORLD,
-  rooms: ROOM_IDS.map((id, i) => ({ id, name: ROOM_NAME[id], x0: i * ROOM_W, x1: (i + 1) * ROOM_W })),
-  walls: PARTITIONS.flatMap(x => partition(x, DOOR_HALF)),
-  obstacles: OBSTACLES,
-  water: [],
-  spawn: SPAWN,
-  spots: [1, 2, 3, 4].flatMap(r => [2.4, 6, 9.6].map(dx => ({ x: r * ROOM_W + dx, z: -2.6 })))
-    .concat([{ x: 3.5, z: -2.2 }, { x: 8, z: -2.2 }, { x: 6, z: 3.6 }]),
-  // the viewing benches: three seats each, facing the paintings
-  seats: BENCHES.flatMap(b => [-0.85, 0, 0.85].map(dx => {
-    const x = (b.x0 + b.x1) / 2 + dx;
-    return seat(x, (b.z0 + b.z1) / 2, 0.42, Math.PI, 'sit', { x, z: 0.4 });
-  })),
-};
+// Built from its list of halls (see galleryLayout.ts).
+export const GALLERY_MAP: WorldMap = GALLERY_LAYOUT.map;
+export const WORLD: Rect = GALLERY_LAYOUT.bounds;
+export const OBSTACLES: Rect[] = GALLERY_MAP.obstacles;
 
 // ───────────────────────── 🏠 home party: a two-storey house ─────────────────────────
 /**

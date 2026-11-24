@@ -50,7 +50,7 @@ describe('proximity', () => {
 
 describe('party furniture', () => {
   it('adds standing tables and plants you cannot walk through', async () => {
-    const { TABLES, PLANTS } = await import('../src');
+    const { tables: TABLES, plants: PLANTS } = (await import('../src')).GALLERY_LAYOUT;
     expect(TABLES.length).toBeGreaterThanOrEqual(8);
     expect(PLANTS.length).toBeGreaterThanOrEqual(4);
     for (const t of [...TABLES, ...PLANTS]) expect(isWalkable({ x: t.x, z: t.z })).toBe(false);

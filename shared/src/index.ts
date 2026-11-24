@@ -9,3 +9,4 @@ export * from './hours';
 export * from './board';
 export * from './crowd';
 export * from './gallery';
+export * from './galleryLayout';
