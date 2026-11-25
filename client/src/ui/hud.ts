@@ -427,7 +427,8 @@ export function createHud(conn: PartyConnection, controls: Controls) {
       leaving = true;
       sound.play('whoosh', { pitch: 0.6 });
       for (const id of ['mood-card', 'hours-card']) $(id).hidden = true;
-      $('dock').hidden = true; $('chip-tray').hidden = true;
+      // the lift is coming: no more walking, and nothing left open over the record card
+      $('dock').hidden = true; $('chip-tray').hidden = true; $('joystick').hidden = true; people.hidden = true; book.hidden = true;
       try { await party?.farewell(); } catch (err) { console.error(err); }
       const stats = party?.stats ?? { sent: 0, got: 0, clinks: 0 };
       $('bye-list').innerHTML = byeLines({ ms: Date.now() - joinedAt, from: firstEnergy, to: lastEnergy, ...stats }).map(l => `<li>${esc(l)}</li>`).join('');
@@ -445,7 +446,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
     dispose() {
       cleanups.forEach(f => f());
       living.close();
-      $('bye-card').hidden = true; $('dock').hidden = false; $('chip-tray').hidden = false; $('night-veil').hidden = true; $('event-chip').hidden = true;
+      $('bye-card').hidden = true; $('dock').hidden = false; $('chip-tray').hidden = false; $('joystick').hidden = false; $('night-veil').hidden = true; $('event-chip').hidden = true;
       hud.hidden = true; people.hidden = true; chip.hidden = true; drinkChip.hidden = true; for (const c of Object.values(actChips)) c.hidden = true; book.hidden = true; likeChip.hidden = true;
       $('help').hidden = true;
     },

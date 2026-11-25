@@ -36,14 +36,44 @@ function same(a: string, b: string) {
   return x.length === y.length && timingSafeEqual(x, y);
 }
 
+/** Wrong passwords allowed from one place before it has to wait, and how long. */
+export const ADMIN_TRIES = 10;
+export const ADMIN_WAIT = 10 * 60_000;
+const wrong = new Map<string, { n: number; since: number }>();
+/** Who is knocking: the last address in X-Forwarded-For is the one Render's proxy saw (earlier ones can be made up). */
+const knocker = (req: Request) => {
+  const fwd = String(req.headers['x-forwarded-for'] ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  return fwd.at(-1) ?? req.socket.remoteAddress ?? '?';
+};
+
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const header = req.headers.authorization ?? '';
   const [scheme, value] = header.split(' ');
+  const who = knocker(req), now = Date.now(), w = wrong.get(who);
+  if (w && now - w.since > ADMIN_WAIT) wrong.delete(who);
+  else if (w && w.n >= ADMIN_TRIES) {
+    res.set('Retry-After', String(Math.ceil((w.since + ADMIN_WAIT - now) / 1000))).status(429).send('비밀번호를 너무 여러 번 틀렸어요. 10분 뒤에 다시 해 주세요.');
+    return;
+  }
   if (scheme === 'Basic' && value) {
     const pass = Buffer.from(value, 'base64').toString().split(':').slice(1).join(':');
-    if (same(pass, process.env.ADMIN_PASSWORD || adminPassword)) return next();
+    if (same(pass, process.env.ADMIN_PASSWORD || adminPassword)) { wrong.delete(who); return next(); }
+    // only a password that was sent and wrong counts (a browser's first visit sends none)
+    const cur = wrong.get(who);
+    wrong.set(who, cur ? { n: cur.n + 1, since: cur.since } : { n: 1, since: now });
+    if (wrong.size > 5000) wrong.clear();
   }
   res.set('WWW-Authenticate', 'Basic realm="party-admin", charset="UTF-8"').status(401).send('관리자 비밀번호가 필요해요.');
+}
+
+/**
+ * Buttons that change something (close a room, walk someone out) must come from the manager
+ * page itself. A browser remembers the password, so another site could otherwise press them
+ * with a plain form; it can't add this header.
+ */
+function fromThePage(req: Request, res: Response, next: NextFunction) {
+  if (req.get('x-admin') === '1') return next();
+  res.status(403).json({ error: '관리자 페이지에서만 할 수 있어요.' });
 }
 
 export function mountAdmin(app: Application) {
@@ -69,13 +99,13 @@ export function mountAdmin(app: Application) {
     if (r.ok) res.json(r); else res.status(r.status).json({ error: r.error });
   });
   // close a party, or walk one person out of it
-  app.post('/admin/api/rooms/:roomId/close', requireAdmin, (req, res) => {
+  app.post('/admin/api/rooms/:roomId/close', requireAdmin, fromThePage, (req, res) => {
     const room = PartyRoom.open.get(String(req.params.roomId));
     if (!room) { res.status(404).json({ ok: false }); return; }
     room.closeAll();
     res.json({ ok: true });
   });
-  app.post('/admin/api/rooms/:roomId/kick/:id', requireAdmin, (req, res) => {
+  app.post('/admin/api/rooms/:roomId/kick/:id', requireAdmin, fromThePage, (req, res) => {
     const room = PartyRoom.open.get(String(req.params.roomId));
     res.status(room ? 200 : 404).json({ ok: !!room && room.dismiss(String(req.params.id), 'kicked') });
   });

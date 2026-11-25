@@ -120,7 +120,7 @@ document.addEventListener('click',async e=>{
   if(b.dataset.armed!=='1'){b.dataset.armed='1';b.dataset.label=b.textContent;b.textContent=b.dataset.close?'정말 닫을까요?':'정말요?';setTimeout(()=>{if(b.isConnected){b.dataset.armed='';b.textContent=b.dataset.label;}},3000);return;}
   b.disabled=true;
   const url=b.dataset.close?'/admin/api/rooms/'+encodeURIComponent(b.dataset.close)+'/close':'/admin/api/rooms/'+b.dataset.kick.split('/').map(encodeURIComponent).join('/kick/');
-  const r=await fetch(url,{method:'POST'}).catch(()=>null);
+  const r=await fetch(url,{method:'POST',headers:{'x-admin':'1'}}).catch(()=>null);
   b.textContent=r&&r.ok?'처리했어요':'실패했어요';setTimeout(load,1200);
 });
 load();setInterval(load,5000);

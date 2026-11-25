@@ -366,6 +366,19 @@ describe('manager page', () => {
     expect(s.people[0]).toMatchObject({ name: '유진', room: '금요일 밤', region: '대한민국 · 서울' });
     expect(s.rooms[0]).toMatchObject({ title: '금요일 밤', clients: 1 });
   });
+  it('too many wrong passwords from one place are slowed down', async () => {
+    const tryWith = (pass: string, from: string) => fetch('http://localhost:2568/admin/api/stats', {
+      headers: { authorization: 'Basic ' + Buffer.from('admin:' + pass).toString('base64'), 'x-forwarded-for': from },
+    });
+    for (let k = 0; k < 10; k++) expect((await tryWith('guess' + k, '203.0.113.7')).status).toBe(401);
+    const locked = await tryWith('test-pass', '203.0.113.7');
+    expect(locked.status).toBe(429);
+    expect(await locked.text()).toContain('10분');
+    // a made-up address in front doesn't get around it (the proxy adds the real one last)
+    expect((await tryWith('test-pass', '198.51.100.1, 203.0.113.7')).status).toBe(429);
+    // someone else is not locked out
+    expect((await tryWith('test-pass', '203.0.113.8')).status).toBe(200);
+  });
   it('serves the manager page itself behind the same password', async () => {
     expect((await fetch('http://localhost:2568/admin')).status).toBe(401);
     const auth = 'Basic ' + Buffer.from('admin:test-pass').toString('base64');
@@ -638,7 +651,10 @@ describe('manager page: rooms', () => {
     const no = await fetch(`http://localhost:2568/admin/api/rooms/${room.roomId}/close`, { method: 'POST' });
     expect(no.status).toBe(401);
     const code = leftWith(a);
-    const ok = await fetch(`http://localhost:2568/admin/api/rooms/${room.roomId}/close`, { method: 'POST', headers: { authorization: auth } });
+    // another site can't press the button for you: the page's own header is needed
+    const forged = await fetch(`http://localhost:2568/admin/api/rooms/${room.roomId}/close`, { method: 'POST', headers: { authorization: auth } });
+    expect(forged.status).toBe(403);
+    const ok = await fetch(`http://localhost:2568/admin/api/rooms/${room.roomId}/close`, { method: 'POST', headers: { authorization: auth, 'x-admin': '1' } });
     expect((await ok.json()).ok).toBe(true);
     expect(await code).toBe(LEAVE_CODE.closed);
   }, DISMISS_DELAY + 5000);
