@@ -10,6 +10,7 @@ import './viewer.css';
 import { QUESTIONS, playAnswer } from './docent';
 import { ANSWERS } from './answers';
 import { GALLERY } from '@party/shared';
+import { forTouch, touchFirst } from './touchWords';
 import { artMotion, setArtMotion } from '../ui/artMotion';
 
 
@@ -117,6 +118,8 @@ const ART=GALLERY.items.filter(g=>!g.hidden).map(g=>{const hand=HAND.find(h=>h.i
   if(g.image||!hand)return {i:g.i,room:g.room,title:g.title,w:g.w,h:g.h,desc:g.desc,how:g.how||'그림을 천천히 들여다보세요. 빛이 은은하게 스쳐 가요.',hint:g.hint||'천천히 보기',
     kind:'plain',img:g.image,thumb:g.thumb||g.image,mask:FLAT_MASK,depth:FLAT_DEPTH,doc:g.doc,fx:D({shimmer:.12})};
   return {...hand,title:g.title,desc:g.desc,how:g.how||hand.how,hint:g.hint||hand.hint,doc:g.doc};});
+/* on a phone the tips say finger instead of cursor */
+if(touchFirst())for(const a of ART){a.how=forTouch(a.how);a.hint=forTouch(a.hint);}
 ART.forEach((a,k)=>{a.k=k;a.img=a.img||`a/a${pad2(a.i)}.jpg`;a.thumb=a.thumb||`a/t${pad2(a.i)}.jpg`;a.mask=a.mask||`a/m${pad2(a.i)}.png`;a.depth=a.depth||`a/d${pad2(a.i)}.png`;});
 
 /* ---------- viewer DOM ---------- */
