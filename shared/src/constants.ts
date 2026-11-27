@@ -10,6 +10,8 @@ export const NAME_MAX = 12;
 export const CHAT_MAX = 120;
 export const TITLE_MAX = 24;
 
+/** Seconds between two chat lines from the same guest: typing is slower than this, flooding isn't. */
+export const CHAT_EVERY = 0.5;
 export const VOICE_MAX_MS = 30_000;
 export const VOICE_MAX_BYTES = 400_000;
 

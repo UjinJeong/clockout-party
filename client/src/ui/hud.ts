@@ -2,7 +2,7 @@ import { FIREWORK_COOLDOWN,
   BATTERY_LABEL, EMOTES, EMOTE_ICON, ENERGY, MOODS, MOOD_ENERGY, MOOD_ICON, MOOD_LABEL, VOICE_MAX_MS,
   type Battery, type MapRoom, type Mood, type Seat,
 } from '@party/shared';
-import { DRINK_ROOMS, HAND_LABEL, type Look, type Note } from '@party/shared';
+import { CHAT_EVERY, DRINK_ROOMS, HAND_LABEL, type Look, type Note } from '@party/shared';
 import type { Party } from '../game/party';
 import type { PartyConnection } from '../net/types';
 import type { Artwork } from '../world/art';
@@ -93,9 +93,13 @@ export function createHud(conn: PartyConnection, controls: Controls) {
 
   // ---- chat ----
   const input = $('chat-input') as HTMLInputElement;
+  let chatAt = 0;
   cleanups.push(onSubmit($('chat-form') as HTMLFormElement, () => {
     const text = input.value.trim();
     if (!text) return;
+    // the party passes on one line per CHAT_EVERY: keep what they typed instead of losing it
+    if (Date.now() - chatAt < CHAT_EVERY * 1000) { toast('조금만 천천히 말해 주세요', 1600); return; }
+    chatAt = Date.now();
     conn.chat(text);
     input.value = '';
   }));

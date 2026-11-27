@@ -1,6 +1,6 @@
 import { Room, type Client } from '@colyseus/core';
 import {
-  DISMISS_DELAY, IDLE_KICK, LEAVE_CODE, isOwnerKey, type LeaveReason, ACT_EVERY, isAct, spawnSpot, Board, CLINK, Clinks, TOGETHER, hasCompany, isNear, DOZE_AFTER, ENERGY, FIREWORK_COOLDOWN, nearStage, sanitizeHours, MAX_PLAYERS, MAX_SPEED, MOOD_ENERGY, batteryOf, chargeRate, finite, isEmote, isMood, isTheme, mapFor,
+  CHAT_EVERY, DISMISS_DELAY, IDLE_KICK, LEAVE_CODE, isOwnerKey, type LeaveReason, ACT_EVERY, isAct, spawnSpot, Board, CLINK, Clinks, TOGETHER, hasCompany, isNear, DOZE_AFTER, ENERGY, FIREWORK_COOLDOWN, nearStage, sanitizeHours, MAX_PLAYERS, MAX_SPEED, MOOD_ENERGY, batteryOf, chargeRate, finite, isEmote, isMood, isTheme, mapFor,
   moveWithCollision, nearbyIds, nearestWalkable, stepEnergy, type WorldMap, parseLook, sanitizeChat, sanitizeName, sanitizeTitle, validateVoice,
 } from '@party/shared';
 import { saveLike, saveNote, sharedBoard, voterOf } from './boards';
@@ -10,7 +10,7 @@ import { stats } from './stats';
 export interface PartyMetadata { title: string; theme: string; private: boolean }
 
 interface Track {
-  at: number; voiceAt: number;
+  at: number; voiceAt: number; chatAt: number;
   /** Exact energy; the synced field is whole numbers. */
   energy: number;
   /** Seconds since the player last did anything. */
@@ -56,7 +56,11 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
     move: (client: Client, m: unknown) => this.onMove(client, m),
     chat: (client: Client, m: unknown) => {
       const text = sanitizeChat((m as { text?: unknown } | null)?.text);
-      if (!text) return;
+      const track = this.tracks.get(client.sessionId);
+      if (!text || !track) return;
+      const now = Date.now();
+      if (now - track.chatAt < CHAT_EVERY * 1000) return; // no chat flooding
+      track.chatAt = now;
       this.active(client.sessionId);
       this.toNearby(client, 'chat', { from: client.sessionId, text, ts: Date.now() });
     },
@@ -206,7 +210,7 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
       energy: ENERGY.start, battery: batteryOf(ENERGY.start), seat: -1, dozing: false, mood: '', hours: sanitizeHours(options.hours), away: false,
     }));
     this.voters.set(client.sessionId, voterOf(options.visitor, client.sessionId));
-    this.tracks.set(client.sessionId, { at: Date.now(), voiceAt: 0, energy: ENERGY.start, idle: 0, moodSet: false });
+    this.tracks.set(client.sessionId, { at: Date.now(), voiceAt: 0, chatAt: 0, energy: ENERGY.start, idle: 0, moodSet: false });
     // the one who made the room is its host, also when they come back to it
     if (this.ownerKey && options.ownerKey === this.ownerKey) { this.ownerOf.set(client.sessionId, true); this.state.owner = client.sessionId; }
     stats.join({ id: client.sessionId, name, roomId: this.roomId, roomTitle: this.state.title, isPrivate: this.state.isPrivate, tz: options.tz });

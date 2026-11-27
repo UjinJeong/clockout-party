@@ -11,7 +11,7 @@ import app from '../src/app';
 import type { PartyRoom } from '../src/PartyRoom';
 import { resetBoards } from '../src/boards';
 import { createBoardStore } from '../src/boardStore';
-import { DOZE_AFTER, ENERGY, MAPS, MOOD_ENERGY } from '@party/shared';
+import { CHAT_EVERY, DOZE_AFTER, ENERGY, MAPS, MOOD_ENERGY } from '@party/shared';
 
 let colyseus: ColyseusTestServer;
 beforeAll(async () => { colyseus = await boot(app); });
@@ -67,6 +67,22 @@ describe('party room', () => {
     expect(got.a).toEqual(['안녕']);
     expect(got.b).toEqual(['안녕']);
     expect(got.far).toEqual([]);
+  });
+
+  it('passes on only one chat per CHAT_EVERY from the same person (no flooding)', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', {});
+    const a = await colyseus.connectTo(room, { name: 'A', look });
+    const b = await colyseus.connectTo(room, { name: 'B', look });
+    const got: string[] = [];
+    b.onMessage('chat', (m: any) => got.push(m.text));
+    for (let i = 0; i < 10; i++) a.send('chat', { text: 'spam ' + i });
+    await wait(150);
+    expect(got).toEqual(['spam 0']);
+    await wait(CHAT_EVERY * 1000);
+    a.send('chat', { text: '이제 됨' });
+    b.send('chat', { text: 'B는 따로' });
+    await wait(150);
+    expect(got).toEqual(['spam 0', '이제 됨', 'B는 따로']);
   });
 
   it('ignores empty chat', async () => {
