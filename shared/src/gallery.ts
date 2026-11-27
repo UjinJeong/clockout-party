@@ -59,6 +59,11 @@ export interface GalleryItem {
   answers: string[];
   /** A replacement picture (paths under the site, e.g. gallery/17-k3j2.jpg). Without it, the original. */
   image?: string; wall?: string; thumb?: string;
+  /**
+   * Motion made for a replaced picture by the manager page's auto analysis: a motion map
+   * (R flow, G sway, B shimmer), a depth map, and how strong each effect is. `fx: {}` = keep it still.
+   */
+  mask?: string; depth?: string; fx?: AutoFx;
   /** Taken down for now (kept, not shown). */
   hidden?: boolean;
 }
@@ -66,6 +71,27 @@ export interface GalleryItem {
 export interface Gallery { halls: Hall[]; items: GalleryItem[] }
 /** How many paintings a hall shows (taken-down ones don't count). */
 export const shownIn = (g: Gallery, hallId: string) => g.items.filter(x => x.room === hallId && !x.hidden).length;
+
+/** The effects auto motion may set, and how far each may go (the living painting viewer's own knobs). */
+export const FX_RANGE = {
+  flow: [0, 0.012], flowScale: [1, 8], flowSpeed: [0.1, 2],
+  sway: [0, 0.01], swayFreq: [1, 14], swaySpeed: [0.3, 3], swayTop: [0, 1],
+  shimmer: [0, 0.6], breath: [0, 0.012], ripple: [0, 0.012], ripMask: [0, 1], para: [0, 0.04],
+} as const;
+export type FxKey = keyof typeof FX_RANGE;
+export const FX_KEYS = Object.keys(FX_RANGE) as FxKey[];
+export type AutoFx = Partial<Record<FxKey, number>>;
+const checkFx = (v: unknown): AutoFx | null => {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const out: AutoFx = {};
+  for (const k of FX_KEYS) {
+    const n = (v as Record<string, unknown>)[k];
+    if (typeof n !== 'number' || !Number.isFinite(n)) continue;
+    const [lo, hi] = FX_RANGE[k];
+    out[k] = Math.min(hi, Math.max(lo, n));
+  }
+  return out;
+};
 
 export const LIMITS = { title: 40, desc: 300, doc: 800, how: 200, hint: 30, answer: 800 } as const;
 const PATH = /^gallery\/[A-Za-z0-9_-]{1,64}\.(jpg|jpeg|png|webp)$/;
@@ -129,6 +155,16 @@ export function checkGallery(input: unknown): { ok: true; gallery: Gallery } | {
       it[k] = o[k] as string;
     }
     if (it.image && (!it.wall || !it.thumb)) return { ok: false, error: `「${title}」: 새 그림의 작은 사본이 빠졌어요. 다시 올려 주세요.` };
+    // auto motion only ever belongs to a replaced picture: an original keeps its hand-made one
+    if (it.image) {
+      for (const k of ['mask', 'depth'] as const) {
+        if (o[k] === undefined || o[k] === null || o[k] === '') continue;
+        if (!isGalleryPath(o[k])) return { ok: false, error: `「${title}」: 움직임 파일 경로가 잘못됐어요.` };
+        it[k] = o[k] as string;
+      }
+      const fx = checkFx(o.fx);
+      if (fx) it.fx = fx;
+    }
     if (o.hidden === true) it.hidden = true;
     items.push(it);
   }

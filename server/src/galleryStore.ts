@@ -81,7 +81,7 @@ export function createGalleryStore(o: StoreOptions = {}) {
       if (!token) return { ok: false, status: 503, error: 'GitHub 토큰이 설정되지 않아서 저장할 수 없어요. (Render의 GITHUB_TOKEN)' };
       const checked = checkGallery(raw);
       if (!checked.ok) return { ok: false, status: 400, error: checked.error };
-      const used = new Set(checked.gallery.items.flatMap(it => [it.image, it.wall, it.thumb]).filter(Boolean) as string[]);
+      const used = new Set(checked.gallery.items.flatMap(it => [it.image, it.wall, it.thumb, it.mask, it.depth]).filter(Boolean) as string[]);
       const files: { path: string; bytes: Buffer }[] = [];
       for (const p of Array.isArray(pictures) ? pictures : []) {
         const { path, data } = (p ?? {}) as PictureUpload;

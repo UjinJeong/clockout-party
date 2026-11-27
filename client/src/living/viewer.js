@@ -109,14 +109,16 @@ const HAND = [
   fx:D({flow:.003,flowScale:6,flowSpeed:.7,shimmer:.45,ripple:.004,ripMask:1})},
 ];
 /* The catalogue: order, words and any replacement picture come from gallery.json (the manager page);
-   each original painting keeps its hand-made motion from HAND. A replaced or new picture gets a gentle
-   shimmer only, with a flat mask and depth (its own motion would have to be made by hand). */
+   each original painting keeps its hand-made motion from HAND. A replaced or new picture moves the way
+   the manager page's auto analysis worked out (its own motion map, depth map and strengths), or stays still. */
 const FLAT_MASK='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4XmNoaGgAAAMEAYGyFkehAAAAAElFTkSuQmCC';
 const FLAT_DEPTH='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4XmPw9fUFAAHSAOindOlcAAAAAElFTkSuQmCC';
 const pad2=n=>String(n).padStart(2,'0');
 const ART=GALLERY.items.filter(g=>!g.hidden).map(g=>{const hand=HAND.find(h=>h.i===g.i);
-  if(g.image||!hand)return {i:g.i,room:g.room,title:g.title,w:g.w,h:g.h,desc:g.desc,how:g.how||'그림을 천천히 들여다보세요. 빛이 은은하게 스쳐 가요.',hint:g.hint||'천천히 보기',
-    kind:'plain',img:g.image,thumb:g.thumb||g.image,mask:FLAT_MASK,depth:FLAT_DEPTH,doc:g.doc,fx:D({shimmer:.12})};
+  if(g.image||!hand)return {i:g.i,room:g.room,title:g.title,w:g.w,h:g.h,desc:g.desc,how:g.how||(g.fx&&!Object.keys(g.fx).length?'그림을 천천히 들여다보세요.':'그림을 천천히 들여다보세요. 빛이 은은하게 스쳐 가요.'),hint:g.hint||'천천히 보기',
+    kind:'plain',img:g.image,thumb:g.thumb||g.image,mask:g.fx&&g.mask||FLAT_MASK,depth:g.fx&&g.depth||FLAT_DEPTH,doc:g.doc,
+    // auto motion from the manager page (fx: {} = keep it still); pictures from before it: a gentle shimmer
+    fx:g.fx?D(g.fx):D({shimmer:.12})};
   return {...hand,title:g.title,desc:g.desc,how:g.how||hand.how,hint:g.hint||hand.hint,doc:g.doc};});
 /* on a phone the tips say finger instead of cursor */
 if(touchFirst())for(const a of ART){a.how=forTouch(a.how);a.hint=forTouch(a.hint);}

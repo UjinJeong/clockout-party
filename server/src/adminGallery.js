@@ -13,6 +13,7 @@
 
   let base = [], items = [], baseHalls = [], halls = [], version = '', canSave = false, repo = '', branch = 'main';
   const pics = new Map();     // path → { data (base64), url (preview) }
+  const motion = new Map();   // painting id → what the 🪄 auto motion found (this visit only)
   let open = null;            // the id being edited
   let loaded = false, busy = false;
 
@@ -38,7 +39,7 @@
       const g = await r.json();
       if (!r.ok) throw new Error(g.error || '불러오지 못했어요.');
       base = g.gallery.items; items = structuredClone(base); baseHalls = g.gallery.halls; halls = structuredClone(baseHalls); if (g.options) OPT = g.options; openHall = null; version = g.version; canSave = g.canSave; repo = g.repo; branch = g.branch;
-      pics.clear(); open = null; loaded = true;
+      pics.clear(); motion.clear(); open = null; loaded = true;
       render();
     } catch (e) { box.innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
   }
@@ -46,7 +47,7 @@
   function render() {
     const parts = [];
     if (!canSave) parts.push('<div class="err">지금은 <b>보기만</b> 할 수 있어요. 저장하려면 Render의 환경 변수에 <code>GITHUB_TOKEN</code>을 넣어 주세요.</div>');
-    parts.push('<p class="note">저장하면 GitHub에 기록되고, 2~5분 뒤 사이트에 반영돼요. 새로 올린 그림은 빛이 은은하게 스치는 기본 움직임만 있어요 (원래 그림의 움직임은 그 그림에 맞춰 만든 것이라서요).</p>');
+    parts.push('<p class="note">저장하면 GitHub에 기록되고, 2~5분 뒤 사이트에 반영돼요. 새로 올린 그림은 🪄 자동으로 읽어서 움직일 곳(하늘·물의 흐름, 잎의 살랑임, 반짝임, 입체)을 찾아요. 찾지 못하면 움직임 없이 걸려요.</p>');
     parts.push(hallsSection());
     for (const [room, name, max] of rooms()) {
       const list = items.filter(x => x.room === room);
@@ -148,7 +149,6 @@
       + (it.image && isOriginal ? '<button class="mini" data-restore="' + it.i + '">원래 그림으로</button>' : '')
       + (!isOriginal ? '<button class="mini danger-lite" data-remove="' + it.i + '">이 그림 지우기</button>' : '')
       + '<small>' + it.w + ' × ' + it.h + ' px</small>'
-      + (it.image ? '<small>바꾼 그림은 빛이 은은하게 스치는 기본 움직임만 있어요. "해 보기"가 비어 있으면 "천천히 보기"로 나와요.</small>' : '')
       + '</div>'
       + '<div class="gfields">'
       + f('title', '제목', 0, 40)
@@ -158,7 +158,8 @@
       + '<div class="two">' + f('how', '해 보기 (살아난 그림에서 할 수 있는 것)', 0, 200) + f('hint', '짧은 힌트', 0, 30) + '</div>'
       + '<details><summary>도슨트에게 물어보기 답변 4개</summary>'
       + QUESTIONS.map((q, k) => '<label><span>' + esc(q) + '</span><textarea data-a="' + k + '" rows="3" maxlength="800">' + esc(it.answers[k] ?? '') + '</textarea></label>').join('')
-      + '</details></div></div>';
+      + '</details></div>'
+      + (it.image ? motionBox(it) : '') + '</div>';
   }
 
   function bar() {
@@ -167,7 +168,7 @@
     const moved = !n && changed(); // only the hanging order changed
     const hc = hallChanges().length;
     $('gcount').textContent = [hc ? '관 ' + hc + '곳' : '', n ? '그림 ' + n + '점' : ''].filter(Boolean).join(' · ') + (n || hc ? ' 바뀜' : moved ? '거는 순서가 바뀌었어요' : '바뀐 내용 없음');
-    $('gsave').disabled = !changed() || !canSave || busy;
+    $('gsave').disabled = !changed() || !canSave || busy || busyMotion();
     $('gundo').disabled = !changed() || busy;
   }
 
@@ -206,6 +207,109 @@
     // the original's hand-made motion (and its "해 보기") does not fit a new picture
     if (!it.image && base.some(b => b.i === it.i)) { it.how = ''; it.hint = ''; }
     Object.assign(it, { image: name + '.jpg', wall: name + '-wall.jpg', thumb: name + '-t.jpg', w: s.full.w, h: s.full.h });
+    delete it.mask; delete it.depth; delete it.fx; motion.delete(it.i);
+  }
+
+  // ---- 🪄 auto motion: read a picture for what could move (in this browser; nothing is sent anywhere) ----
+  const TRANSFORMERS = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.1';
+  const DEPTH_MODEL = 'onnx-community/depth-anything-v2-small';
+  const LV = [['off', '끄기'], ['low', '약하게'], ['mid', '보통'], ['high', '강하게']];
+  const FX_LABEL = { flow: '🌊 흐름 (하늘·물)', sway: '🌿 살랑임 (잎·결)', shimmer: '✨ 반짝임', depth: '🧊 입체 (깊이)' };
+  let autoMod = null, depthPipe = null;
+  const auto = () => (autoMod ??= import('/admin/auto-motion.js').catch(e => { autoMod = null; throw e; }));
+  const busyMotion = () => [...motion.values()].some(m => m.state === 'busy');
+  const within = (p, ms) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('시간 초과')), ms))]);
+  const picUrl = it => pics.has(it.image) ? pics.get(it.image).url : '/' + it.image;
+  function loadImg(src, fb) {
+    return new Promise((ok, no) => {
+      const im = new Image(); im.crossOrigin = 'anonymous';
+      im.onload = () => ok(im);
+      im.onerror = () => { if (fb && im.src !== fb) { im.src = fb; fb = ''; } else no(new Error('그림을 불러오지 못했어요.')); };
+      im.src = src;
+    });
+  }
+  /** Depth from a small model run right here (downloaded once, about 25MB). Near = 1. */
+  async function depthOf(img, w, h) {
+    if (!depthPipe) depthPipe = (async () => {
+      const T = await import(TRANSFORMERS);
+      try { if (navigator.gpu && await navigator.gpu.requestAdapter()) return await T.pipeline('depth-estimation', DEPTH_MODEL, { device: 'webgpu' }); } catch { /* fall back to the CPU */ }
+      return T.pipeline('depth-estimation', DEPTH_MODEL, { dtype: 'q8' });
+    })().catch(e => { depthPipe = null; throw e; });
+    const pipe = await depthPipe;
+    const k = Math.min(1, 640 / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    const out = await pipe(c.toDataURL('image/jpeg', 0.9));
+    const dc = out.depth.toCanvas(), s = document.createElement('canvas'); s.width = w; s.height = h;
+    const g = s.getContext('2d'); g.drawImage(dc, 0, 0, w, h);
+    const d = g.getImageData(0, 0, w, h).data, depth = new Float32Array(w * h);
+    for (let i = 0; i < w * h; i++) depth[i] = d[i * 4] / 255;
+    return depth;
+  }
+  /** RGBA pixels → a PNG, drawn twice as big (smoothly) so the motion fades between pixels. */
+  function png(rgba, w, h) {
+    const a = document.createElement('canvas'); a.width = w; a.height = h; a.getContext('2d').putImageData(new ImageData(rgba, w, h), 0, 0);
+    const b = document.createElement('canvas'); b.width = w * 2; b.height = h * 2;
+    const g = b.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(a, 0, 0, b.width, b.height);
+    const url = b.toDataURL('image/png');
+    return { data: url.slice(url.indexOf(',') + 1), url };
+  }
+  const grey = (v, w, h) => { const o = new Uint8ClampedArray(w * h * 4); for (let i = 0; i < w * h; i++) { o[i * 4] = o[i * 4 + 1] = o[i * 4 + 2] = Math.round(v[i] * 255); o[i * 4 + 3] = 255; } return o; };
+  /** The picture, dimmed, with what moves painted over it: blue flows, green sways, gold shimmers. */
+  function preview(img, mask, w, h) {
+    const o = new Uint8ClampedArray(w * h * 4);
+    for (let i = 0; i < w * h; i++) {
+      const f = mask[i * 4] / 255, s = mask[i * 4 + 1] / 255, m = mask[i * 4 + 2] / 255, t = f + s + m || 1;
+      o[i * 4] = (90 * f + 120 * s + 255 * m) / t; o[i * 4 + 1] = (180 * f + 225 * s + 215 * m) / t; o[i * 4 + 2] = (255 * f + 110 * s + 70 * m) / t;
+      o[i * 4 + 3] = Math.min(1, Math.max(f, s, m)) * 190;
+    }
+    const c = document.createElement('canvas'); c.width = w * 2; c.height = h * 2;
+    const g = c.getContext('2d'); g.drawImage(img, 0, 0, c.width, c.height); g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(0, 0, c.width, c.height);
+    const a = document.createElement('canvas'); a.width = w; a.height = h; a.getContext('2d').putImageData(new ImageData(o, w, h), 0, 0);
+    g.drawImage(a, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.8);
+  }
+  /** Read the picture: motion map, depth, strengths, "해 보기". Anything going wrong = it hangs still. */
+  async function makeMotion(it) {
+    const id = it.i;
+    motion.set(id, { state: 'busy' }); render();
+    try {
+      const M = await auto();
+      const img = await loadImg(picUrl(it), fallback({ thumb: it.image }));
+      const c = M.shrinkTo(img, M.READ_SIZE), w = c.width, h = c.height;
+      const px = c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+      let depth;
+      try { depth = M.normalizeDepth(await within(depthOf(img, w, h), 180000)); } catch (e) { console.warn('입체 분석은 건너뛰어요:', e); }
+      const r = M.analyze(px, w, h, depth);
+      const stem = it.image.replace(/\.[a-z]+$/, '');
+      delete it.mask; delete it.depth;
+      if (r.found.some(f => f !== 'depth')) { it.mask = stem + '-m.png'; pics.set(it.mask, png(r.mask, w, h)); }
+      if (r.hasDepth) { it.depth = stem + '-d.png'; pics.set(it.depth, png(grey(depth, w, h), w, h)); }
+      it.fx = r.fx;
+      if (!it.how.trim() || M.isAutoHow(it.how)) { const t = M.howFor(r.found); it.how = t.how; it.hint = t.hint; }
+      motion.set(id, { state: r.found.length ? 'done' : 'none', areas: r.areas, found: r.found, hasDepth: r.hasDepth, levels: r.levels, preview: preview(img, r.mask, w, h) });
+    } catch (e) {
+      console.warn('움직임 분석 실패:', e);
+      it.fx = {}; delete it.mask; delete it.depth;
+      motion.set(id, { state: 'fail' });
+    }
+    if (byId(id)) render();
+  }
+  function motionBox(it) {
+    const m = motion.get(it.i), btn = (label) => '<button class="mini" data-auto="' + it.i + '">🪄 ' + label + '</button>';
+    let body;
+    if (m?.state === 'busy') body = '<p class="mbusy">그림을 읽는 중이에요… 처음 한 번은 입체 분석 AI를 내려받느라 30초~1분쯤 걸려요.</p>';
+    else if (m?.state === 'done') body = '<div class="mrow"><img class="mprev" alt="움직이는 곳 미리보기" src="' + m.preview + '">'
+      + '<div class="mlist">' + m.found.map(k => '<label><span>' + FX_LABEL[k] + (k !== 'depth' ? ' <small>' + Math.round(m.areas[k] * 100) + '%</small>' : '') + '</span><select data-lv="' + k + '" data-for-lv="' + it.i + '">'
+        + LV.map(([v, t]) => '<option value="' + v + '"' + (m.levels[k] === v ? ' selected' : '') + '>' + t + '</option>').join('') + '</select></label>').join('')
+      + '<small>미리보기: 파랑 = 흐름, 초록 = 살랑임, 노랑 = 반짝임</small></div></div>' + btn('다시 읽기');
+    else if (m?.state === 'none') body = '<p>움직일 곳을 찾지 못해서 <b>움직임 없이</b> 걸어요.</p>' + btn('다시 읽기');
+    else if (m?.state === 'fail') body = '<p>그림을 읽지 못해서 <b>움직임 없이</b> 걸어요.</p>' + btn('다시 읽기');
+    else if (it.fx) {
+      const on = [it.fx.flow && 'flow', it.fx.sway && 'sway', it.fx.shimmer && 'shimmer', it.fx.para && 'depth'].filter(Boolean);
+      body = '<p>' + (on.length ? '저장된 움직임: ' + on.map(k => FX_LABEL[k]).join(', ') : '움직임 없이 걸려 있어요.') + '</p>' + btn('다시 만들기');
+    } else body = '<p>아직 자동 움직임이 없어요 (빛만 은은하게 스쳐요).</p>' + btn('움직임 자동 만들기');
+    return '<div class="gmotion"><b>🪄 자동 움직임</b>' + body + '</div>';
   }
 
   // ---- clicks and typing ----
@@ -236,7 +340,8 @@
       const it = byId(d.hide);
       if (it.hidden && shown(it.room) >= slots(it.room)) { alertIn(b, '벽이 꽉 찼어요'); return; }
       it.hidden = !it.hidden;
-    } else if (d.restore) { const it = byId(d.restore), was = base.find(x => x.i === it.i); delete it.image; delete it.wall; delete it.thumb; if (was && !was.image) Object.assign(it, { w: was.w, h: was.h, how: was.how, hint: was.hint }); }
+    } else if (d.auto) { makeMotion(byId(d.auto)); return; }
+    else if (d.restore) { const it = byId(d.restore), was = base.find(x => x.i === it.i); delete it.image; delete it.wall; delete it.thumb; delete it.mask; delete it.depth; delete it.fx; motion.delete(it.i); if (was && !was.image) Object.assign(it, { w: was.w, h: was.h, how: was.how, hint: was.hint }); }
     else if (d.remove) {
       if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = '정말 지울까요?'; return; }
       items = items.filter(x => x.i !== +d.remove); open = null;
@@ -248,7 +353,7 @@
         const file = input.files && input.files[0]; if (!file) return;
         const it = { i, room: d.add, title: '새 그림', w: 1000, h: 1000, desc: '', doc: '', how: '', hint: '', answers: ['', '', '', ''] };
         try { await putPicture(it, file); } catch (err) { alert(err.message); return; }
-        items.push(it); open = i; render();
+        items.push(it); open = i; render(); makeMotion(it);
       };
       input.click();
       return;
@@ -260,7 +365,13 @@
     if (t.dataset.file) {
       const it = byId(t.dataset.file), file = t.files && t.files[0];
       if (!file) return;
-      try { await putPicture(it, file); } catch (err) { alert(err.message); }
+      try { await putPicture(it, file); } catch (err) { alert(err.message); render(); return; }
+      render(); makeMotion(it); return;
+    }
+    if (t.dataset.lv) {
+      const it = byId(t.dataset.forLv), m = motion.get(it.i);
+      m.levels[t.dataset.lv] = t.value;
+      it.fx = (await auto()).fxFor(m.areas, m.levels, m.hasDepth);
       render(); return;
     }
     // (hall fields are kept as they are typed; no redraw here, or a click right after typing a name would land on a redrawn page)
@@ -291,14 +402,15 @@
 
   $('gundo').addEventListener('click', () => {
     if ($('gundo').dataset.armed !== '1') { $('gundo').dataset.armed = '1'; $('gundo').textContent = '정말 모두 되돌릴까요?'; setTimeout(() => { $('gundo').dataset.armed = ''; $('gundo').textContent = '모두 되돌리기'; }, 3000); return; }
-    items = structuredClone(base); halls = structuredClone(baseHalls); pics.clear(); open = null; $('gundo').dataset.armed = ''; $('gundo').textContent = '모두 되돌리기'; render();
+    items = structuredClone(base); halls = structuredClone(baseHalls); pics.clear(); motion.clear(); open = null; $('gundo').dataset.armed = ''; $('gundo').textContent = '모두 되돌리기'; render();
   });
   $('gsave').addEventListener('click', async () => {
     if (busy) return;
     const bad = halls.find(h => !h.name.trim());
     if (bad) { $('gmsg').textContent = '이름이 빈 관이 있어요.'; $('gmsg').className = 'bad'; return; }
     const titles = hallChanges().concat(items.filter(it => { const b = base.find(x => x.i === it.i); return !b || JSON.stringify(b) !== JSON.stringify(it); }).map(it => it.title));
-    const used = new Set(items.flatMap(it => [it.image, it.wall, it.thumb]).filter(Boolean));
+    if (busyMotion()) { $('gmsg').textContent = '그림을 읽는 중이에요. 끝나면 저장해 주세요.'; $('gmsg').className = 'bad'; return; }
+    const used = new Set(items.flatMap(it => [it.image, it.wall, it.thumb, it.mask, it.depth]).filter(Boolean));
     const pictures = [...pics.entries()].filter(([p]) => used.has(p)).map(([path, v]) => ({ path, data: v.data }));
     busy = true; bar(); $('gmsg').textContent = '저장하는 중…'; $('gmsg').className = '';
     try {

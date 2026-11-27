@@ -137,3 +137,31 @@ describe('the gallery list (manager page)', () => {
     expect(withItems([{ ...items[0], image: 'gallery/17-abc.jpg', wall: 'gallery/17-abc-wall.jpg', thumb: 'gallery/17-abc-t.jpg' }, ...items.slice(1)]).ok).toBe(true);
   });
 });
+
+import { FX_KEYS } from '../src/gallery';
+describe('auto motion on a replaced picture', () => {
+  const pic = { image: 'gallery/17-new.jpg', wall: 'gallery/17-new-wall.jpg', thumb: 'gallery/17-new-t.jpg' };
+  it('keeps the motion maps and the effect strengths', () => {
+    const one = { ...items[0], ...pic, mask: 'gallery/17-new-m.png', depth: 'gallery/17-new-d.png', fx: { flow: 0.004, sway: 0.003, shimmer: 0.2, ripMask: 1 } };
+    const r = withItems([one, ...items.slice(1)]);
+    expect(r.ok && r.gallery.items[0]).toMatchObject({ mask: 'gallery/17-new-m.png', depth: 'gallery/17-new-d.png', fx: { flow: 0.004, sway: 0.003, shimmer: 0.2, ripMask: 1 } });
+  });
+  it('an empty fx means "no motion" and is kept as such', () => {
+    const r = withItems([{ ...items[0], ...pic, fx: {} }, ...items.slice(1)]);
+    expect(r.ok && r.gallery.items[0].fx).toEqual({});
+  });
+  it('drops unknown effects, clamps strengths, refuses bad map paths', () => {
+    const r = withItems([{ ...items[0], ...pic, fx: { flow: 9, sway: -1, shimmer: 'x', evil: 1, uWater: 1 } }, ...items.slice(1)]);
+    const fx = r.ok ? r.gallery.items[0].fx! : {};
+    expect(Object.keys(fx).every(k => (FX_KEYS as readonly string[]).includes(k))).toBe(true);
+    expect(fx.flow).toBeLessThanOrEqual(0.012);
+    expect(fx.sway).toBe(0);
+    expect('shimmer' in fx).toBe(false);
+    expect(withItems([{ ...items[0], ...pic, mask: '../x.png', fx: {} }, ...items.slice(1)])).toMatchObject({ ok: false });
+  });
+  it('motion belongs to a replaced picture only (an original keeps its hand-made motion)', () => {
+    const r = withItems([{ ...items[0], fx: { flow: 0.004 }, mask: 'gallery/17-new-m.png' }, ...items.slice(1)]);
+    expect(r.ok && r.gallery.items[0].fx).toBeUndefined();
+    expect(r.ok && r.gallery.items[0].mask).toBeUndefined();
+  });
+});

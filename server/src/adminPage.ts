@@ -51,6 +51,10 @@ nav.tabs button[aria-selected="true"]{background:var(--plate);color:var(--ink);b
 .badge.gold{background:var(--gilt);color:var(--ink)}.badge.plain{background:#d6c7aa;color:var(--ink)}
 .geditor{display:grid;grid-template-columns:220px 1fr;gap:16px;padding:12px;margin:6px 0 10px;background:#faf4e8;border:1px solid #e3d6bd}
 .gpic{display:flex;flex-direction:column;gap:8px}.gpic img{width:100%;max-height:220px;object-fit:contain;background:#efe5d2}.gpic small{color:var(--ink-2)}
+.gmotion{grid-column:1/-1;display:grid;gap:8px;padding:10px 12px;background:#fff;border:1px solid #e3d6bd;font-size:13.5px}.gmotion p{margin:0}.gmotion .mbusy{color:var(--wine)}
+.mrow{display:grid;grid-template-columns:minmax(0,260px) 1fr;gap:12px;align-items:start}.mprev{width:100%;border:1px solid #e3d6bd}.mlist{display:grid;gap:6px}.mlist label{display:flex;justify-content:space-between;align-items:center;gap:8px}.mlist small{color:var(--ink-2)}.mlist select{font:inherit;font-size:13.5px;padding:3px 6px}
+.gmotion .mini{justify-self:start}
+@media (max-width:640px){.mrow{grid-template-columns:1fr}}
 .btnlike{display:inline-block;text-align:center;background:var(--wine);color:#fff;border-radius:3px;padding:6px 10px;font-size:13px;cursor:pointer}
 .gfields{display:grid;gap:8px}.gfields label,.gfields .lab{display:grid;gap:3px;font-size:13px}.gfields label span,.gfields .lab>span:first-child{color:var(--ink-2)}
 .gfields input,.gfields textarea,.gfields select{font:inherit;font-size:14px;padding:6px 8px;border:1px solid #cdbd9e;border-radius:2px;background:#fff;width:100%}

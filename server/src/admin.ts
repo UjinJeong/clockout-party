@@ -80,6 +80,8 @@ function fromThePage(req: Request, res: Response, next: NextFunction) {
 export function mountAdmin(app: Application) {
   app.get('/admin', requireAdmin, (_req, res) => { res.type('html').send(ADMIN_PAGE); });
   app.get('/admin/gallery.js', requireAdmin, (_req, res) => { res.type('js').set('Cache-Control', 'no-store').sendFile(fileURLToPath(new URL('./adminGallery.js', import.meta.url))); });
+  // 🪄 reading a new picture for its motion runs in the manager's browser
+  app.get('/admin/auto-motion.js', requireAdmin, (_req, res) => { res.type('js').set('Cache-Control', 'no-store').sendFile(fileURLToPath(new URL('./autoMotion.js', import.meta.url))); });
   app.get('/admin/api/stats', requireAdmin, async (_req, res) => {
     const rooms = await matchMaker.query({ name: ROOM_NAME });
     res.set('Cache-Control', 'no-store').json({

@@ -104,3 +104,20 @@ describe('saving the gallery to GitHub', () => {
     expect(await store.save(today, [], now.version)).toMatchObject({ ok: false, status: 503 });
   });
 });
+
+describe('auto motion maps', () => {
+  it('saves the motion and depth maps with the picture, in the same commit', async () => {
+    const gh = fakeGitHub();
+    const store = createGalleryStore({ token: 'good-token', repo: 'me/party', fetch: gh.fetch });
+    const now = await store.load();
+    const items = structuredClone(now.gallery.items);
+    Object.assign(items[0], { image: 'gallery/17-a.jpg', wall: 'gallery/17-a-wall.jpg', thumb: 'gallery/17-a-t.jpg', mask: 'gallery/17-a-m.png', depth: 'gallery/17-a-d.png', fx: { flow: 0.004 } });
+    const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0]).toString('base64');
+    const pics = [...['gallery/17-a.jpg', 'gallery/17-a-wall.jpg', 'gallery/17-a-t.jpg'].map(path => ({ path, data: JPEG })), ...['gallery/17-a-m.png', 'gallery/17-a-d.png'].map(path => ({ path, data: PNG }))];
+    const r = await store.save({ halls: now.gallery.halls, items }, pics, now.version, 'auto motion');
+    expect(r.ok).toBe(true);
+    expect(gh.files.has('client/public/gallery/17-a-m.png')).toBe(true);
+    expect(gh.files.has('client/public/gallery/17-a-d.png')).toBe(true);
+    expect(gh.calls.filter(c => c === 'POST /git/commits')).toHaveLength(1);
+  });
+});
