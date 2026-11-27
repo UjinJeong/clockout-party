@@ -10,7 +10,13 @@ export const NOTES_KEPT = 30;
 /** Seconds between two notes from the same guest. */
 export const NOTE_EVERY = 20;
 
-export interface Note { name: string; text: string; ts: number }
+export interface Note { name: string; text: string; ts: number; /** so the manager page can take one down */ id?: string }
+/** A note's id: worked out from the note itself, so a note saved before ids existed gets the same one. */
+export function noteId(n: Pick<Note, 'name' | 'text' | 'ts'>): string {
+  let h = 2166136261;
+  for (const ch of `${n.ts}|${n.name}|${n.text}`) { h ^= ch.codePointAt(0)!; h = Math.imul(h, 16777619) >>> 0; }
+  return n.ts.toString(36) + h.toString(36);
+}
 export interface BoardSnapshot { notes: Note[]; likes: Record<string, number> }
 /** What is saved: the notes, and who hearted each painting (visitor ids, not counts). */
 export interface BoardSaved { notes: Note[]; voters: Record<string, string[]> }
@@ -29,7 +35,8 @@ export class Board {
     const t = sanitizeNote(text);
     if (!t || ts - (this.lastNote.get(from) ?? -Infinity) < NOTE_EVERY * 1000) return null;
     this.lastNote.set(from, ts);
-    const n = { name, text: t, ts };
+    const n: Note = { name, text: t, ts };
+    n.id = noteId(n);
     this.notes.push(n);
     if (this.notes.length > NOTES_KEPT) this.notes.shift();
     return n;
@@ -52,11 +59,19 @@ export class Board {
   /** Put back what was saved (anything malformed is left out). */
   restore(saved: BoardSaved) {
     const ok = (n: unknown): n is Note => !!n && typeof (n as Note).name === 'string' && typeof (n as Note).text === 'string' && typeof (n as Note).ts === 'number';
-    this.notes = (Array.isArray(saved.notes) ? saved.notes.filter(ok) : []).slice(-NOTES_KEPT);
+    this.notes = (Array.isArray(saved.notes) ? saved.notes.filter(ok) : []).slice(-NOTES_KEPT).map(n => ({ name: n.name, text: n.text, ts: n.ts, id: noteId(n) }));
     this.likes.clear();
     for (const [art, who] of Object.entries(saved.voters ?? {})) {
       if (ART_KEY.test(art) && Array.isArray(who)) this.likes.set(art, new Set(who.filter(w => typeof w === 'string')));
     }
+  }
+
+  /** Take a note down (the manager page). True if it was there. */
+  removeNote(id: string): boolean {
+    const k = this.notes.findIndex(n => n.id === id);
+    if (k < 0) return false;
+    this.notes.splice(k, 1);
+    return true;
   }
 
   snapshot(): BoardSnapshot {

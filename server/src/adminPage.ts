@@ -42,6 +42,7 @@ button[data-armed="1"]{background:#e2552f;color:#fff;border-color:#e2552f}
 nav.tabs{display:flex;gap:6px}nav.tabs button{background:none;border:1px solid #5a4a44;color:#c9b9a3;border-radius:3px;padding:5px 12px;font:inherit;font-size:13.5px;cursor:pointer}
 nav.tabs button[aria-selected="true"]{background:var(--plate);color:var(--ink);border-color:var(--plate)}
 #tab-gallery{padding-bottom:90px}
+#board th,#board button{white-space:nowrap}#board td:nth-child(3){font-size:12.5px;min-width:72px}#board td:nth-child(2){min-width:110px}
 .groom h2 small{font:500 13px var(--sans);color:var(--ink-2);margin-left:6px}
 .gcard{display:grid;grid-template-columns:72px 1fr auto;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid #e3d6bd}
 .gcard.off{opacity:.55}.gcard img{width:72px;height:56px;object-fit:cover;background:#d9ccb2;border-radius:2px}
@@ -68,8 +69,9 @@ button.add{margin-top:10px;background:none;border:1px dashed #b9a682;color:var(-
 .gbar .save{background:var(--gilt);color:var(--ink);border-color:var(--gilt);font-weight:600}.gbar .ghost{background:none;color:var(--plate)}.gbar button:disabled{opacity:.4;cursor:default}
 @media (max-width:760px){.geditor{grid-template-columns:1fr}.gcard{grid-template-columns:56px 1fr}.ghall{grid-template-columns:28px 1fr}.gbtns{grid-column:1/-1;justify-content:flex-start}.gfields .two{grid-template-columns:1fr}}
 </style></head><body>
-<header><h1>파티 관리</h1><nav class="tabs"><button type="button" data-tab="stats" aria-selected="true">📊 현황</button><button type="button" data-tab="gallery" aria-selected="false">🖼️ 전시장</button></nav><p id="updated">불러오는 중</p></header>
+<header><h1>파티 관리</h1><nav class="tabs"><button type="button" data-tab="stats" aria-selected="true">📊 현황</button><button type="button" data-tab="gallery" aria-selected="false">🖼️ 전시장</button><button type="button" data-tab="board" aria-selected="false">📝 방명록</button></nav><p id="updated">불러오는 중</p></header>
 <main id="tab-gallery" hidden><div id="gallery"></div></main>
+<main id="tab-board" hidden><p class="note">공개 파티의 방명록은 테마마다 벽 하나를 같이 써요(최근 30개). 지우면 저장소에서도 지워지고, 지금 열린 파티 화면에서도 바로 사라져요. 친구만 파티의 글은 그 방 안에만 있어서 여기에는 보이지 않아요.</p><div id="board"></div></main>
 <div id="gbar" class="gbar" hidden><span id="gcount"></span><span id="gmsg"></span><button type="button" id="gundo" class="ghost">모두 되돌리기</button><button type="button" id="gsave" class="save">저장하기</button></div>
 <main id="tab-stats">
   <div id="error" class="err" hidden></div>
@@ -125,11 +127,38 @@ document.addEventListener('click',async e=>{
   b.textContent=r&&r.ok?'처리했어요':'실패했어요';setTimeout(load,1200);
 });
 load();setInterval(load,5000);
+// 📝 the guest book walls: read them, take a note down (asks once, right on the button)
+const THEME_NAME={gallery:'🖼️ 전시장',home:'🏠 홈파티',pool:'🏖️ 풀파티'};
+const when=ts=>new Date(ts).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'});
+async function loadBoard(){
+  const box=$('board');
+  try{
+    const r=await fetch('/admin/api/board',{cache:'no-store'});
+    if(!r.ok)throw new Error('방명록을 불러오지 못했어요 ('+r.status+').');
+    const d=await r.json();
+    box.innerHTML=Object.entries(d.themes).map(([t,b])=>{
+      const notes=b.notes.slice().reverse();
+      const hearts=Object.entries(b.likes).sort((x,y)=>y[1]-x[1]);
+      return '<section><h2>'+(THEME_NAME[t]||esc(t))+' 벽 <small>'+notes.length+' / 30</small></h2>'
+        +(notes.length?'<table><thead><tr><th>이름표</th><th>남긴 글</th><th>남긴 때</th><th></th></tr></thead><tbody>'+notes.map(n=>row([esc(n.name),esc(n.text),when(n.ts),'<button class="danger" data-unnote="'+esc(t)+'/'+esc(n.id)+'">지우기</button>'])).join('')+'</tbody></table>':'<p class="empty">아직 남긴 글이 없어요.</p>')
+        +(hearts.length?'<p class="note">❤️ '+hearts.map(([k,n])=>esc(d.paintings[k]||k)+' '+n).join(' · ')+'</p>':'')
+        +'</section>';
+    }).join('');
+  }catch(e){box.innerHTML='<p class="err">'+esc(e.message||'불러오지 못했어요.')+'</p>';}
+}
+document.addEventListener('click',async e=>{
+  const b=e.target.closest('button[data-unnote]');if(!b)return;
+  if(b.dataset.armed!=='1'){b.dataset.armed='1';b.textContent='정말 지울까요?';setTimeout(()=>{if(b.isConnected){b.dataset.armed='';b.textContent='지우기';}},3000);return;}
+  b.disabled=true;
+  const [t,id]=b.dataset.unnote.split('/');
+  const r=await fetch('/admin/api/board/'+encodeURIComponent(t)+'/notes/'+encodeURIComponent(id)+'/delete',{method:'POST',headers:{'x-admin':'1'}}).catch(()=>null);
+  b.textContent=r&&r.ok?'지웠어요':'실패했어요';setTimeout(loadBoard,900);
+});
 // tabs: 현황 / 전시장 (the address remembers which: /admin#gallery)
 function tab(name){for(const b of document.querySelectorAll('.tabs button'))b.setAttribute('aria-selected',String(b.dataset.tab===name));
-  $('tab-stats').hidden=name!=='stats';$('tab-gallery').hidden=name!=='gallery';$('gbar').hidden=name!=='gallery'||$('gbar').dataset.ready!=='1';
-  if(name==='gallery'&&window.showGallery)window.showGallery();history.replaceState(null,'',name==='gallery'?'#gallery':'#');}
+  $('tab-stats').hidden=name!=='stats';$('tab-gallery').hidden=name!=='gallery';$('tab-board').hidden=name!=='board';$('gbar').hidden=name!=='gallery'||$('gbar').dataset.ready!=='1';
+  if(name==='gallery'&&window.showGallery)window.showGallery();if(name==='board')loadBoard();history.replaceState(null,'',name==='stats'?'#':'#'+name);}
 document.querySelector('.tabs').addEventListener('click',e=>{const b=e.target.closest('button[data-tab]');if(b)tab(b.dataset.tab);});
 </script>
 <script src="/admin/gallery.js"></script>
-<script>new MutationObserver(()=>{$('gbar').dataset.ready='1';}).observe($('gallery'),{childList:true});tab(location.hash==='#gallery'?'gallery':'stats');</script></body></html>`;
+<script>new MutationObserver(()=>{$('gbar').dataset.ready='1';}).observe($('gallery'),{childList:true});tab(location.hash==='#gallery'?'gallery':location.hash==='#board'?'board':'stats');</script></body></html>`;

@@ -94,6 +94,7 @@ class ColyseusConnection implements PartyConnection {
     });
     room.onMessage('board', (b: BoardSnapshot) => this.ev.emit('board', b));
     room.onMessage('note', (n: Note) => this.ev.emit('note', n));
+    room.onMessage('unnote', (m: { id: string }) => this.ev.emit('unnote', m));
     room.onMessage('likes', (m: { art: string; n: number }) => this.ev.emit('likes', m.art, m.n));
     room.onMessage('act', (m: { from: string; kind: Act }) => this.ev.emit('act', m.from, m.kind));
     room.onMessage('clink', (m: { a: string; b: string }) => this.ev.emit('clink', m.a, m.b));

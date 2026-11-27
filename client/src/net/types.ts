@@ -32,6 +32,8 @@ export interface PartyEvents {
   /** 📝❤️ what earlier guests left: the guest book and the hearts on paintings (sent when you arrive). */
   board(b: BoardSnapshot): void;
   note(n: Note): void;
+  /** the manager page took a note off the wall */
+  unnote(m: { id: string }): void;
   likes(art: string, n: number): void;
   /** Someone dived, squirted the water pistol, or changed the TV channel. */
   act(from: string, kind: Act): void;

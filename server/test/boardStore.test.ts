@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { NOTES_KEPT } from '@party/shared';
+import { NOTES_KEPT, noteId } from '@party/shared';
 import { createBoardStore, type BoardStore } from '../src/boardStore';
 
 // A real Redis for the saved kind, when this machine has one (Render's Key Value speaks the same).
@@ -32,6 +32,16 @@ describe.each(kinds)('guest book and hearts kept %s', (kind, make) => {
     expect(g.notes[0].text).toBe('n3');
     expect(g.notes.at(-1)!.text).toBe('n' + (NOTES_KEPT + 2));
     expect((await s.load('pool')).notes.map(n => n.text)).toEqual(['시원해요']);
+    await s.close();
+  });
+  it('takes one note out and keeps the rest (also notes saved before they had ids)', async () => {
+    if (skip()) return;
+    const s = await make();
+    await s.addNote('gallery', { name: '갑', text: '좋아요', ts: 1, id: noteId({ name: '갑', text: '좋아요', ts: 1 }) });
+    await s.addNote('gallery', { name: '을', text: '장난', ts: 2 });                     // an older note, no id
+    expect(await s.removeNote('gallery', noteId({ name: '을', text: '장난', ts: 2 }))).toBe(true);
+    expect(await s.removeNote('gallery', 'nope')).toBe(false);
+    expect((await s.load('gallery')).notes.map(n => n.text)).toEqual(['좋아요']);
     await s.close();
   });
   it('remembers who hearted what, and a heart taken back', async () => {

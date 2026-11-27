@@ -371,6 +371,32 @@ describe('manager page', () => {
     // where the guest book is kept (here no REDIS_URL: memory only)
     expect(s.guestBook).toBe('memory');
   });
+  it('shows every theme\'s guest book and takes a note down everywhere', async () => {
+    const auth = 'Basic ' + Buffer.from('admin:test-pass').toString('base64');
+    const room = await colyseus.createRoom<PartyRoom>('party', { theme: 'gallery' });
+    const a = await colyseus.connectTo(room, { name: '장난꾸러기' });
+    const gone: string[] = [];
+    a.onMessage('note', () => {}); a.onMessage('likes', () => {}); a.onMessage('unnote', (m: any) => gone.push(m.id));
+    a.send('note', { text: '지워질 글' }); a.send('like', { art: '3' });
+    await wait(100);
+    const get = async () => (await fetch('http://localhost:2568/admin/api/board', { headers: { authorization: auth } })).json();
+    const before = await get();
+    expect(Object.keys(before.themes)).toEqual(['gallery', 'home', 'pool']);
+    const note = before.themes.gallery.notes[0];
+    expect(note).toMatchObject({ name: '장난꾸러기', text: '지워질 글' });
+    expect(before.themes.gallery.likes).toEqual({ '3': 1 });
+    expect(typeof before.paintings['3']).toBe('string');
+    const del = (id: string, theme = 'gallery', page = true) => fetch(`http://localhost:2568/admin/api/board/${theme}/notes/${id}/delete`, {
+      method: 'POST', headers: { authorization: auth, ...(page ? { 'x-admin': '1' } : {}) },
+    });
+    expect((await del(note.id, 'gallery', false)).status).toBe(403);    // not from the manager page
+    expect((await del(note.id, 'nowhere')).status).toBe(404);
+    expect((await del(note.id)).status).toBe(200);
+    expect((await del(note.id)).status).toBe(404);                       // already gone
+    await wait(80);
+    expect(gone).toEqual([note.id]);                                     // the open party drops it right away
+    expect((await get()).themes.gallery.notes).toEqual([]);
+  });
   it('too many wrong passwords from one place are slowed down', async () => {
     const tryWith = (pass: string, from: string) => fetch('http://localhost:2568/admin/api/stats', {
       headers: { authorization: 'Basic ' + Buffer.from('admin:' + pass).toString('base64'), 'x-forwarded-for': from },

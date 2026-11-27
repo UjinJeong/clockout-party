@@ -4,7 +4,7 @@ import { monitor } from '@colyseus/monitor';
 import { HALL_COLORS, HALL_LIMITS, HALL_MAX, HALL_MOTIONS, MAX_HALLS, ROOM_NAME } from '@party/shared';
 import { stats } from './stats';
 import { PartyRoom } from './PartyRoom';
-import { keptIn } from './boards';
+import { allBoards, keptIn, takeDown } from './boards';
 import { createGalleryStore, type GalleryStore } from './galleryStore';
 
 /** What the manager page's halls section can offer (the same rules the server checks). */
@@ -89,6 +89,17 @@ export function mountAdmin(app: Application) {
         .map(r => ({ roomId: r.roomId, title: r.metadata?.title ?? '파티', theme: r.metadata?.theme ?? 'gallery', private: !!r.private, clients: r.clients, maxClients: r.maxClients, people: PartyRoom.open.get(r.roomId)?.roster() ?? [] }))
         .sort((a, b) => b.clients - a.clients),
     });
+  });
+  // 📝 the guest book walls (public parties share one per theme): read, and take a note down
+  app.get('/admin/api/board', requireAdmin, async (_req, res) => {
+    res.set('Cache-Control', 'no-store').json(await allBoards());
+  });
+  app.post('/admin/api/board/:theme/notes/:id/delete', requireAdmin, fromThePage, async (req, res) => {
+    const theme = String(req.params.theme), id = String(req.params.id);
+    if (!(await takeDown(theme, id))) { res.status(404).json({ error: '그 글이 없어요. 이미 지워졌을 수 있어요.' }); return; }
+    // open parties showing that wall drop it right away
+    for (const room of PartyRoom.open.values()) if (room.state.theme === theme && !room.state.isPrivate) room.broadcast('unnote', { id });
+    res.json({ ok: true });
   });
   // 🖼️ the gallery: every painting and its words; save = one commit to GitHub, then Render redeploys
   app.get('/admin/api/gallery', requireAdmin, async (_req, res) => {

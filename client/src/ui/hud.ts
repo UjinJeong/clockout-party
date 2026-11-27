@@ -210,6 +210,7 @@ export function createHud(conn: PartyConnection, controls: Controls) {
   conn.on({
     board: b => { notes = b.notes.slice(); likes.clear(); for (const [k, n] of Object.entries(b.likes)) likes.set(k, n); drawBook(); drawLike(); },
     note: n => { notes.push(n); drawBook(); if (book.hidden) toast(`📝 ${n.name}: ${n.text}`, 3200); },
+    unnote: m => { notes = notes.filter(n => n.id !== m.id); drawBook(); },
     likes: (art, n) => { likes.set(art, n); drawLike(); },
   });
   conn.askBoard();

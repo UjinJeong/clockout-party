@@ -1,5 +1,5 @@
 import { createClient } from 'redis';
-import { NOTES_KEPT, type BoardSaved, type Note } from '@party/shared';
+import { NOTES_KEPT, noteId, type BoardSaved, type Note } from '@party/shared';
 
 /**
  * Where the guest book and the hearts on paintings are kept between restarts.
@@ -16,6 +16,8 @@ export interface BoardStore {
   kind: 'memory' | 'redis';
   load(theme: string): Promise<BoardSaved>;
   addNote(theme: string, note: Note): Promise<void>;
+  /** Take a note down (manager page). True if it was there. */
+  removeNote(theme: string, id: string): Promise<boolean>;
   setLike(theme: string, art: string, voter: string, on: boolean): Promise<void>;
   close(): Promise<void>;
 }
@@ -36,6 +38,12 @@ function memoryStore(): BoardStore {
       const list = notes.get(theme) ?? [];
       list.push(note);
       notes.set(theme, list.slice(-NOTES_KEPT));
+    },
+    async removeNote(theme, id) {
+      const list = notes.get(theme) ?? [];
+      const k = list.findIndex(n => noteId(n) === id);
+      if (k >= 0) list.splice(k, 1);
+      return k >= 0;
     },
     async setLike(theme, art, voter, on) {
       let t = likes.get(theme);
@@ -87,6 +95,14 @@ function redisStore(url: string, prefix: string): BoardStore {
     }, 3000),
     addNote: (theme, note) => safe('saving a note', undefined, async () => {
       await client.multi().lPush(k('notes', theme), JSON.stringify(note)).lTrim(k('notes', theme), 0, NOTES_KEPT - 1).exec();
+    }, 1500),
+    removeNote: (theme, id) => safe('taking a note down', false, async () => {
+      for (const raw of await client.lRange(k('notes', theme), 0, -1)) {
+        let n: Note | null = null;
+        try { n = JSON.parse(raw); } catch { /* not a note */ }
+        if (n && noteId(n) === id) return (await client.lRem(k('notes', theme), 1, raw)) > 0;
+      }
+      return false;
     }, 1500),
     setLike: (theme, art, voter, on) => safe('saving a heart', undefined, async () => {
       if (on) await client.multi().sAdd(k('likes', theme, art), voter).sAdd(k('likes', theme), art).exec();
