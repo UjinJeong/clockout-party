@@ -73,6 +73,7 @@ button.add{margin-top:10px;background:none;border:1px dashed #b9a682;color:var(-
 <div id="gbar" class="gbar" hidden><span id="gcount"></span><span id="gmsg"></span><button type="button" id="gundo" class="ghost">모두 되돌리기</button><button type="button" id="gsave" class="save">저장하기</button></div>
 <main id="tab-stats">
   <div id="error" class="err" hidden></div>
+  <p id="kept" class="note"></p>
   <div class="row">
     <div class="stat live"><b id="online">0</b><span>지금 접속 중</span></div>
     <div class="stat"><b id="visits">0</b><span>오늘 들어온 횟수</span></div>
@@ -99,7 +100,7 @@ async function load(){
     const r=await fetch('/admin/api/stats',{cache:'no-store'});
     if(!r.ok)throw new Error(r.status===401?'비밀번호가 맞지 않아요. 새로고침해서 다시 입력해 주세요.':'서버가 응답하지 않아요 ('+r.status+').');
     const s=await r.json();$('error').hidden=true;
-    $('online').textContent=s.online;$('visits').textContent=s.today.visits;$('peak').textContent=s.today.peak;$('avg').textContent=mins(s.today.avgMinutes);
+    $('kept').textContent=s.guestBook==='redis'?'📝 방명록·좋아요: Key Value에 저장 중 (배포하거나 서버가 잠들어도 남아요)':'📝 방명록·좋아요: 서버 메모리에만 있어요 (Key Value가 연결되지 않음. 배포하거나 서버가 잠들면 사라져요)';$('online').textContent=s.online;$('visits').textContent=s.today.visits;$('peak').textContent=s.today.peak;$('avg').textContent=mins(s.today.avgMinutes);
     $('tz').textContent=s.reportTz;
     const max=Math.max(1,...s.byRegion.map(x=>x.online));
     $('regions').innerHTML=s.byRegion.length?s.byRegion.map(x=>'<div class="bar"><span>'+esc(x.country===x.city?x.country:x.country+' '+x.city)+'</span><i style="width:'+(x.online/max*100)+'%"></i><b>'+x.online+'</b></div>').join(''):'<p class="empty">지금 들어와 있는 사람이 없어요.</p>';

@@ -368,6 +368,8 @@ describe('manager page', () => {
     expect(s.online).toBe(1);
     expect(s.people[0]).toMatchObject({ name: '유진', room: '금요일 밤', region: '대한민국 · 서울' });
     expect(s.rooms[0]).toMatchObject({ title: '금요일 밤', clients: 1 });
+    // where the guest book is kept (here no REDIS_URL: memory only)
+    expect(s.guestBook).toBe('memory');
   });
   it('too many wrong passwords from one place are slowed down', async () => {
     const tryWith = (pass: string, from: string) => fetch('http://localhost:2568/admin/api/stats', {

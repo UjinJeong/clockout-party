@@ -4,6 +4,7 @@ import { monitor } from '@colyseus/monitor';
 import { HALL_COLORS, HALL_LIMITS, HALL_MAX, HALL_MOTIONS, MAX_HALLS, ROOM_NAME } from '@party/shared';
 import { stats } from './stats';
 import { PartyRoom } from './PartyRoom';
+import { keptIn } from './boards';
 import { createGalleryStore, type GalleryStore } from './galleryStore';
 
 /** What the manager page's halls section can offer (the same rules the server checks). */
@@ -83,6 +84,7 @@ export function mountAdmin(app: Application) {
     const rooms = await matchMaker.query({ name: ROOM_NAME });
     res.set('Cache-Control', 'no-store').json({
       ...stats.snapshot(),
+      guestBook: keptIn(),
       rooms: rooms
         .map(r => ({ roomId: r.roomId, title: r.metadata?.title ?? '파티', theme: r.metadata?.theme ?? 'gallery', private: !!r.private, clients: r.clients, maxClients: r.maxClients, people: PartyRoom.open.get(r.roomId)?.roster() ?? [] }))
         .sort((a, b) => b.clients - a.clients),

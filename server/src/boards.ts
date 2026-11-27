@@ -20,6 +20,8 @@ export function sharedBoard(theme: string): Promise<Board> {
   }
   return b;
 }
+/** 'redis' when the guest book is saved in Key Value, 'memory' when it lives only as long as the server. */
+export const keptIn = (): BoardStore['kind'] => theStore().kind;
 export const saveNote: BoardStore['addNote'] = (theme, note) => theStore().addNote(theme, note);
 export const saveLike: BoardStore['setLike'] = (theme, art, voter, on) => theStore().setLike(theme, art, voter, on);
 
