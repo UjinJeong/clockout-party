@@ -160,7 +160,7 @@
       + '<details><summary>도슨트에게 물어보기 답변 4개</summary>'
       + QUESTIONS.map((q, k) => '<label><span>' + esc(q) + '</span><textarea data-a="' + k + '" rows="3" maxlength="800">' + esc(it.answers[k] ?? '') + '</textarea></label>').join('')
       + '</details></div>'
-      + (it.image ? motionBox(it) : '') + '</div>';
+      + (it.image ? motionBox(it) : '<div class="gmotion"><b>🪄 자동 움직임</b><p>이 그림은 손으로 만든 <b>전용 움직임</b>이 이미 있어요. 왼쪽 <b>[그림 바꾸기]</b>로 새 그림을 올리면, 여기서 단어·붓으로 움직임을 만들 수 있어요.</p></div>') + '</div>';
   }
 
   function bar() {
