@@ -2,7 +2,8 @@
  * Things guests leave behind at a party, for whoever comes next:
  *  - 📝 방명록: one short line each (a post-it on the wall)
  *  - ❤️ a heart on a painting (the gallery), one per guest per painting
- * Kept by the party while it is open. Same rules on the server and in the demo.
+ * The server keeps one per theme for its public parties (saved, so it outlives restarts) and
+ * one per friends-only party. Same rules on the server and in the demo.
  */
 export const NOTE_MAX = 60;
 export const NOTES_KEPT = 30;
@@ -11,6 +12,9 @@ export const NOTE_EVERY = 20;
 
 export interface Note { name: string; text: string; ts: number }
 export interface BoardSnapshot { notes: Note[]; likes: Record<string, number> }
+/** What is saved: the notes, and who hearted each painting (visitor ids, not counts). */
+export interface BoardSaved { notes: Note[]; voters: Record<string, string[]> }
+const ART_KEY = /^[\w-]{1,24}$/;
 
 export const sanitizeNote = (v: unknown): string =>
   typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, NOTE_MAX) : '';
@@ -31,13 +35,28 @@ export class Board {
     return n;
   }
 
-  /** Heart a painting (or take it back). Returns the new count, or null for a bad key. */
-  like(from: string, art: unknown): number | null {
-    if (typeof art !== 'string' || !/^[\w-]{1,24}$/.test(art)) return null;
+  /** Heart a painting (or take it back). Returns the new count and whether it is now on, or null for a bad key. */
+  toggleLike(from: string, art: unknown): { n: number; on: boolean } | null {
+    if (typeof art !== 'string' || !ART_KEY.test(art)) return null;
     let s = this.likes.get(art);
     if (!s) this.likes.set(art, s = new Set());
-    if (!s.delete(from)) s.add(from);
-    return s.size;
+    const on = !s.delete(from);
+    if (on) s.add(from);
+    return { n: s.size, on };
+  }
+  /** Heart a painting (or take it back). Returns the new count, or null for a bad key. */
+  like(from: string, art: unknown): number | null {
+    return this.toggleLike(from, art)?.n ?? null;
+  }
+
+  /** Put back what was saved (anything malformed is left out). */
+  restore(saved: BoardSaved) {
+    const ok = (n: unknown): n is Note => !!n && typeof (n as Note).name === 'string' && typeof (n as Note).text === 'string' && typeof (n as Note).ts === 'number';
+    this.notes = (Array.isArray(saved.notes) ? saved.notes.filter(ok) : []).slice(-NOTES_KEPT);
+    this.likes.clear();
+    for (const [art, who] of Object.entries(saved.voters ?? {})) {
+      if (ART_KEY.test(art) && Array.isArray(who)) this.likes.set(art, new Set(who.filter(w => typeof w === 'string')));
+    }
   }
 
   snapshot(): BoardSnapshot {

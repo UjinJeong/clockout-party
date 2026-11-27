@@ -1,4 +1,5 @@
 import { Client, Callbacks, type Room } from '@colyseus/sdk';
+import { visitorKey } from './visitor';
 import { leaveReason, sanitizeHours, ROOM_NAME, isMood, isTheme, parseLook, type Act, type Battery, type BoardSnapshot, type Note, type Emote, type Look, type Mood, type Theme } from '@party/shared';
 import { Emitter, type NetPlayer, type PartyConnection, type PartyEvents } from './types';
 
@@ -33,8 +34,8 @@ export async function connectParty(req: JoinRequest, name: string, look: Look, h
   const tz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return undefined; } })();
   // 👑 the room you make is yours: a key kept on this device makes you its host, also when you come back
   const room = req.mode === 'create'
-    ? await client.create(ROOM_NAME, { title: req.title, private: req.private, theme: req.theme, name, look, tz, hours, ownerKey: newKey() })
-    : await client.joinById(req.roomId, { name, look, tz, hours, ownerKey: ownedRooms()[req.roomId] });
+    ? await client.create(ROOM_NAME, { title: req.title, private: req.private, theme: req.theme, name, look, tz, hours, ownerKey: newKey(), visitor: visitorKey() })
+    : await client.joinById(req.roomId, { name, look, tz, hours, ownerKey: ownedRooms()[req.roomId], visitor: visitorKey() });
   if (req.mode === 'create') keepOwner(room.roomId, pendingKey);
   const conn = new ColyseusConnection(room);
   // Wait for the first full state so the room title and the guest list are ready.

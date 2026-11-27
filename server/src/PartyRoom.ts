@@ -3,6 +3,7 @@ import {
   DISMISS_DELAY, IDLE_KICK, LEAVE_CODE, isOwnerKey, type LeaveReason, ACT_EVERY, isAct, spawnSpot, Board, CLINK, Clinks, TOGETHER, hasCompany, isNear, DOZE_AFTER, ENERGY, FIREWORK_COOLDOWN, nearStage, sanitizeHours, MAX_PLAYERS, MAX_SPEED, MOOD_ENERGY, batteryOf, chargeRate, finite, isEmote, isMood, isTheme, mapFor,
   moveWithCollision, nearbyIds, nearestWalkable, stepEnergy, type WorldMap, parseLook, sanitizeChat, sanitizeName, sanitizeTitle, validateVoice,
 } from '@party/shared';
+import { saveLike, saveNote, sharedBoard, voterOf } from './boards';
 import { PartyState, Player } from './schema';
 import { stats } from './stats';
 
@@ -39,7 +40,11 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
   private lastFirework = 0;
   private saidBye = new Set<string>();
   private clinks = new Clinks();
-  private board = new Board();
+  /** 📝 this party's guest book: the theme's shared one, or its own when friends-only */
+  private notes = new Board();
+  /** ❤️ hearts on paintings: always the theme's shared, saved ones */
+  private hearts = new Board();
+  private voters = new Map<string, string>();
   /** Proof of being the host; whoever made the room holds it on their device. Never sent out. */
   private ownerKey = '';
   private ownerOf = new Map<string, boolean>();
@@ -124,19 +129,27 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
     /** 👑 host only: close the party for everyone */
     closeRoom: (client: Client) => { if (this.isHost(client)) this.closeAll(); },
     /** what earlier guests left (asked for once the client is ready to show it) */
-    board: (client: Client) => { client.send('board', this.board.snapshot()); },
+    board: (client: Client) => { client.send('board', { notes: this.notes.snapshot().notes, likes: this.hearts.snapshot().likes }); },
     /** 📝 a line in the guest book, for everyone here and whoever comes next */
     note: (client: Client, m: unknown) => {
       const p = this.state.players.get(client.sessionId);
-      const n = p && this.board.note(client.sessionId, p.name, (m as { text?: unknown } | null)?.text, Date.now());
-      if (n) { this.active(client.sessionId); this.broadcast('note', n); }
+      const n = p && this.notes.note(client.sessionId, p.name, (m as { text?: unknown } | null)?.text, Date.now());
+      if (!n) return;
+      this.active(client.sessionId);
+      if (this.state.isPrivate) { this.broadcast('note', n); return; }
+      // the wall is shared: every public party of this theme sees it now, and it is kept
+      for (const r of this.sameWall(false)) r.broadcast('note', n);
+      void saveNote(this.state.theme, n);
     },
     /** ❤️ on a painting (again to take it back) */
     like: (client: Client, m: unknown) => {
       if (!this.state.players.has(client.sessionId)) return;
       const art = (m as { art?: unknown } | null)?.art;
-      const n = this.board.like(client.sessionId, art);
-      if (n !== null) this.broadcast('likes', { art, n });
+      const voter = this.voters.get(client.sessionId) ?? 's' + client.sessionId;
+      const r = this.hearts.toggleLike(voter, art);
+      if (!r) return;
+      for (const room of this.sameWall(true)) room.broadcast('likes', { art, n: r.n });
+      void saveLike(this.state.theme, art as string, voter, r.on);
     },
     sit: (client: Client, m: unknown) => this.onSit(client, (m as { seat?: unknown } | null)?.seat),
     stand: (client: Client) => { this.standUp(client.sessionId); this.active(client.sessionId); },
@@ -168,6 +181,8 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
     const title = sanitizeTitle(options.title);
     const theme = isTheme(options.theme) ? options.theme : 'gallery';
     this.map = mapFor(theme);
+    this.hearts = await sharedBoard(theme);
+    this.notes = isPrivate ? new Board() : this.hearts;
     this.state.title = title;
     this.state.theme = theme;
     this.state.isPrivate = isPrivate;
@@ -190,6 +205,7 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
       x: spot.x, z: spot.z, dir: 0, moving: false,
       energy: ENERGY.start, battery: batteryOf(ENERGY.start), seat: -1, dozing: false, mood: '', hours: sanitizeHours(options.hours), away: false,
     }));
+    this.voters.set(client.sessionId, voterOf(options.visitor, client.sessionId));
     this.tracks.set(client.sessionId, { at: Date.now(), voiceAt: 0, energy: ENERGY.start, idle: 0, moodSet: false });
     // the one who made the room is its host, also when they come back to it
     if (this.ownerKey && options.ownerKey === this.ownerKey) { this.ownerOf.set(client.sessionId, true); this.state.owner = client.sessionId; }
@@ -199,6 +215,7 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
   onLeave(client: Client) {
     this.state.players.delete(client.sessionId);
     this.tracks.delete(client.sessionId);
+    this.voters.delete(client.sessionId);
     this.leaving.delete(client.sessionId);
     this.ownerOf.delete(client.sessionId);
     this.clinks.forget(client.sessionId);
@@ -207,6 +224,11 @@ export class PartyRoom extends Room<{ state: PartyState; metadata: PartyMetadata
   }
 
   onDispose() { PartyRoom.open.delete(this.roomId); }
+
+  /** The open parties showing the same shared wall (this theme; friends-only ones too when asked, for hearts). */
+  private sameWall(withPrivate: boolean): PartyRoom[] {
+    return [...PartyRoom.open.values()].filter(r => r.state.theme === this.state.theme && (withPrivate || !r.state.isPrivate));
+  }
 
   private isHost(client: Client) { return !this.closing && this.ownerOf.get(client.sessionId) === true; }
 

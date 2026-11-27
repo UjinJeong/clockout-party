@@ -18,3 +18,19 @@ services:
       # "Contents: Read and write" on this repository only; entered in the Render dashboard.
       - key: GITHUB_TOKEN
         sync: false
+      # 📝❤️ the guest book and the hearts on paintings are kept in the Key Value below, so a
+      # redeploy or a sleep doesn't wipe them (without it they live in memory only)
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: clockout-party-kv
+          property: connectionString
+
+  # Free Key Value (Redis-compatible). Reachable only from Render services in the same region.
+  # The free plan keeps data in memory (no disk backup), so a rare restart of this instance clears it.
+  - type: keyvalue
+    name: clockout-party-kv
+    plan: free
+    region: singapore
+    maxmemoryPolicy: noeviction
+    ipAllowList: []

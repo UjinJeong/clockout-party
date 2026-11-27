@@ -5,16 +5,19 @@ import { mkdtempSync as __mk, writeFileSync as __wr } from 'node:fs';
 import { tmpdir as __tmp } from 'node:os';
 process.env.CLIENT_DIST = __mk(__tmp() + '/client-');
 __wr(process.env.CLIENT_DIST + '/index.html', '<title>퇴근 파티</title>');
-import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach } from 'vitest';
 import { boot, type ColyseusTestServer } from '@colyseus/testing';
 import app from '../src/app';
 import type { PartyRoom } from '../src/PartyRoom';
+import { resetBoards } from '../src/boards';
+import { createBoardStore } from '../src/boardStore';
 import { DOZE_AFTER, ENERGY, MAPS, MOOD_ENERGY } from '@party/shared';
 
 let colyseus: ColyseusTestServer;
 beforeAll(async () => { colyseus = await boot(app); });
 afterAll(async () => { await colyseus.shutdown(); });
 afterEach(async () => { await colyseus.cleanup(); });
+beforeEach(() => { resetBoards(); });
 
 const look = { kind: 'fox', color: 2, hat: 'headphones', hand: 'wine', outfit: 'tie' };
 const wait = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -523,6 +526,72 @@ describe('📝 guest book and ❤️ on paintings', () => {
     expect(board.notes.map((n: any) => n.text)).toEqual(['오늘도 살았다']);
     expect(board.likes).toEqual({ '3': 1 });
   });
+});
+
+describe('📝 the guest book and ❤️ outlive a party', () => {
+  const wait = (ms = 80) => new Promise(r => setTimeout(r, ms));
+  const boardOf = async (c: any) => { const got = new Promise<any>(res => c.onMessage('board', res)); c.send('board', {}); return got; };
+  const quiet = (c: any) => { for (const t of ['note', 'likes']) c.onMessage(t, () => {}); return c; };
+  it('public parties of the same theme share one wall, live', async () => {
+    const r1 = await colyseus.createRoom<PartyRoom>('party', { theme: 'gallery' });
+    const r2 = await colyseus.createRoom<PartyRoom>('party', { theme: 'gallery' });
+    const a = quiet(await colyseus.connectTo(r1, { name: '갑' }));
+    const b = await colyseus.connectTo(r2, { name: '을' });
+    const live: any[] = [];
+    b.onMessage('note', (n: any) => live.push(n.text)); b.onMessage('likes', () => {});
+    a.send('note', { text: '다음 사람 안녕' });
+    await wait();
+    expect(live).toEqual(['다음 사람 안녕']);
+    expect((await boardOf(b)).notes.map((n: any) => n.text)).toEqual(['다음 사람 안녕']);
+    const pool = quiet(await colyseus.connectTo(await colyseus.createRoom<PartyRoom>('party', { theme: 'pool' }), { name: '병' }));
+    expect((await boardOf(pool)).notes).toEqual([]);
+  });
+  it(`a friends-only party's notes stay in that party; its hearts still count`, async () => {
+    const secret = await colyseus.createRoom<PartyRoom>('party', { theme: 'gallery', private: true });
+    const a = quiet(await colyseus.connectTo(secret, { name: '친구' }));
+    a.send('note', { text: '우리끼리 얘기' }); a.send('like', { art: '5' });
+    await wait();
+    expect((await boardOf(a)).notes.map((n: any) => n.text)).toEqual(['우리끼리 얘기']);
+    const open = quiet(await colyseus.connectTo(await colyseus.createRoom<PartyRoom>('party', { theme: 'gallery' }), { name: '남' }));
+    const seen = await boardOf(open);
+    expect(seen.notes).toEqual([]);
+    expect(seen.likes).toEqual({ '5': 1 });
+  });
+  it('one heart per visitor, even after coming back', async () => {
+    const room = await colyseus.createRoom<PartyRoom>('party', { theme: 'gallery' });
+    const visitor = 'visitor-key-0123456789';
+    quiet(await colyseus.connectTo(room, { name: '남아 있는 사람' }));   // so the party stays open
+    const a = quiet(await colyseus.connectTo(room, { name: '나', visitor }));
+    a.send('like', { art: '9' }); await wait();
+    await a.leave();
+    const again = quiet(await colyseus.connectTo(room, { name: '나', visitor }));
+    expect((await boardOf(again)).likes).toEqual({ '9': 1 });
+    again.send('like', { art: '9' }); await wait();          // same visitor: takes it back
+    expect((await boardOf(again)).likes).toEqual({});
+  });
+  it('a restarted server finds the notes and hearts again', async () => {
+    const store = createBoardStore({});
+    resetBoards(store);
+    const a = quiet(await colyseus.connectTo(await colyseus.createRoom<PartyRoom>('party', { theme: 'home' }), { name: '집주인', visitor: 'visitor-key-aaaaaaaaaa' }));
+    a.send('note', { text: '불 끄고 가요' }); a.send('like', { art: '1' });
+    await wait(150);
+    await colyseus.cleanup();
+    resetBoards(store);                                        // a new server process, same Key Value
+    const b = quiet(await colyseus.connectTo(await colyseus.createRoom<PartyRoom>('party', { theme: 'home' }), { name: '다음' }));
+    const seen = await boardOf(b);
+    expect(seen.notes.map((n: any) => n.text)).toEqual(['불 끄고 가요']);
+    expect(seen.likes).toEqual({ '1': 1 });
+  });
+  it('a broken store never stops the party', async () => {
+    resetBoards(createBoardStore({ url: 'redis://127.0.0.1:1' }));
+    const room = await colyseus.createRoom<PartyRoom>('party', { theme: 'gallery' });
+    const a = await colyseus.connectTo(room, { name: '꿋꿋' });
+    const heard: string[] = [];
+    a.onMessage('note', (n: any) => heard.push(n.text)); a.onMessage('likes', () => {});
+    a.send('note', { text: '그래도 보여요' });
+    await wait();
+    expect(heard).toEqual(['그래도 보여요']);
+  }, 15000);
 });
 
 describe('🍹 a new drink from the bar', () => {

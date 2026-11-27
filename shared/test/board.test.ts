@@ -1,6 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import { Board, NOTES_KEPT, NOTE_EVERY, NOTE_MAX } from '../src/board';
 
+describe('📝 a board that outlives the server', () => {
+  it('says whether a heart went on or came off, so it can be saved', () => {
+    const b = new Board();
+    expect(b.toggleLike('v1', '7')).toEqual({ n: 1, on: true });
+    expect(b.toggleLike('v2', '7')).toEqual({ n: 2, on: true });
+    expect(b.toggleLike('v1', '7')).toEqual({ n: 1, on: false });
+    expect(b.toggleLike('v1', '../x')).toBeNull();
+  });
+  it('comes back from what was saved, hearts and all', () => {
+    const b = new Board();
+    b.restore({ notes: [{ name: '앞사람', text: '수고했어요', ts: 1 }], voters: { '7': ['v1', 'v2'], bad: 'x' as never } });
+    expect(b.snapshot()).toEqual({ notes: [{ name: '앞사람', text: '수고했어요', ts: 1 }], likes: { '7': 2 } });
+    expect(b.toggleLike('v1', '7')).toEqual({ n: 1, on: false });           // the same visitor takes it back
+  });
+  it('keeps only the newest notes and only tidy ones when restoring', () => {
+    const b = new Board();
+    const many = Array.from({ length: NOTES_KEPT + 5 }, (_, k) => ({ name: 'n', text: 't' + k, ts: k }));
+    b.restore({ notes: [...many, { name: 1, text: null } as never], voters: {} });
+    const notes = b.snapshot().notes;
+    expect(notes).toHaveLength(NOTES_KEPT);
+    expect(notes.at(-1)!.text).toBe('t' + (NOTES_KEPT + 4));
+  });
+});
+
 describe('📝 방명록', () => {
   it('keeps short, tidy lines, newest last', () => {
     const b = new Board();
