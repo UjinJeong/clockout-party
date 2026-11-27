@@ -914,7 +914,7 @@ export class Party {
     const talking: { tag: Tag; x: number; y: number; bw: number; bh: number }[] = [];
     const plates: { l: number; r: number; t: number; b: number }[] = [];
     for (const [id, g] of this.guests) {
-      v.set(g.rig.root.position.x, 1.85 + g.rig.root.position.y, g.rig.root.position.z).project(this.camera);
+      v.set(g.rig.root.position.x, 1.85 + g.anim.tagY, g.rig.root.position.z).project(this.camera);
       const vis = v.z < 1 && v.x > -1.2 && v.x < 1.2 && v.y > -1.2 && v.y < 1.3;
       const sx = (v.x * 0.5 + 0.5) * w, sy = (-v.y * 0.5 + 0.5) * h;
       g.tag.place(sx, sy, vis && g.rig.root.visible, v.z);

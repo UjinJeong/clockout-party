@@ -46,6 +46,9 @@ export class Animator {
   private glanceAmt = 1;       // how much of the full turn this glance uses
   private glanceSide = 1;      // which shoulder (kept for the whole glance, so it never flips)
   private lastMood: Mood | '' | undefined;
+  /** Where the name tag and speech bubbles hang from: the body's real height (stairs, a seat, a dive's arc),
+   *  without the little hops and dance bounces, so the bubbles don't shake while the body jumps about. */
+  tagY = 0;
 
   constructor(private rig: AnimalRig) {
     rig.root.rotation.order = 'YXZ'; // turn first, then lean back (lying on a lounger)
@@ -104,6 +107,7 @@ export class Animator {
     // lying back on a lounger (around the feet), sitting on a seat
     r.root.rotation.x = -1.2 * this.lie;
     r.root.position.y = b.baseY;
+    this.tagY = b.baseY;
 
     // the face: resting expression from their mood, a flash of feeling during a reaction.
     // Sleepy eyes: barely open when drained, a little more as you recharge; shut when dozing; a slow blink.
@@ -231,7 +235,9 @@ export class Animator {
         // off the board: up in an arc, one somersault about the tummy, arms stretched for the water
         const a = Math.PI * 2 * Math.min(1, Math.max(0, (p - 0.12) / 0.7)), mid = 0.65;
         r.root.rotation.x = a;
-        r.root.position.y += Math.sin(Math.PI * Math.min(1, p / 0.92)) * 1.25 + mid * (1 - Math.cos(a));
+        const arc = Math.sin(Math.PI * Math.min(1, p / 0.92)) * 1.25 + mid * (1 - Math.cos(a));
+        r.root.position.y += arc;
+        this.tagY += arc; // one big arc: the bubble goes along
         const back = -mid * Math.sin(a), yaw = r.root.rotation.y;
         r.root.position.x += Math.sin(yaw) * back; r.root.position.z += Math.cos(yaw) * back;
         r.armL.rotation.x = -2.9 * env; r.armR.rotation.x = -2.9 * env;
