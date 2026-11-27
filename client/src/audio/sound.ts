@@ -22,15 +22,17 @@ export const SOUND_LABEL: Record<SoundMode, { icon: string; text: string }> = {
 
 /** Effects from others: full volume up close, gone by this distance (m). */
 export const HEAR_FAR = 10;
+/** Big, distant sounds (fireworks over the sea) carry across the whole party. */
+export const FAR_SOUND = 60;
 
 /**
  * How loud, and how far left/right, a sound `dx`/`dz` metres away from you is.
  * The camera always looks down −z, so +x is to your right on screen.
  */
-export function spatial(dx: number, dz: number): { gain: number; pan: number } {
+export function spatial(dx: number, dz: number, far = HEAR_FAR): { gain: number; pan: number } {
   const d = Math.hypot(dx, dz);
   const near = 2;
-  const gain = d <= near ? 1 : Math.max(0, 1 - (d - near) / (HEAR_FAR - near)) ** 1.6;
+  const gain = d <= near ? 1 : Math.max(0, 1 - (d - near) / (far - near)) ** 1.6;
   const pan = Math.max(-1, Math.min(1, dx / 6)) * 0.7;
   return { gain, pan };
 }
@@ -38,6 +40,8 @@ export function spatial(dx: number, dz: number): { gain: number; pan: number } {
 export interface PlayOpts {
   /** where the sound comes from (omit for your own sounds: centre, full volume) */
   at?: { x: number; z: number };
+  /** how far away it can still be heard (default HEAR_FAR; FAR_SOUND for fireworks) */
+  range?: number;
   delay?: number;
   volume?: number;
   pitch?: number;
@@ -131,7 +135,7 @@ export class Sound {
     if (c.state !== 'running') { if (document.hidden) return false; void c.resume().catch(() => {}); }
     let vol = o.volume ?? 1, pan = 0;
     if (o.at) {
-      const s = spatial(o.at.x - this.listener.x, o.at.z - this.listener.z);
+      const s = spatial(o.at.x - this.listener.x, o.at.z - this.listener.z, o.range);
       vol *= s.gain; pan = s.pan;
     }
     if (vol < 0.02) return false;

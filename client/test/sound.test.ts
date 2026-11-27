@@ -85,6 +85,23 @@ describe('hearing others', () => {
   });
 });
 
+describe('fireworks are heard across the party', () => {
+  it('a far, loud sound carries much further than a voice', async () => {
+    const { spatial, HEAR_FAR, FAR_SOUND } = await import('../src/audio/sound');
+    expect(spatial(0, 11).gain).toBe(0);                          // a voice 11 m away: gone
+    expect(spatial(0, 11, FAR_SOUND).gain).toBeGreaterThan(0.6);  // a firework 11 m up: loud
+    expect(spatial(25, 10, FAR_SOUND).gain).toBeGreaterThan(0.3); // from the far end of the beach: still there
+    expect(spatial(HEAR_FAR + 1, 0).gain).toBe(0);
+    expect(spatial(4, 9, FAR_SOUND).pan).toBeGreaterThan(0);      // and still from the right side
+  });
+  it('the pool party\'s fireworks play loud enough from the dance floor', async () => {
+    const src = (await import('node:fs')).readFileSync(new URL('../src/world/pool.ts', import.meta.url), 'utf8');
+    const calls = src.match(/sound\.play\('(launch|boom|crackle)'[^)]*\)/g) ?? [];
+    expect(calls.length).toBeGreaterThanOrEqual(3);
+    for (const c of calls) expect(c).toContain('range: FAR_SOUND');
+  });
+});
+
 describe('the 🔊 button', () => {
   let store: Record<string, string>;
   beforeEach(() => {

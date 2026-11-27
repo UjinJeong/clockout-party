@@ -7,7 +7,7 @@ import { builder, flames, rnd, std, stringLights, tiles } from './kit';
 import { buildStage } from './djStage';
 import { stepFloats, type FloatBody, type Pusher } from './floatPhysics';
 import { Fireworks } from './fireworks';
-import { sound } from '../audio/sound';
+import { sound, FAR_SOUND } from '../audio/sound';
 import type { WorldParts } from './world';
 
 /**
@@ -193,12 +193,12 @@ export function buildPool(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Wo
   // the DJ stage, and fireworks over the sea
   const stage = buildStage(group, POOL.dj, B.x1, POOL.dance);
   const fireworks = new Fireworks(group, {
-    launch: at => sound.play('launch', { at: { x: at.x, z: -12 }, volume: 0.55, pitch: 0.9 + Math.random() * 0.25 }),
+    launch: at => sound.play('launch', { at: { x: at.x, z: -12 }, range: FAR_SOUND, volume: 0.55, pitch: 0.9 + Math.random() * 0.25 }),
     burst: (at, shape) => {
       // sound travels: the bang arrives a moment after the flash
       const delay = Math.min(0.25, Math.abs(at.z) / 343);
-      sound.play('boom', { at: { x: at.x, z: -9 }, delay, volume: 0.8, pitch: 0.85 + Math.random() * 0.3 });
-      if (shape === 'glitter' || shape === 'willow') sound.play('crackle', { at: { x: at.x, z: -9 }, delay: delay + 0.2, volume: 0.6 });
+      sound.play('boom', { at: { x: at.x, z: -9 }, range: FAR_SOUND, delay, volume: 0.8, pitch: 0.85 + Math.random() * 0.3 });
+      if (shape === 'glitter' || shape === 'willow') sound.play('crackle', { at: { x: at.x, z: -9 }, range: FAR_SOUND, delay: delay + 0.2, volume: 0.6 });
     },
   });
   let showSlot = -1, showCheck = 0, camX = 20;
