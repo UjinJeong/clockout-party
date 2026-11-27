@@ -64,6 +64,8 @@ export interface GalleryItem {
    * (R flow, G sway, B shimmer), a depth map, and how strong each effect is. `fx: {}` = keep it still.
    */
   mask?: string; depth?: string; fx?: AutoFx;
+  /** The manager's few words for its motion ("회색 하늘, 꽃잎 날림"), and what drifts over the picture. */
+  prompt?: string; drift?: Drift;
   /** Taken down for now (kept, not shown). */
   hidden?: boolean;
 }
@@ -81,6 +83,9 @@ export const FX_RANGE = {
 export type FxKey = keyof typeof FX_RANGE;
 export const FX_KEYS = Object.keys(FX_RANGE) as FxKey[];
 export type AutoFx = Partial<Record<FxKey, number>>;
+/** Things that can drift over a replaced picture in the living painting viewer. */
+export const DRIFTS = ['petals', 'snow', 'fireflies', 'rain'] as const;
+export type Drift = (typeof DRIFTS)[number];
 const checkFx = (v: unknown): AutoFx | null => {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
   const out: AutoFx = {};
@@ -93,7 +98,7 @@ const checkFx = (v: unknown): AutoFx | null => {
   return out;
 };
 
-export const LIMITS = { title: 40, desc: 300, doc: 800, how: 200, hint: 30, answer: 800 } as const;
+export const LIMITS = { prompt: 60, title: 40, desc: 300, doc: 800, how: 200, hint: 30, answer: 800 } as const;
 const PATH = /^gallery\/[A-Za-z0-9_-]{1,64}\.(jpg|jpeg|png|webp)$/;
 export const isGalleryPath = (v: unknown): v is string => typeof v === 'string' && PATH.test(v);
 
@@ -164,6 +169,9 @@ export function checkGallery(input: unknown): { ok: true; gallery: Gallery } | {
       }
       const fx = checkFx(o.fx);
       if (fx) it.fx = fx;
+      const prompt = text(o.prompt, LIMITS.prompt);
+      if (prompt) it.prompt = prompt;
+      if ((DRIFTS as readonly unknown[]).includes(o.drift)) it.drift = o.drift as Drift;
     }
     if (o.hidden === true) it.hidden = true;
     items.push(it);

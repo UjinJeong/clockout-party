@@ -56,6 +56,7 @@
       parts.push('<button class="add" data-add="' + room + '"' + (shown(room) >= max ? ' disabled title="벽이 꽉 찼어요. 다른 그림을 내리면 걸 수 있어요."' : '') + '>＋ 새 그림 걸기</button></section>');
     }
     box.innerHTML = parts.join('');
+    for (const c of box.querySelectorAll('canvas[data-brush]')) drawPreview(c, motion.get(+c.dataset.brush));
     for (const img of box.querySelectorAll('img[data-fb]')) img.addEventListener('error', () => { if (img.dataset.fb && img.src !== img.dataset.fb) img.src = img.dataset.fb; }, { once: true });
     bar();
   }
@@ -256,18 +257,20 @@
   }
   const grey = (v, w, h) => { const o = new Uint8ClampedArray(w * h * 4); for (let i = 0; i < w * h; i++) { o[i * 4] = o[i * 4 + 1] = o[i * 4 + 2] = Math.round(v[i] * 255); o[i * 4 + 3] = 255; } return o; };
   /** The picture, dimmed, with what moves painted over it: blue flows, green sways, gold shimmers. */
-  function preview(img, mask, w, h) {
+  function drawPreview(c, m) {
+    if (!m?.img) return;
+    const { img, mask, w, h } = m;
+    const W = Math.min(520, img.naturalWidth), H = Math.round(W * h / w);
+    if (c.width !== W) { c.width = W; c.height = H; }
     const o = new Uint8ClampedArray(w * h * 4);
     for (let i = 0; i < w * h; i++) {
       const f = mask[i * 4] / 255, s = mask[i * 4 + 1] / 255, m = mask[i * 4 + 2] / 255, t = f + s + m || 1;
       o[i * 4] = (90 * f + 120 * s + 255 * m) / t; o[i * 4 + 1] = (180 * f + 225 * s + 215 * m) / t; o[i * 4 + 2] = (255 * f + 110 * s + 70 * m) / t;
       o[i * 4 + 3] = Math.min(1, Math.max(f, s, m)) * 190;
     }
-    const c = document.createElement('canvas'); c.width = w * 2; c.height = h * 2;
     const g = c.getContext('2d'); g.drawImage(img, 0, 0, c.width, c.height); g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(0, 0, c.width, c.height);
     const a = document.createElement('canvas'); a.width = w; a.height = h; a.getContext('2d').putImageData(new ImageData(o, w, h), 0, 0);
-    g.drawImage(a, 0, 0, c.width, c.height);
-    return c.toDataURL('image/jpeg', 0.8);
+    g.imageSmoothingQuality = 'high'; g.drawImage(a, 0, 0, c.width, c.height);
   }
   /** Read the picture: motion map, depth, strengths, "해 보기". Anything going wrong = it hangs still. */
   async function makeMotion(it) {
@@ -280,14 +283,17 @@
       const px = c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
       let depth;
       try { depth = M.normalizeDepth(await within(depthOf(img, w, h), 180000)); } catch (e) { console.warn('입체 분석은 건너뛰어요:', e); }
-      const r = M.analyze(px, w, h, depth);
+      const hints = M.parsePrompt(it.prompt);
+      const r = M.analyze(px, w, h, depth, hints);
       const stem = it.image.replace(/\.[a-z]+$/, '');
       delete it.mask; delete it.depth;
       if (r.found.some(f => f !== 'depth')) { it.mask = stem + '-m.png'; pics.set(it.mask, png(r.mask, w, h)); }
       if (r.hasDepth) { it.depth = stem + '-d.png'; pics.set(it.depth, png(grey(depth, w, h), w, h)); }
       it.fx = r.fx;
-      if (!it.how.trim() || M.isAutoHow(it.how)) { const t = M.howFor(r.found); it.how = t.how; it.hint = t.hint; }
-      motion.set(id, { state: r.found.length ? 'done' : 'none', areas: r.areas, found: r.found, hasDepth: r.hasDepth, levels: r.levels, preview: preview(img, r.mask, w, h) });
+      if (r.drift) it.drift = r.drift;
+      if (!it.how.trim() || M.isAutoHow(it.how)) { const t = M.howFor(r.found, it.drift); it.how = t.how; it.hint = t.hint; }
+      motion.set(id, { state: r.found.length ? 'done' : 'none', still: !!hints.still, words: hints.words, areas: r.areas, found: r.found, hasDepth: r.hasDepth, levels: r.levels, min: r.min,
+        img, mask: r.mask, w, h, stem, tool: 'flow', size: 'mid' });
     } catch (e) {
       console.warn('움직임 분석 실패:', e);
       it.fx = {}; delete it.mask; delete it.depth;
@@ -295,22 +301,50 @@
     }
     if (byId(id)) render();
   }
+  const DRIFT_LABEL = [['', '없음'], ['petals', '🌸 꽃잎'], ['snow', '❄️ 눈'], ['fireflies', '✨ 반딧불'], ['rain', '🌧️ 비']];
+  const TOOLS = [['flow', '🌊 흐름'], ['sway', '🌿 살랑임'], ['shimmer', '✨ 반짝임'], ['erase', '🧽 지우개']];
+  const SIZES = [['thin', '가늘게', 0.035], ['mid', '보통', 0.065], ['thick', '굵게', 0.11]];
   function motionBox(it) {
     const m = motion.get(it.i), btn = (label) => '<button class="mini" data-auto="' + it.i + '">🪄 ' + label + '</button>';
+    const words = '<div class="mprompt"><input data-prompt="' + it.i + '" maxlength="60" value="' + esc(it.prompt ?? '') + '" placeholder="몇 단어로 알려 주세요: 회색 하늘, 바다, 바람, 꽃잎 날림">'
+      + '<button class="mini" data-auto="' + it.i + '">이 말로 다시 읽기</button></div>'
+      + '<small class="mhelp">알아듣는 말: 하늘·구름·노을 / 바다·물·강·호수 / 바람·잎·풀·털 / 반짝·빛·별·금 / 입체 / 고요 · 날리는 것: 꽃잎·벚꽃, 눈 내림, 반딧불, 비</small>';
+    const drift = '<label class="mdrift"><span>날리는 것</span><select data-drift="' + it.i + '">' + DRIFT_LABEL.map(([v, t]) => '<option value="' + v + '"' + ((it.drift ?? '') === v ? ' selected' : '') + '>' + t + '</option>').join('') + '</select></label>';
     let body;
     if (m?.state === 'busy') body = '<p class="mbusy">그림을 읽는 중이에요… 처음 한 번은 입체 분석 AI를 내려받느라 30초~1분쯤 걸려요.</p>';
-    else if (m?.state === 'done') body = '<div class="mrow"><img class="mprev" alt="움직이는 곳 미리보기" src="' + m.preview + '">'
-      + '<div class="mlist">' + m.found.map(k => '<label><span>' + FX_LABEL[k] + (k !== 'depth' ? ' <small>' + Math.round(m.areas[k] * 100) + '%</small>' : '') + '</span><select data-lv="' + k + '" data-for-lv="' + it.i + '">'
-        + LV.map(([v, t]) => '<option value="' + v + '"' + (m.levels[k] === v ? ' selected' : '') + '>' + t + '</option>').join('') + '</select></label>').join('')
-      + '<small>미리보기: 파랑 = 흐름, 초록 = 살랑임, 노랑 = 반짝임</small></div></div>' + btn('다시 읽기');
-    else if (m?.state === 'none') body = '<p>움직일 곳을 찾지 못해서 <b>움직임 없이</b> 걸어요.</p>' + btn('다시 읽기');
-    else if (m?.state === 'fail') body = '<p>그림을 읽지 못해서 <b>움직임 없이</b> 걸어요.</p>' + btn('다시 읽기');
+    else if (m?.state === 'done' || m?.state === 'none') {
+      const keys = ['flow', 'sway', 'shimmer'].filter(k => m.found.includes(k) || m.areas[k] > 0.0005).concat(m.hasDepth ? ['depth'] : []);
+      body = (m.words?.length ? '<p class="mwords">알아들은 말: ' + m.words.map(w => '<span class="chip">' + esc(w) + '</span>').join(' ') + '</p>' : '')
+        + (m.state === 'none' ? '<p>' + (m.still ? '고요하게, <b>움직임 없이</b> 걸어요.' : '움직일 곳을 찾지 못해서 <b>움직임 없이</b> 걸어요. 아래 그림에 붓으로 칠하면 그곳이 움직여요.') + '</p>' : '')
+        + '<div class="mrow"><div><canvas class="mprev" data-brush="' + it.i + '" title="붓으로 칠해서 고치기"></canvas>'
+        + '<div class="mtools">' + TOOLS.map(([v, t]) => '<button class="mini' + (m.tool === v ? ' on' : '') + '" data-tool="' + v + '" data-for-tool="' + it.i + '">' + t + '</button>').join('')
+        + '<span class="msep"></span>' + SIZES.map(([v, t]) => '<button class="mini' + (m.size === v ? ' on' : '') + '" data-size="' + v + '" data-for-tool="' + it.i + '">' + t + '</button>').join('') + '</div>'
+        + '<small>그림 위를 붓으로 칠해서 움직일 곳을 고쳐요. 파랑 = 흐름, 초록 = 살랑임, 노랑 = 반짝임</small></div>'
+        + '<div class="mlist">' + keys.map(k => '<label><span>' + FX_LABEL[k] + (k !== 'depth' ? ' <small>' + (Math.round(m.areas[k] * 1000) / 10) + '%</small>' : '') + '</span><select data-lv="' + k + '" data-for-lv="' + it.i + '">'
+          + LV.map(([v, t]) => '<option value="' + v + '"' + (m.levels[k] === v ? ' selected' : '') + '>' + t + '</option>').join('') + '</select></label>').join('')
+        + drift + '</div></div>';
+    }
+    else if (m?.state === 'fail') body = '<p>그림을 읽지 못해서 <b>움직임 없이</b> 걸어요.</p>' + drift;
     else if (it.fx) {
       const on = [it.fx.flow && 'flow', it.fx.sway && 'sway', it.fx.shimmer && 'shimmer', it.fx.para && 'depth'].filter(Boolean);
-      body = '<p>' + (on.length ? '저장된 움직임: ' + on.map(k => FX_LABEL[k]).join(', ') : '움직임 없이 걸려 있어요.') + '</p>' + btn('다시 만들기');
+      body = '<p>' + (on.length ? '저장된 움직임: ' + on.map(k => FX_LABEL[k]).join(', ') : '움직임 없이 걸려 있어요.') + ' <small>(붓으로 고치려면 "다시 만들기")</small></p>' + btn('다시 만들기') + drift;
     } else body = '<p>아직 자동 움직임이 없어요 (빛만 은은하게 스쳐요).</p>' + btn('움직임 자동 만들기');
-    return '<div class="gmotion"><b>🪄 자동 움직임</b>' + body + '</div>';
+    return '<div class="gmotion"><b>🪄 자동 움직임</b>' + words + body + '</div>';
   }
+  /** After the brush or a level change: strengths, what's found, "해 보기", and the motion map file. */
+  async function motionChanged(it, m, painted) {
+    const M = await auto();
+    if (painted) {
+      m.areas = M.areasOf(m.mask); m.min = M.MANUAL_AREA;
+      for (const k of ['flow', 'sway', 'shimmer']) if (m.areas[k] >= m.min[k] && m.levels[k] === 'off' && !m.found.includes(k)) m.levels[k] = 'mid';
+      m.found = ['flow', 'sway', 'shimmer'].filter(k => m.areas[k] >= m.min[k]).concat(m.hasDepth ? ['depth'] : []);
+      m.state = m.found.length ? 'done' : 'none'; m.still = false;
+      it.mask = m.stem + '-m.png'; pics.set(it.mask, png(new Uint8ClampedArray(m.mask), m.w, m.h));
+    }
+    it.fx = M.fxFor(m.areas, m.levels, m.hasDepth, m.min);
+    if (!it.how.trim() || M.isAutoHow(it.how)) { const t = M.howFor(m.found.filter(k => m.levels[k] !== 'off'), it.drift); it.how = t.how; it.hint = t.hint; }
+  }
+
 
   // ---- clicks and typing ----
   box.addEventListener('click', async e => {
@@ -341,7 +375,8 @@
       if (it.hidden && shown(it.room) >= slots(it.room)) { alertIn(b, '벽이 꽉 찼어요'); return; }
       it.hidden = !it.hidden;
     } else if (d.auto) { makeMotion(byId(d.auto)); return; }
-    else if (d.restore) { const it = byId(d.restore), was = base.find(x => x.i === it.i); delete it.image; delete it.wall; delete it.thumb; delete it.mask; delete it.depth; delete it.fx; motion.delete(it.i); if (was && !was.image) Object.assign(it, { w: was.w, h: was.h, how: was.how, hint: was.hint }); }
+    else if (d.forTool) { const m = motion.get(+d.forTool); if (d.tool) m.tool = d.tool; if (d.size) m.size = d.size; }
+    else if (d.restore) { const it = byId(d.restore), was = base.find(x => x.i === it.i); delete it.image; delete it.wall; delete it.thumb; delete it.mask; delete it.depth; delete it.fx; delete it.prompt; delete it.drift; motion.delete(it.i); if (was && !was.image) Object.assign(it, { w: was.w, h: was.h, how: was.how, hint: was.hint }); }
     else if (d.remove) {
       if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = '정말 지울까요?'; return; }
       items = items.filter(x => x.i !== +d.remove); open = null;
@@ -371,7 +406,14 @@
     if (t.dataset.lv) {
       const it = byId(t.dataset.forLv), m = motion.get(it.i);
       m.levels[t.dataset.lv] = t.value;
-      it.fx = (await auto()).fxFor(m.areas, m.levels, m.hasDepth);
+      await motionChanged(it, m, false);
+      render(); return;
+    }
+    if (t.dataset.drift !== undefined) {
+      const it = byId(t.dataset.drift);
+      if (t.value) it.drift = t.value; else delete it.drift;
+      const m = motion.get(it.i), M = await auto();
+      if (!it.how.trim() || M.isAutoHow(it.how)) { const on = m?.found ? m.found.filter(k => m.levels[k] !== 'off') : []; const x = M.howFor(on, it.drift); it.how = x.how; it.hint = x.hint; }
       render(); return;
     }
     // (hall fields are kept as they are typed; no redraw here, or a click right after typing a name would land on a redrawn page)
@@ -392,12 +434,30 @@
       if (t.dataset.h === 'name') { const row = hed.previousElementSibling.querySelector('.gtext b'); if (row) row.textContent = t.value; }
       bar(); return;
     }
+    if (t.dataset.prompt) { byId(t.dataset.prompt).prompt = t.value; bar(); return; }
     const ed = t.closest('.geditor'); if (!ed) return;
     const it = byId(ed.dataset.for);
     if (t.dataset.f && t.dataset.f !== 'room') it[t.dataset.f] = t.value;
     if (t.dataset.a) it.answers[+t.dataset.a] = t.value;
     bar();
   });
+  // ---- the brush: paint on the preview to fix what moves ----
+  let stroke = null;
+  box.addEventListener('pointerdown', async e => {
+    const c = e.target.closest('canvas[data-brush]'); if (!c) return;
+    const it = byId(c.dataset.brush), m = motion.get(it.i); if (!m?.mask) return;
+    e.preventDefault(); c.setPointerCapture?.(e.pointerId);
+    stroke = { c, it, m, M: await auto() }; dab(e);
+  });
+  box.addEventListener('pointermove', e => { if (stroke) dab(e); });
+  const endStroke = async () => { if (!stroke) return; const { it, m } = stroke; stroke = null; await motionChanged(it, m, true); render(); };
+  box.addEventListener('pointerup', endStroke); box.addEventListener('pointercancel', endStroke);
+  function dab(e) {
+    const { c, m, M } = stroke, r = c.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width * m.w, y = (e.clientY - r.top) / r.height * m.h;
+    M.brush(m.mask, m.w, m.h, x, y, Math.max(1.5, SIZES.find(s => s[0] === m.size)[2] * Math.max(m.w, m.h)), m.tool);
+    drawPreview(c, m);
+  }
   function alertIn(b, msg) { const old = b.textContent; b.textContent = msg; setTimeout(() => { b.textContent = old; }, 1800); }
 
   $('gundo').addEventListener('click', () => {

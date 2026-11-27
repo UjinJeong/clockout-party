@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain JS module served to the manager page as-is
-import { analyze, fxFor, howFor, isAutoHow, LEVELS } from '../src/autoMotion.js';
+import { analyze, areasOf, brush, fxFor, howFor, isAutoHow, LEVELS, MANUAL_AREA, parsePrompt } from '../src/autoMotion.js';
 import { FX_KEYS, FX_RANGE } from '@party/shared';
 
 const W = 120, H = 90;
@@ -118,5 +118,74 @@ describe('auto motion: the manager turns effects up, down or off', () => {
     const t = howFor(['flow', 'sway']);
     expect(t.how.length).toBeGreaterThan(5);
     expect(t.hint.length).toBeLessThanOrEqual(30);
+  });
+});
+
+describe('auto motion: a few words from the manager', () => {
+  it('understands the words, with particles and spaces, and not inside other words', () => {
+    expect(parsePrompt('회색 하늘이랑 바다, 바람에 흔들리는 풀')).toMatchObject({ sky: true, water: true, wind: true });
+    expect(parsePrompt('동물 그림').water).toBeFalsy();               // 동물 is not 물
+    expect(parsePrompt('벚꽃잎 날림').drift).toBe('petals');
+    expect(parsePrompt('비율이 좋은 그림').drift).toBeUndefined();     // 비율 is not rain
+    expect(parsePrompt('벚꽃 날림').drift).toBe('petals');
+    expect(parsePrompt('눈 내리는 밤').drift).toBe('snow');
+    expect(parsePrompt('큰 눈').drift).toBeUndefined();                 // an eye is not snow
+    expect(parsePrompt('비가 와요').drift).toBe('rain');
+    expect(parsePrompt('반딧불 가득').drift).toBe('fireflies');
+    expect(parsePrompt('움직임 없이').still).toBe(true);
+    expect(parsePrompt('반짝이는 별, 입체').sparkle && parsePrompt('반짝이는 별, 입체').depth).toBe(true);
+    expect(parsePrompt('').words).toEqual([]);
+    expect(parsePrompt('하늘, 꽃잎').words).toEqual(['하늘', '꽃잎']);
+  });
+  it('"하늘" makes a grey sky flow (colour no longer matters)', () => {
+    const px = paint((x, y) => y < H / 2 ? [150, 150, 152] : [90, 70, 50]);
+    expect(analyze(px, W, H).found).not.toContain('flow');
+    const r = analyze(px, W, H, undefined, parsePrompt('회색 하늘'));
+    expect(r.found).toContain('flow');
+    expect(meanIn(r.mask, 0, 2, H / 2 - 6)).toBeGreaterThan(0.6);
+  });
+  it('"바다" makes a smooth bottom of any colour ripple', () => {
+    const px = paint((x, y) => y > H * 0.55 ? [150, 120, 90] : [40, 40, 40]);
+    const r = analyze(px, W, H, undefined, parsePrompt('바다'));
+    expect(r.found).toContain('flow');
+    expect(r.fx.ripMask).toBe(1);
+  });
+  it('"고요" keeps it still whatever is in the picture', () => {
+    const px = paint((x, y) => y < H / 2 ? [110 + y, 160 + y, 235] : [40, 140, 30]);
+    const r = analyze(px, W, H, undefined, parsePrompt('고요하게'));
+    expect(r.found).toEqual([]);
+    expect(r.fx).toEqual({});
+  });
+  it('the drift word comes back with the reading, and in "해 보기"', () => {
+    const r = analyze(paint(() => [128, 128, 128]), W, H, undefined, parsePrompt('꽃잎'));
+    expect(r.drift).toBe('petals');
+    expect(howFor(r.found, 'petals').how).toContain('꽃잎');
+    expect(isAutoHow(howFor(['sway'], 'snow').how)).toBe(true);
+  });
+});
+
+describe('auto motion: the brush', () => {
+  it('paints flow, sway or shimmer in a soft round dab, and the eraser clears', () => {
+    const m = new Uint8ClampedArray(W * H * 4);
+    brush(m, W, H, 30, 30, 6, 'flow');
+    expect(m[(30 * W + 30) * 4]).toBe(255);
+    expect(m[(30 * W + 60) * 4]).toBe(0);
+    brush(m, W, H, 30, 30, 6, 'sway');
+    expect(m[(30 * W + 30) * 4 + 1]).toBe(255);
+    expect(m[(30 * W + 30) * 4]).toBe(0);              // sway replaces flow (one or the other)
+    brush(m, W, H, 30, 30, 6, 'shimmer');
+    expect(m[(30 * W + 30) * 4 + 2]).toBe(255);         // shimmer adds on top
+    brush(m, W, H, 30, 30, 8, 'erase');
+    expect([...m.slice((30 * W + 30) * 4, (30 * W + 30) * 4 + 3)]).toEqual([0, 0, 0]);
+    expect(m[(30 * W + 30) * 4 + 3]).toBe(255);
+  });
+  it('a small painted spot still moves (the manager asked for it)', () => {
+    const m = new Uint8ClampedArray(W * H * 4);
+    brush(m, W, H, 60, 45, 4, 'sway');
+    const a = areasOf(m);
+    expect(a.sway).toBeGreaterThan(0);
+    expect(a.sway).toBeLessThan(0.08);
+    expect(fxFor(a, { sway: 'mid' }, false).sway).toBeUndefined();
+    expect(fxFor(a, { sway: 'mid' }, false, MANUAL_AREA).sway).toBeGreaterThan(0);
   });
 });

@@ -52,8 +52,13 @@ nav.tabs button[aria-selected="true"]{background:var(--plate);color:var(--ink);b
 .geditor{display:grid;grid-template-columns:220px 1fr;gap:16px;padding:12px;margin:6px 0 10px;background:#faf4e8;border:1px solid #e3d6bd}
 .gpic{display:flex;flex-direction:column;gap:8px}.gpic img{width:100%;max-height:220px;object-fit:contain;background:#efe5d2}.gpic small{color:var(--ink-2)}
 .gmotion{grid-column:1/-1;display:grid;gap:8px;padding:10px 12px;background:#fff;border:1px solid #e3d6bd;font-size:13.5px}.gmotion p{margin:0}.gmotion .mbusy{color:var(--wine)}
-.mrow{display:grid;grid-template-columns:minmax(0,260px) 1fr;gap:12px;align-items:start}.mprev{width:100%;border:1px solid #e3d6bd}.mlist{display:grid;gap:6px}.mlist label{display:flex;justify-content:space-between;align-items:center;gap:8px}.mlist small{color:var(--ink-2)}.mlist select{font:inherit;font-size:13.5px;padding:3px 6px}
+.mrow{display:grid;grid-template-columns:minmax(0,340px) 1fr;gap:12px;align-items:start}.mprev{width:100%;border:1px solid #e3d6bd}.mlist{display:grid;gap:6px}.mlist label{display:flex;justify-content:space-between;align-items:center;gap:8px}.mlist small{color:var(--ink-2)}.mlist select{font:inherit;font-size:13.5px;padding:3px 6px}
 .gmotion .mini{justify-self:start}
+.mprompt{display:flex;gap:6px}.mprompt input{flex:1;font:inherit;font-size:14px;padding:6px 8px;border:1px solid #cdbd9e;border-radius:2px}.mhelp{color:var(--ink-2);font-size:12px}
+.mwords .chip{display:inline-block;background:#efe5d2;border-radius:999px;padding:1px 8px;margin:0 2px;font-size:12.5px}
+canvas.mprev{width:100%;max-width:520px;border:1px solid #e3d6bd;cursor:crosshair;touch-action:none;display:block}
+.mtools{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 2px}.mtools .mini{font-size:12px;padding:2px 7px}.mtools .mini.on{background:var(--ink);color:var(--plate);border-color:var(--ink)}.msep{width:8px}
+.mdrift{display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px dashed #d6c7aa;padding-top:6px}.mdrift select{font:inherit;font-size:13.5px;padding:3px 6px}
 @media (max-width:640px){.mrow{grid-template-columns:1fr}}
 .btnlike{display:inline-block;text-align:center;background:var(--wine);color:#fff;border-radius:3px;padding:6px 10px;font-size:13px;cursor:pointer}
 .gfields{display:grid;gap:8px}.gfields label,.gfields .lab{display:grid;gap:3px;font-size:13px}.gfields label span,.gfields .lab>span:first-child{color:var(--ink-2)}

@@ -9,6 +9,47 @@
 export const LEVELS = { off: 0, low: 0.6, mid: 1, high: 1.6 };
 /** Smallest share of the picture worth moving. */
 export const MIN_AREA = { flow: 0.08, sway: 0.08, shimmer: 0.003 };
+/** …when the manager asked for it in words, */
+export const PROMPT_AREA = { flow: 0.02, sway: 0.02, shimmer: 0.001 };
+/** …and when they painted it with the brush. */
+export const MANUAL_AREA = { flow: 0.002, sway: 0.002, shimmer: 0.0005 };
+
+// ---- a few words from the manager ("회색 하늘, 바다, 꽃잎 날림"): a fixed word list, no AI ----
+const WORDS = {
+  sky: ['하늘', '구름', '노을', '석양', 'sky', 'cloud', 'clouds', 'sunset'],
+  water: ['바다', '물', '물결', '강', '강물', '호수', '연못', '파도', '시냇물', 'water', 'sea', 'river', 'lake', 'pond', 'wave', 'waves'],
+  wind: ['바람', '잎', '나뭇잎', '풀', '나무', '숲', '털', '머리카락', '갈대', 'wind', 'leaf', 'leaves', 'grass', 'tree', 'trees', 'fur', 'hair'],
+  sparkle: ['반짝', '빛', '별', '별빛', '금', '금빛', '윤슬', 'sparkle', 'glitter', 'gold', 'star', 'stars'],
+  depth: ['입체', '깊이', '3d', 'depth'],
+  still: ['고요', '정지', '멈춤', 'still'],
+};
+const DRIFT_WORDS = {
+  petals: ['꽃잎', '벚꽃', '벚꽃잎', 'petal', 'petals'],
+  snow: ['눈송이', '함박눈', '눈발', 'snow'],
+  fireflies: ['반딧불', '반딧불이', 'firefly', 'fireflies'],
+  rain: ['빗방울', '소나기', 'rain'],
+};
+// endings that may follow a word ("하늘이랑", "빛이"), so a one-letter word never matches inside another (동물 ≠ 물)
+const TAIL = /^(이|가|은|는|을|를|에|에서|의|과|와|도|이랑|랑|로|으로|처럼|들|만|이나|나|하게|한|이는|이고|고)?$/;
+const matches = (tok, key) => tok === key || (tok.startsWith(key) && (key.length > 1 ? true : TAIL.test(tok.slice(key.length))));
+
+/** The manager's words → what to look for. Unknown words are ignored. */
+export function parsePrompt(text) {
+  const toks = String(text ?? '').toLowerCase().split(/[\s,.!?·/~、]+/).filter(Boolean);
+  const out = { words: [] };
+  const say = (w) => { if (!out.words.includes(w)) out.words.push(w); };
+  toks.forEach((t, i) => {
+    const next = toks[i + 1] ?? '';
+    for (const [k, keys] of Object.entries(WORDS)) { const key = keys.find(x => matches(t, x)); if (key) { out[k] = true; say(key); } }
+    for (const [d, keys] of Object.entries(DRIFT_WORDS)) { const key = keys.find(x => matches(t, x)); if (key && !out.drift) { out.drift = d; say(key); } }
+    // two-word ones: "눈 내림", "비가 와요", "움직임 없이"
+    const falls = /^(내|와|오|쌓|펑펑|흩)/.test(next);
+    if (matches(t, '눈') && falls && !out.drift) { out.drift = 'snow'; say('눈 내림'); }
+    if (matches(t, '비') && !out.drift && (falls || /^비(가|는)$/.test(t))) { out.drift = 'rain'; say('비'); }
+    if (t === '움직임' && next.startsWith('없')) { out.still = true; say('움직임 없이'); }
+  });
+  return out;
+}
 /** The long side of the copy that gets read (and of the motion map that gets saved). */
 export const READ_SIZE = 160;
 
@@ -81,7 +122,7 @@ export function normalizeDepth(raw) {
  * @param depth optional 0–1 depth for the same w×h (near = 1)
  * @returns { mask: RGBA Uint8ClampedArray, areas, found: ('flow'|'sway'|'shimmer'|'depth')[], hasDepth, fx }
  */
-export function analyze(px, w, h, depth) {
+export function analyze(px, w, h, depth, hints = {}) {
   const n = w * h;
   const L = new Float32Array(n), Hu = new Float32Array(n), Sa = new Float32Array(n), Va = new Float32Array(n);
   for (let i = 0; i < n; i++) {
@@ -106,10 +147,12 @@ export function analyze(px, w, h, depth) {
     const i = y * w + x, yy = y / h, H = Hu[i], S = Sa[i], V = Va[i], t = sd[i];
     const blue = H >= 175 && H <= 255 && S > 0.12 && V > 0.35;
     const sunset = (H <= 40 || H > 330) && S > 0.5 && V > 0.6;
-    if (yy < 0.62 && t < 0.035 && (blue || sunset)) skyC[i] = 1;
-    if (yy > 0.45 && t < 0.07 && H >= 150 && H <= 250 && S > 0.12 && V > 0.08) waterC[i] = 1;   // dark navy water counts too
-    if (t > 0.04 && busy[i] > 0.5) sway[i] = H >= 60 && H <= 170 && S > 0.18 ? 1 : 0.55;
-    if ((V > 0.8 && L[i] - lm[i] > 0.12) || (H >= 38 && H <= 58 && S > 0.5 && V > 0.6 && t > 0.03)) shim[i] = 1;
+    // told "하늘" / "바다": any smooth top / bottom is sky / water, whatever its colour
+    if (yy < 0.62 && t < 0.035 && (blue || sunset || hints.sky)) skyC[i] = 1;
+    if (yy > 0.45 && t < 0.07 && ((H >= 150 && H <= 250 && S > 0.12 && V > 0.08) || hints.water)) waterC[i] = 1;   // dark navy water counts too
+    if (hints.wind ? t > 0.03 && busy[i] > 0.35 : t > 0.04 && busy[i] > 0.5) sway[i] = H >= 60 && H <= 170 && S > 0.18 ? 1 : 0.55;
+    const peak = hints.sparkle ? V > 0.7 && L[i] - lm[i] > 0.08 : V > 0.8 && L[i] - lm[i] > 0.12;
+    if (peak || (H >= 38 && H <= 58 && S > 0.5 && V > 0.6 && t > 0.03)) shim[i] = 1;
   }
   // sky and water are whole areas: fill the small gaps in them (a cloud, a reflection)
   const skyD = local(skyC, w, h, 5).mean, waterD = local(waterC, w, h, 5).mean;
@@ -143,8 +186,10 @@ export function analyze(px, w, h, depth) {
   for (let i = 0; i < n; i++) sway[i] *= 1 - flowRaw[i];
   const areas = { flow: mean(flowRaw), sway: mean(sway), shimmer: mean(shim), water: waterArea };
   const hasDepth = depthSpread(depth) > 0.15;
-  const found = ['flow', 'sway', 'shimmer'].filter(k => areas[k] >= MIN_AREA[k]);
-  if (hasDepth) found.push('depth');
+  const asked = { flow: hints.sky || hints.water, sway: hints.wind, shimmer: hints.sparkle };
+  const min = Object.fromEntries(Object.keys(MIN_AREA).map(k => [k, asked[k] ? PROMPT_AREA[k] : MIN_AREA[k]]));
+  const found = hints.still ? [] : ['flow', 'sway', 'shimmer'].filter(k => areas[k] >= min[k]);
+  if (hasDepth && !hints.still) found.push('depth');
   const F = soften(flowRaw, w, h), G = soften(sway, w, h), B = soften(shim, w, h, 1);
   const mask = new Uint8ClampedArray(n * 4);
   for (let i = 0; i < n; i++) {
@@ -153,17 +198,17 @@ export function analyze(px, w, h, depth) {
     mask[i * 4 + 2] = found.includes('shimmer') ? Math.min(1, B[i] * 2) * 255 : 0;
     mask[i * 4 + 3] = 255;
   }
-  const levels = Object.fromEntries(['flow', 'sway', 'shimmer', 'depth'].map(k => [k, found.includes(k) ? 'mid' : 'off']));
-  return { mask, areas, found, hasDepth, levels, fx: fxFor(areas, levels, hasDepth) };
+  const levels = Object.fromEntries(['flow', 'sway', 'shimmer', 'depth'].map(k => [k, found.includes(k) ? (k === 'depth' && hints.depth ? 'high' : 'mid') : 'off']));
+  return { mask, areas, found, hasDepth: hasDepth && !hints.still, levels, min, fx: fxFor(areas, levels, hasDepth && !hints.still, min), drift: hints.drift };
 }
 
 /** Effect strengths for the viewer from what was found and the levels the manager picked. */
-export function fxFor(areas, levels, hasDepth) {
+export function fxFor(areas, levels, hasDepth, min = MIN_AREA) {
   const k = (name) => LEVELS[levels?.[name] ?? 'mid'] ?? 1;
   const fx = {};
-  if (k('flow') > 0 && areas.flow >= MIN_AREA.flow) Object.assign(fx, { flow: +(0.0045 * k('flow')).toFixed(5), flowScale: 3, flowSpeed: 0.55, ripple: +(0.006 * k('flow')).toFixed(4), ripMask: 1 });
-  if (k('sway') > 0 && areas.sway >= MIN_AREA.sway) Object.assign(fx, { sway: +(0.0032 * k('sway')).toFixed(5), swayFreq: 7, swaySpeed: 1.3, swayTop: 0 });
-  if (k('shimmer') > 0 && areas.shimmer >= MIN_AREA.shimmer) fx.shimmer = +(0.22 * k('shimmer')).toFixed(3);
+  if (k('flow') > 0 && areas.flow >= min.flow) Object.assign(fx, { flow: +(0.0045 * k('flow')).toFixed(5), flowScale: 3, flowSpeed: 0.55, ripple: +(0.006 * k('flow')).toFixed(4), ripMask: 1 });
+  if (k('sway') > 0 && areas.sway >= min.sway) Object.assign(fx, { sway: +(0.0032 * k('sway')).toFixed(5), swayFreq: 7, swaySpeed: 1.3, swayTop: 0 });
+  if (k('shimmer') > 0 && areas.shimmer >= min.shimmer) fx.shimmer = +(0.22 * k('shimmer')).toFixed(3);
   if (hasDepth && k('depth') > 0) fx.para = +(0.012 * k('depth')).toFixed(4);
   return fx;
 }
@@ -174,18 +219,43 @@ const SAY = {
   shimmer: ['빛이 군데군데 반짝여요.', '반짝이는 빛'],
   depth: ['그림 위를 움직이면 앞뒤가 입체로 들썩여요.', '움직여서 입체 보기'],
 };
-/** "해 보기" and its short hint, from what moves. Empty when nothing does. */
-export function howFor(found) {
+const SAY_DRIFT = {
+  petals: ['꽃잎이 흩날려요.', '꽃잎 날림'], snow: ['눈이 소복소복 내려요.', '눈 내림'],
+  fireflies: ['반딧불이 떠다녀요.', '반딧불'], rain: ['비가 내려요.', '비 내림'],
+};
+/** "해 보기" and its short hint, from what moves (and what drifts). Empty when nothing does. */
+export function howFor(found, drift) {
   const on = ['flow', 'sway', 'shimmer', 'depth'].filter(k => found.includes(k));
-  if (!on.length) return { how: '', hint: '' };
-  return { how: on.map(k => SAY[k][0]).join(' ') + (on.includes('flow') ? ' 그림을 누르면 물결이 퍼져요.' : ''), hint: SAY[on[0]][1] };
+  const lines = (drift && SAY_DRIFT[drift] ? [SAY_DRIFT[drift][0]] : []).concat(on.map(k => SAY[k][0]));
+  if (!lines.length) return { how: '', hint: '' };
+  return { how: lines.join(' ') + (on.includes('flow') ? ' 그림을 누르면 물결이 퍼져요.' : ''), hint: drift && SAY_DRIFT[drift] ? SAY_DRIFT[drift][1] : SAY[on[0]][1] };
+}
+
+/** Share of the picture each effect covers in a motion map. */
+export function areasOf(mask) {
+  const n = mask.length / 4; let f = 0, s = 0, m = 0;
+  for (let i = 0; i < n; i++) { f += mask[i * 4]; s += mask[i * 4 + 1]; m += mask[i * 4 + 2]; }
+  return { flow: f / n / 255, sway: s / n / 255, shimmer: m / n / 255 };
+}
+
+/** One soft round dab of the brush on a motion map: flow or sway (one replaces the other), shimmer on top, or erase. */
+export function brush(mask, w, h, cx, cy, r, tool) {
+  for (let y = Math.max(0, Math.floor(cy - r)); y <= Math.min(h - 1, Math.ceil(cy + r)); y++) for (let x = Math.max(0, Math.floor(cx - r)); x <= Math.min(w - 1, Math.ceil(cx + r)); x++) {
+    const d = Math.hypot(x - cx, y - cy); if (d > r) continue;
+    const e = clamp((d - r * 0.6) / (r * 0.4), 0, 1), f = 1 - e * e * (3 - 2 * e), v = 255 * f, i = (y * w + x) * 4;
+    if (tool === 'flow') { mask[i] = Math.max(mask[i], v); mask[i + 1] *= 1 - f; }
+    else if (tool === 'sway') { mask[i + 1] = Math.max(mask[i + 1], v); mask[i] *= 1 - f; }
+    else if (tool === 'shimmer') mask[i + 2] = Math.max(mask[i + 2], v);
+    else { mask[i] *= 1 - f; mask[i + 1] *= 1 - f; mask[i + 2] *= 1 - f; }
+    mask[i + 3] = 255;
+  }
 }
 
 /** Was this "해 보기" written by howFor (so a new reading may replace it)? The manager's own words: never. */
 export function isAutoHow(how) {
   let rest = String(how ?? '').trim();
   if (!rest) return false;
-  for (const line of [' 그림을 누르면 물결이 퍼져요.', ...Object.values(SAY).map(v => v[0])]) rest = rest.split(line.trim()).join('');
+  for (const line of [' 그림을 누르면 물결이 퍼져요.', ...Object.values(SAY).map(v => v[0]), ...Object.values(SAY_DRIFT).map(v => v[0])]) rest = rest.split(line.trim()).join('');
   return rest.trim() === '';
 }
 

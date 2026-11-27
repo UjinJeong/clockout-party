@@ -165,3 +165,21 @@ describe('auto motion on a replaced picture', () => {
     expect(r.ok && r.gallery.items[0].mask).toBeUndefined();
   });
 });
+
+import { DRIFTS } from '../src/gallery';
+describe('motion words and things that drift (replaced pictures)', () => {
+  const pic = { image: 'gallery/17-new.jpg', wall: 'gallery/17-new-wall.jpg', thumb: 'gallery/17-new-t.jpg' };
+  it('keeps the words and what drifts over the picture', () => {
+    const r = withItems([{ ...items[0], ...pic, fx: {}, prompt: '  회색 하늘, 꽃잎 날림 ', drift: 'petals' }, ...items.slice(1)]);
+    expect(r.ok && r.gallery.items[0]).toMatchObject({ prompt: '회색 하늘, 꽃잎 날림', drift: 'petals' });
+    expect(DRIFTS).toEqual(['petals', 'snow', 'fireflies', 'rain']);
+  });
+  it('drops an unknown drift, trims long words; an original never gets them', () => {
+    const r = withItems([{ ...items[0], ...pic, drift: 'bats', prompt: 'x'.repeat(200) }, ...items.slice(1)]);
+    expect(r.ok && r.gallery.items[0].drift).toBeUndefined();
+    expect(r.ok && r.gallery.items[0].prompt!.length).toBe(60);
+    const o = withItems([{ ...items[0], drift: 'snow', prompt: '눈' }, ...items.slice(1)]);
+    expect(o.ok && o.gallery.items[0].drift).toBeUndefined();
+    expect(o.ok && o.gallery.items[0].prompt).toBeUndefined();
+  });
+});
